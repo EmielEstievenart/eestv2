@@ -16,7 +16,3 @@ endif()
 # Ensure the header files are in the include path
 target_include_directories(templates_example
                            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
-# Set output directory (optional)
-set_target_properties(templates_example PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                                   ${CMAKE_BINARY_DIR}/bin)

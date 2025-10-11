@@ -2,61 +2,61 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run Unit Tests (Windows Debug)",
+            "name": "Tests: all",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/windows-msvc-debug/tests/unit_tests/unit_tests.exe",
+            "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
+            "cwd": "${command:cmake.buildDirectory}",
             "environment": [],
             "console": "integratedTerminal"
         },
         {
-            "name": "Debug TCP Server Lifecycle Tests",
+            "name": "Test: TCP Server Lifecycle ",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/windows-msvc-debug/tests/unit_tests/unit_tests.exe",
+            "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [
                 "--gtest_filter=TcpServerLifeCycleTest.*"
             ],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
+            "cwd": "${workspaceFolder}",
             "environment": [],
             "console": "integratedTerminal"
         },
         {
-            "name": "Debug Single TCP Server Test",
+            "name": "Test: Single TCP Server ",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/windows-msvc-debug/tests/unit_tests/unit_tests.exe",
+            "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [
                 "--gtest_filter=TcpConnectionTest.ClientToServerDataTransfer"
             ],
             "stopAtEntry": true,
-            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
+            "cwd": "${command:cmake.buildDirectory}",
             "environment": [],
             "console": "integratedTerminal"
         },
         {
-            "name": "Run Template Example",
+            "name": "Example: Templates",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/windows-msvc-debug/templates_example.exe",
+            "program": "${command:cmake.buildDirectory}/bin/templates_example.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
+            "cwd": "${command:cmake.buildDirectory}",
             "environment": [],
             "console": "integratedTerminal"
         },
         {
-            "name": "Run SFINAE Example",
+            "name": "Example: SFINAE ",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/windows-msvc-debug/examples/sfinae/sfinae.exe",
+            "program": "${command:cmake.buildDirectory}/bin/sfinae.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/out/build/windows-msvc-debug",
+            "cwd": "${command:cmake.buildDirectory}",
             "environment": [],
             "console": "integratedTerminal"
         },
@@ -68,6 +68,19 @@
             "args": [],
             "cwd": "${command:cmake.launchTargetDirectory}",
             "preLaunchTask": "CMake: build",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Echo CMake Launch Target Directory",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "C:\\Windows\\System32\\cmd.exe",
+            "args": [
+                "/C",
+                "echo ${command:cmake.buildDirectory} & pause"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
             "console": "integratedTerminal"
         }
     ]
