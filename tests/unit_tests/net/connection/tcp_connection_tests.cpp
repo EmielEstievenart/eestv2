@@ -205,7 +205,7 @@ TEST_F(TcpConnectionTest, ClientToServerDataTransfer)
     // Send data from client to server
     const std::string test_message = "Hello from client!";
     ASSERT_TRUE(write_to_buffer(client->send_buffer(), test_message));
-    client->send();
+    client->start_send();
 
     // Wait and read data on server side
     start = std::chrono::steady_clock::now();
@@ -273,7 +273,7 @@ TEST_F(TcpConnectionTest, ServerToClientDataTransfer)
     // Send data from server to client
     const std::string test_message = "Hello from server!";
     ASSERT_TRUE(write_to_buffer(server_connection->send_buffer(), test_message));
-    server_connection->send();
+    server_connection->start_send();
 
     // Wait and read data on client side
     start = std::chrono::steady_clock::now();
@@ -339,10 +339,10 @@ TEST_F(TcpConnectionTest, BidirectionalDataTransfer)
     const std::string server_message = "Server says hi!";
 
     ASSERT_TRUE(write_to_buffer(client->send_buffer(), client_message));
-    client->send();
+    client->start_send();
 
     ASSERT_TRUE(write_to_buffer(server_connection->send_buffer(), server_message));
-    server_connection->send();
+    server_connection->start_send();
 
     // Wait and read data on both sides
     start = std::chrono::steady_clock::now();
@@ -647,7 +647,7 @@ TEST_F(TcpConnectionTest, MultipleSequentialMessages)
     for (const auto& msg : test_messages)
     {
         ASSERT_TRUE(write_to_buffer(client->send_buffer(), msg));
-        client->send();
+        client->start_send();
         std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Small delay between messages
     }
 
