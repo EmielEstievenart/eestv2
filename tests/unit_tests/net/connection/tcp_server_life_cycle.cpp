@@ -1,4 +1,4 @@
-#include "eestv/net/connection/tcp_server_connection.hpp"
+#include "eestv/net/connection/tcp_connection.hpp"
 #include "eestv/net/connection/tcp_server.hpp"
 #include "io_context_debugger.hpp"
 #include <boost/asio.hpp>
@@ -168,18 +168,19 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownTest)
 
     std::mutex connection_mutex;
     std::condition_variable connection_cv;
-    std::shared_ptr<TcpServerConnection<>> server_connection;
+    std::shared_ptr<TcpConnection<>> server_connection;
     bool connection_received = false;
 
     // Set callback to capture the server connection
-    server.set_connection_callback([&](std::shared_ptr<TcpServerConnection<>> conn)
-                                   {
-                                       std::cout << "[SERVER] New connection accepted\n";
-                                       std::unique_lock<std::mutex> lock(connection_mutex);
-                                       server_connection = conn;
-                                       connection_received = true;
-                                       connection_cv.notify_one();
-                                   });
+    server.set_connection_callback(
+        [&](std::shared_ptr<TcpConnection<>> conn)
+        {
+            std::cout << "[SERVER] New connection accepted\n";
+            std::unique_lock<std::mutex> lock(connection_mutex);
+            server_connection   = conn;
+            connection_received = true;
+            connection_cv.notify_one();
+        });
 
     // Start the server
     server.async_start();
@@ -190,13 +191,13 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownTest)
     boost::asio::ip::tcp::socket client_socket(*io_context);
     boost::system::error_code connect_error;
 
-    std::atomic<bool> client_connected{false};
+    std::atomic<bool> client_connected {false};
 
     // Async connect from client
     client_socket.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port),
                                 [&](const boost::system::error_code& error)
                                 {
-                                    connect_error = error;
+                                    connect_error    = error;
                                     client_connected = true;
                                     std::cout << "[CLIENT] Connection attempt completed\n";
                                 });
@@ -231,7 +232,7 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownTest)
 
     // Test 3: Send some data from client to server
     const std::string test_message = "Hello from client";
-    std::atomic<bool> send_complete{false};
+    std::atomic<bool> send_complete {false};
     boost::asio::async_write(client_socket, boost::asio::buffer(test_message),
                              [&](const boost::system::error_code& error, std::size_t bytes_transferred)
                              {
@@ -267,7 +268,7 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownTest)
 
     server_connection.reset(); // This should trigger the destructor
 
-    auto destruction_end = std::chrono::steady_clock::now();
+    auto destruction_end      = std::chrono::steady_clock::now();
     auto destruction_duration = std::chrono::duration_cast<std::chrono::milliseconds>(destruction_end - destruction_start);
 
     std::cout << "[TEST] Server connection destroyed in " << destruction_duration.count() << "ms\n";
@@ -276,12 +277,13 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownTest)
     EXPECT_LT(destruction_duration.count(), 1000) << "Destruction took too long (possible hang in destructor)";
 
     // Test 6: Stop the server
-    std::atomic<bool> server_stopped{false};
-    server.async_stop([&]()
-                      {
-                          server_stopped = true;
-                          std::cout << "[SERVER] Stopped\n";
-                      });
+    std::atomic<bool> server_stopped {false};
+    server.async_stop(
+        [&]()
+        {
+            server_stopped = true;
+            std::cout << "[SERVER] Stopped\n";
+        });
 
     // Wait for server to stop
     auto stop_timeout = std::chrono::steady_clock::now() + std::chrono::seconds(2);
@@ -303,17 +305,18 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownWhileActiveTest)
 
     std::mutex connection_mutex;
     std::condition_variable connection_cv;
-    std::shared_ptr<TcpServerConnection<>> server_connection;
+    std::shared_ptr<TcpConnection<>> server_connection;
     bool connection_received = false;
 
-    server.set_connection_callback([&](std::shared_ptr<TcpServerConnection<>> conn)
-                                   {
-                                       std::cout << "[SERVER] New connection accepted\n";
-                                       std::unique_lock<std::mutex> lock(connection_mutex);
-                                       server_connection = conn;
-                                       connection_received = true;
-                                       connection_cv.notify_one();
-                                   });
+    server.set_connection_callback(
+        [&](std::shared_ptr<TcpConnection<>> conn)
+        {
+            std::cout << "[SERVER] New connection accepted\n";
+            std::unique_lock<std::mutex> lock(connection_mutex);
+            server_connection   = conn;
+            connection_received = true;
+            connection_cv.notify_one();
+        });
 
     server.async_start();
     unsigned short port = server.port();
@@ -321,7 +324,7 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownWhileActiveTest)
 
     // Create client
     boost::asio::ip::tcp::socket client_socket(*io_context);
-    std::atomic<bool> client_connected{false};
+    std::atomic<bool> client_connected {false};
 
     client_socket.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port),
                                 [&](const boost::system::error_code& error)
@@ -359,7 +362,7 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownWhileActiveTest)
 
     server_connection.reset(); // Should properly cancel and wait for operations
 
-    auto destruction_end = std::chrono::steady_clock::now();
+    auto destruction_end      = std::chrono::steady_clock::now();
     auto destruction_duration = std::chrono::duration_cast<std::chrono::milliseconds>(destruction_end - destruction_start);
 
     std::cout << "[TEST] Server connection destroyed in " << destruction_duration.count() << "ms\n";
@@ -370,7 +373,7 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownWhileActiveTest)
     // Cleanup
     client_socket.close();
 
-    std::atomic<bool> server_stopped{false};
+    std::atomic<bool> server_stopped {false};
     server.async_stop([&]() { server_stopped = true; });
 
     timeout = std::chrono::steady_clock::now() + std::chrono::seconds(2);
@@ -391,23 +394,24 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownWithSendingTest)
 
     std::mutex connection_mutex;
     std::condition_variable connection_cv;
-    std::shared_ptr<TcpServerConnection<>> server_connection;
+    std::shared_ptr<TcpConnection<>> server_connection;
     bool connection_received = false;
 
-    server.set_connection_callback([&](std::shared_ptr<TcpServerConnection<>> conn)
-                                   {
-                                       std::unique_lock<std::mutex> lock(connection_mutex);
-                                       server_connection = conn;
-                                       connection_received = true;
-                                       connection_cv.notify_one();
-                                   });
+    server.set_connection_callback(
+        [&](std::shared_ptr<TcpConnection<>> conn)
+        {
+            std::unique_lock<std::mutex> lock(connection_mutex);
+            server_connection   = conn;
+            connection_received = true;
+            connection_cv.notify_one();
+        });
 
     server.async_start();
     unsigned short port = server.port();
 
     // Create client
     boost::asio::ip::tcp::socket client_socket(*io_context);
-    std::atomic<bool> client_connected{false};
+    std::atomic<bool> client_connected {false};
 
     client_socket.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port),
                                 [&](const boost::system::error_code& error)
@@ -436,7 +440,7 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownWithSendingTest)
     // Prepare data to send
     std::string large_message(10000, 'A'); // 10KB of data
     std::size_t writable_size = 0;
-    std::uint8_t* write_head = server_connection->send_buffer().get_write_head(writable_size);
+    std::uint8_t* write_head  = server_connection->send_buffer().get_write_head(writable_size);
     ASSERT_NE(write_head, nullptr);
     ASSERT_GE(writable_size, large_message.size());
 
@@ -453,7 +457,7 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownWithSendingTest)
 
     server_connection.reset();
 
-    auto destruction_end = std::chrono::steady_clock::now();
+    auto destruction_end      = std::chrono::steady_clock::now();
     auto destruction_duration = std::chrono::duration_cast<std::chrono::milliseconds>(destruction_end - destruction_start);
 
     std::cout << "[TEST] Server connection destroyed in " << destruction_duration.count() << "ms\n";
@@ -463,7 +467,7 @@ TEST_F(TcpServerLifeCycleTest, ServerConnectionShutdownWithSendingTest)
     // Cleanup
     client_socket.close();
 
-    std::atomic<bool> server_stopped{false};
+    std::atomic<bool> server_stopped {false};
     server.async_stop([&]() { server_stopped = true; });
 
     timeout = std::chrono::steady_clock::now() + std::chrono::seconds(2);

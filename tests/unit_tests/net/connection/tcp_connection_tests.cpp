@@ -1,5 +1,4 @@
-#include "eestv/net/connection/tcp_client_connection.hpp"
-#include "eestv/net/connection/tcp_server_connection.hpp"
+#include "eestv/net/connection/tcp_connection.hpp"
 #include "eestv/net/connection/tcp_server.hpp"
 #include "io_context_debugger.hpp"
 #include <boost/asio.hpp>
