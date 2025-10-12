@@ -1,0 +1,12 @@
+if(NOT EXISTS "@CC_SRC@")
+  message(FATAL_ERROR "compile_commands.json not found at @CC_SRC@")
+endif()
+
+file(READ "@CC_SRC@" _contents)
+
+# Normalize drive letter from C: to c: (applies globally)
+string(REPLACE "C:" "c:" _contents "${_contents}")
+
+# Write normalized contents to destination
+file(WRITE "@CC_DST@" "${_contents}")
+message(STATUS "Wrote @CC_DST@")
