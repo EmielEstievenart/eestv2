@@ -71,13 +71,12 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Echo CMake Launch Target Directory",
+            "name": "Test selected",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "C:\\Windows\\System32\\cmd.exe",
+            "program": "${cmake.testProgram}",
             "args": [
-                "/C",
-                "echo ${command:cmake.buildDirectory} & pause"
+                "${cmake.testArgs}"
             ],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
