@@ -3,84 +3,74 @@
     "configurations": [
         {
             "name": "Tests: all",
-            "type": "cppvsdbg",
+            "type": "lldb-dap",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [],
-            "stopAtEntry": false,
-            "cwd": "${command:cmake.buildDirectory}",
-            "environment": [],
-            "console": "integratedTerminal"
+            "cwd": "${command:cmake.buildDirectory}"
+        },
+        {
+            "name": "Tests: allLDAB",
+            "type": "lldb-dap",
+            "request": "launch",
+            "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
+            "args": [],
+            "cwd": "${command:cmake.buildDirectory}"
         },
         {
             "name": "Test: TCP Server Lifecycle ",
-            "type": "cppvsdbg",
+            "type": "lldb-dap",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [
                 "--gtest_filter=TcpServerLifeCycleTest.*"
             ],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "console": "integratedTerminal"
+            "cwd": "${command:cmake.buildDirectory}"
         },
         {
             "name": "Test: Single TCP Server ",
-            "type": "cppvsdbg",
+            "type": "lldb-dap",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [
                 "--gtest_filter=TcpConnectionTest.ClientToServerDataTransfer"
             ],
-            "stopAtEntry": true,
-            "cwd": "${command:cmake.buildDirectory}",
-            "environment": [],
-            "console": "integratedTerminal"
+            "stopOnEntry": true,
+            "cwd": "${command:cmake.buildDirectory}"
         },
         {
             "name": "Example: Templates",
-            "type": "cppvsdbg",
+            "type": "lldb-dap",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/templates_example.exe",
             "args": [],
-            "stopAtEntry": false,
-            "cwd": "${command:cmake.buildDirectory}",
-            "environment": [],
-            "console": "integratedTerminal"
+            "cwd": "${command:cmake.buildDirectory}"
         },
         {
             "name": "Example: SFINAE ",
-            "type": "cppvsdbg",
+            "type": "lldb-dap",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/sfinae.exe",
             "args": [],
-            "stopAtEntry": false,
-            "cwd": "${command:cmake.buildDirectory}",
-            "environment": [],
-            "console": "integratedTerminal"
+            "cwd": "${command:cmake.buildDirectory}"
         },
         {
             "name": "Debug CMake Target",
-            "type": "cppvsdbg",
+            "type": "lldb-dap",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "args": [],
-            "cwd": "${command:cmake.launchTargetDirectory}",
-            "preLaunchTask": "CMake: build",
-            "console": "integratedTerminal"
+            "cwd": "${command:cmake.launchTargetDirectory}"
         },
         {
             "name": "Test selected",
-            "type": "cppvsdbg",
+            "type": "lldb-dap",
             "request": "launch",
             "program": "${cmake.testProgram}",
             "args": [
                 "${cmake.testArgs}"
             ],
-            "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
-            "console": "integratedTerminal"
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
