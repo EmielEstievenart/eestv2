@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "eestv/flags/synchronous_flags.hpp"
+#include "eestv/flags/flags.hpp"
 #include <thread>
 #include <vector>
 #include <atomic>
@@ -9,40 +9,34 @@ using namespace eestv;
 // Define test enum classes
 enum class TestFlags
 {
-    Flag0 = 0,
-    Flag1 = 1,
-    Flag2 = 2,
-    Flag3 = 3,
-    Flag4 = 4,
+    Flag0  = 0,
+    Flag1  = 1,
+    Flag2  = 2,
+    Flag3  = 3,
+    Flag4  = 4,
     Flag31 = 31 // Maximum for 32-bit uint
 };
 
 enum class StatusFlags
 {
-    Ready = 0,
+    Ready   = 0,
     Running = 1,
-    Paused = 2,
-    Error = 3
+    Paused  = 2,
+    Error   = 3
 };
 
-class SynchronousFlagsTest : public ::testing::Test
+class FlagsTest : public ::testing::Test
 {
 protected:
-    void SetUp() override
-    {
-        flags = std::make_unique<SynchronousFlags<TestFlags>>();
-    }
+    void SetUp() override { flags = std::make_unique<Flags<TestFlags>>(); }
 
-    void TearDown() override
-    {
-        flags.reset();
-    }
+    void TearDown() override { flags.reset(); }
 
-    std::unique_ptr<SynchronousFlags<TestFlags>> flags;
+    std::unique_ptr<Flags<TestFlags>> flags;
 };
 
 // Basic functionality tests
-TEST_F(SynchronousFlagsTest, InitialStateIsAllClear)
+TEST_F(FlagsTest, InitialStateIsAllClear)
 {
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag0));
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag1));
@@ -50,22 +44,22 @@ TEST_F(SynchronousFlagsTest, InitialStateIsAllClear)
     EXPECT_EQ(flags->get_raw(), 0U);
 }
 
-TEST_F(SynchronousFlagsTest, SetSingleFlag)
+TEST_F(FlagsTest, SetSingleFlag)
 {
     flags->set_flag(TestFlags::Flag1);
-    
+
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag0));
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag1));
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag2));
     EXPECT_EQ(flags->get_raw(), 0x02U); // Bit 1 set
 }
 
-TEST_F(SynchronousFlagsTest, SetMultipleFlags)
+TEST_F(FlagsTest, SetMultipleFlags)
 {
     flags->set_flag(TestFlags::Flag0);
     flags->set_flag(TestFlags::Flag2);
     flags->set_flag(TestFlags::Flag4);
-    
+
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag0));
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag1));
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag2));
@@ -74,53 +68,53 @@ TEST_F(SynchronousFlagsTest, SetMultipleFlags)
     EXPECT_EQ(flags->get_raw(), 0x15U); // Bits 0, 2, 4 set (0x01 | 0x04 | 0x10)
 }
 
-TEST_F(SynchronousFlagsTest, ClearSingleFlag)
+TEST_F(FlagsTest, ClearSingleFlag)
 {
     flags->set_flag(TestFlags::Flag1);
     flags->set_flag(TestFlags::Flag2);
-    
+
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag1));
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag2));
-    
+
     flags->clear_flag(TestFlags::Flag1);
-    
+
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag1));
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag2));
     EXPECT_EQ(flags->get_raw(), 0x04U); // Only bit 2 set
 }
 
-TEST_F(SynchronousFlagsTest, ClearFlagThatIsNotSet)
+TEST_F(FlagsTest, ClearFlagThatIsNotSet)
 {
     flags->set_flag(TestFlags::Flag1);
-    
+
     flags->clear_flag(TestFlags::Flag2); // Clear flag that wasn't set
-    
+
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag1));
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag2));
     EXPECT_EQ(flags->get_raw(), 0x02U);
 }
 
-TEST_F(SynchronousFlagsTest, SetSameFlagMultipleTimes)
+TEST_F(FlagsTest, SetSameFlagMultipleTimes)
 {
     flags->set_flag(TestFlags::Flag1);
     flags->set_flag(TestFlags::Flag1);
     flags->set_flag(TestFlags::Flag1);
-    
+
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag1));
     EXPECT_EQ(flags->get_raw(), 0x02U);
 }
 
-TEST_F(SynchronousFlagsTest, ClearAllFlags)
+TEST_F(FlagsTest, ClearAllFlags)
 {
     flags->set_flag(TestFlags::Flag0);
     flags->set_flag(TestFlags::Flag1);
     flags->set_flag(TestFlags::Flag2);
     flags->set_flag(TestFlags::Flag3);
-    
+
     EXPECT_NE(flags->get_raw(), 0U);
-    
+
     flags->clear_all();
-    
+
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag0));
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag1));
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag2));
@@ -128,60 +122,61 @@ TEST_F(SynchronousFlagsTest, ClearAllFlags)
     EXPECT_EQ(flags->get_raw(), 0U);
 }
 
-TEST_F(SynchronousFlagsTest, ToggleFlagOnAndOff)
+TEST_F(FlagsTest, ToggleFlagOnAndOff)
 {
     flags->set_flag(TestFlags::Flag2);
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag2));
-    
+
     flags->clear_flag(TestFlags::Flag2);
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag2));
-    
+
     flags->set_flag(TestFlags::Flag2);
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag2));
 }
 
-TEST_F(SynchronousFlagsTest, MaxBitPosition)
+TEST_F(FlagsTest, MaxBitPosition)
 {
     flags->set_flag(TestFlags::Flag31);
-    
+
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag31));
     EXPECT_EQ(flags->get_raw(), 0x80000000U); // Bit 31 set
 }
 
-TEST_F(SynchronousFlagsTest, AllBitsCombination)
+TEST_F(FlagsTest, AllBitsCombination)
 {
     flags->set_flag(TestFlags::Flag0);
     flags->set_flag(TestFlags::Flag31);
-    
+
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag0));
     EXPECT_TRUE(flags->get_flag(TestFlags::Flag31));
     EXPECT_EQ(flags->get_raw(), 0x80000001U);
 }
 
 // Multi-threading tests
-TEST_F(SynchronousFlagsTest, ConcurrentSetOperations)
+TEST_F(FlagsTest, ConcurrentSetOperations)
 {
     const int num_threads = 8;
     std::vector<std::thread> threads;
-    
+
     // Each thread sets a different flag
     for (int i = 0; i < num_threads; ++i)
     {
-        threads.emplace_back([this, i]()
-        {
-            TestFlags flag = static_cast<TestFlags>(i);
-            for (int j = 0; j < 1000; ++j)
+        threads.emplace_back(
+            [this, i]()
             {
-                flags->set_flag(flag);
-            }
-        });
+                TestFlags flag = static_cast<TestFlags>(i);
+                for (int j = 0; j < 1000; ++j)
+                {
+                    flags->set_flag(flag);
+                }
+            });
     }
-    
+
     for (auto& thread : threads)
     {
         thread.join();
     }
-    
+
     // Verify all flags are set
     for (int i = 0; i < num_threads; ++i)
     {
@@ -190,40 +185,41 @@ TEST_F(SynchronousFlagsTest, ConcurrentSetOperations)
     }
 }
 
-TEST_F(SynchronousFlagsTest, ConcurrentSetAndClearOperations)
+TEST_F(FlagsTest, ConcurrentSetAndClearOperations)
 {
     const int num_threads = 4;
-    const int iterations = 1000;
+    const int iterations  = 1000;
     std::vector<std::thread> threads;
-    
+
     // Half threads set, half threads clear the same flag
     for (int i = 0; i < num_threads; ++i)
     {
-        threads.emplace_back([this, i, iterations]()
-        {
-            for (int j = 0; j < iterations; ++j)
+        threads.emplace_back(
+            [this, i, iterations]()
             {
-                if (i % 2 == 0)
+                for (int j = 0; j < iterations; ++j)
                 {
-                    flags->set_flag(TestFlags::Flag1);
+                    if (i % 2 == 0)
+                    {
+                        flags->set_flag(TestFlags::Flag1);
+                    }
+                    else
+                    {
+                        flags->clear_flag(TestFlags::Flag1);
+                    }
                 }
-                else
-                {
-                    flags->clear_flag(TestFlags::Flag1);
-                }
-            }
-        });
+            });
     }
-    
+
     for (auto& thread : threads)
     {
         thread.join();
     }
-    
+
     // Flag should be in a valid state (either set or clear)
     bool flag_state = flags->get_flag(TestFlags::Flag1);
-    uint32_t raw = flags->get_raw();
-    
+    uint32_t raw    = flags->get_raw();
+
     if (flag_state)
     {
         EXPECT_EQ(raw & 0x02U, 0x02U);
@@ -234,109 +230,112 @@ TEST_F(SynchronousFlagsTest, ConcurrentSetAndClearOperations)
     }
 }
 
-TEST_F(SynchronousFlagsTest, ConcurrentReadOperations)
+TEST_F(FlagsTest, ConcurrentReadOperations)
 {
     flags->set_flag(TestFlags::Flag0);
     flags->set_flag(TestFlags::Flag1);
     flags->set_flag(TestFlags::Flag2);
-    
+
     const int num_threads = 10;
-    const int iterations = 1000;
+    const int iterations  = 1000;
     std::vector<std::thread> threads;
-    std::atomic<int> successful_reads{0};
-    
+    std::atomic<int> successful_reads {0};
+
     for (int i = 0; i < num_threads; ++i)
     {
-        threads.emplace_back([this, iterations, &successful_reads]()
-        {
-            for (int j = 0; j < iterations; ++j)
+        threads.emplace_back(
+            [this, iterations, &successful_reads]()
             {
-                bool f0 = flags->get_flag(TestFlags::Flag0);
-                bool f1 = flags->get_flag(TestFlags::Flag1);
-                bool f2 = flags->get_flag(TestFlags::Flag2);
-                
-                if (f0 && f1 && f2)
+                for (int j = 0; j < iterations; ++j)
                 {
-                    successful_reads++;
+                    bool f0 = flags->get_flag(TestFlags::Flag0);
+                    bool f1 = flags->get_flag(TestFlags::Flag1);
+                    bool f2 = flags->get_flag(TestFlags::Flag2);
+
+                    if (f0 && f1 && f2)
+                    {
+                        successful_reads++;
+                    }
                 }
-            }
-        });
+            });
     }
-    
+
     for (auto& thread : threads)
     {
         thread.join();
     }
-    
+
     // All reads should be successful since flags don't change
     EXPECT_EQ(successful_reads.load(), num_threads * iterations);
 }
 
-TEST_F(SynchronousFlagsTest, ConcurrentMixedOperations)
+TEST_F(FlagsTest, ConcurrentMixedOperations)
 {
     const int num_threads = 8;
-    const int iterations = 500;
+    const int iterations  = 500;
     std::vector<std::thread> threads;
-    
+
     for (int i = 0; i < num_threads; ++i)
     {
-        threads.emplace_back([this, i, iterations]()
-        {
-            TestFlags flag = static_cast<TestFlags>(i % 4);
-            
-            for (int j = 0; j < iterations; ++j)
+        threads.emplace_back(
+            [this, i, iterations]()
             {
-                if (j % 3 == 0)
+                TestFlags flag = static_cast<TestFlags>(i % 4);
+
+                for (int j = 0; j < iterations; ++j)
                 {
-                    flags->set_flag(flag);
+                    if (j % 3 == 0)
+                    {
+                        flags->set_flag(flag);
+                    }
+                    else if (j % 3 == 1)
+                    {
+                        flags->get_flag(flag);
+                    }
+                    else
+                    {
+                        flags->clear_flag(flag);
+                    }
                 }
-                else if (j % 3 == 1)
-                {
-                    flags->get_flag(flag);
-                }
-                else
-                {
-                    flags->clear_flag(flag);
-                }
-            }
-        });
+            });
     }
-    
+
     for (auto& thread : threads)
     {
         thread.join();
     }
-    
+
     // Just verify we can read the final state without crashes
     uint32_t final_state = flags->get_raw();
     EXPECT_LE(final_state, 0xFFFFFFFFU);
 }
 
-TEST_F(SynchronousFlagsTest, ConcurrentClearAll)
+TEST_F(FlagsTest, ConcurrentClearAll)
 {
     flags->set_flag(TestFlags::Flag0);
     flags->set_flag(TestFlags::Flag1);
     flags->set_flag(TestFlags::Flag2);
-    
+
     const int num_threads = 5;
     std::vector<std::thread> threads;
-    
+
     for (int i = 0; i < num_threads; ++i)
     {
-        threads.emplace_back([this]()
-        {
-            for (int j = 0; j < 100; ++j)
+        threads.emplace_back(
+            [this]()
             {
-                flags->clear_all();
-            }
-        });
+                for (int j = 0; j < 100; ++j)
+                {
+                    flags->clear_all();
+                }
+            });
     }
-    
+
     for (auto& thread : threads)
     {
         thread.join();
     }
-    
+
     EXPECT_EQ(flags->get_raw(), 0U);
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag0));
     EXPECT_FALSE(flags->get_flag(TestFlags::Flag1));
@@ -346,19 +345,19 @@ TEST_F(SynchronousFlagsTest, ConcurrentClearAll)
 // Test with different enum class
 TEST(SynchronousFlagsStatusTest, DifferentEnumClass)
 {
-    SynchronousFlags<StatusFlags> status;
-    
+    Flags<StatusFlags> status;
+
     status.set_flag(StatusFlags::Ready);
     status.set_flag(StatusFlags::Running);
-    
+
     EXPECT_TRUE(status.get_flag(StatusFlags::Ready));
     EXPECT_TRUE(status.get_flag(StatusFlags::Running));
     EXPECT_FALSE(status.get_flag(StatusFlags::Paused));
     EXPECT_FALSE(status.get_flag(StatusFlags::Error));
-    
+
     status.clear_flag(StatusFlags::Ready);
     status.set_flag(StatusFlags::Error);
-    
+
     EXPECT_FALSE(status.get_flag(StatusFlags::Ready));
     EXPECT_TRUE(status.get_flag(StatusFlags::Running));
     EXPECT_FALSE(status.get_flag(StatusFlags::Paused));
@@ -368,15 +367,15 @@ TEST(SynchronousFlagsStatusTest, DifferentEnumClass)
 // Edge case tests
 TEST(SynchronousFlagsEdgeCaseTest, DefaultConstruction)
 {
-    SynchronousFlags<TestFlags> flags;
+    Flags<TestFlags> flags;
     EXPECT_EQ(flags.get_raw(), 0U);
 }
 
 TEST(SynchronousFlagsEdgeCaseTest, ConstGetFlag)
 {
-    SynchronousFlags<TestFlags> flags;
+    Flags<TestFlags> flags;
     flags.set_flag(TestFlags::Flag1);
-    
+
     const auto& const_flags = flags;
     EXPECT_TRUE(const_flags.get_flag(TestFlags::Flag1));
     EXPECT_EQ(const_flags.get_raw(), 0x02U);
