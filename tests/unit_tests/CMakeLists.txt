@@ -12,9 +12,9 @@ FetchContent_MakeAvailable(googletest)
 add_executable(
   unit_tests
   net/discovery/discovery_integration_tests.cpp
-#   net/connection/tcp_connection_tests.cpp
+  net/connection/tcp_connection_tests.cpp
   net/connection/tcp_server_life_cycle.cpp
-#   net/connection/tcp_server_connection_life_cycle.cpp
+  # net/connection/tcp_server_connection_life_cycle.cpp
   data/linear_buffer_tests.cpp
   data/linear_buffer_tests.cpp
   serial/serialization_tests.cpp
