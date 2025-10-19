@@ -37,3 +37,7 @@ Run tests
 cd out/build
 ctest --output-on-failure -C Release
 ```
+
+To run with TSAN use: setarch -R ./unit_tests
+
+CTEST no longer works with this enabled, that's why they are disabled with this config. 
