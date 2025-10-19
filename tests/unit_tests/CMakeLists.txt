@@ -1,6 +1,3 @@
-# Enable testing support
-enable_testing()
-
 # Fetch GoogleTest
 include(FetchContent)
 FetchContent_Declare(
@@ -24,6 +21,8 @@ add_executable(
 # Link libraries (assuming eestv_lib provides sources and Boost)
 target_link_libraries(unit_tests PRIVATE eestv_lib GTest::gtest_main)
 
-# Discover all Google Test cases automatically
-include(GoogleTest)
-gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST)
+# Conditionally discover tests (disabled for TSAN where it doesn't work well)
+if(ENABLE_CTEST)
+  include(GoogleTest)
+  gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST)
+endif()

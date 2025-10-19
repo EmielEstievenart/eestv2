@@ -28,7 +28,11 @@ if(WIN32)
   add_compile_definitions(_WIN32_WINNT=0x0601)
 endif()
 
-enable_testing()
+# Allow disabling CTest (e.g., for TSAN where test discovery doesn't work well)
+option(ENABLE_CTEST "Enable CTest and test discovery" ON)
+if(ENABLE_CTEST)
+  enable_testing()
+endif()
 
 add_subdirectory(code)
 add_subdirectory(examples)

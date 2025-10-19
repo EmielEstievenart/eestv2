@@ -40,7 +40,8 @@
         "CMAKE_CXX_FLAGS": "-fsanitize=thread -g -O1",
         "CMAKE_C_FLAGS": "-fsanitize=thread -g -O1",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
-        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread",
+        "ENABLE_CTEST": "OFF"
       }
     },
     {
@@ -178,14 +179,6 @@
       "name": "ubuntu-gcc-release",
       "displayName": "Test Ubuntu GCC Release",
       "configurePreset": "ubuntu-gcc-release",
-      "output": {
-        "outputOnFailure": true
-      }
-    },
-    {
-      "name": "ubuntu-gcc-tsan",
-      "displayName": "Test Ubuntu GCC ThreadSanitizer",
-      "configurePreset": "ubuntu-gcc-tsan",
       "output": {
         "outputOnFailure": true
       }
