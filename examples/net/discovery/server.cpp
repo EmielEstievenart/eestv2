@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
         std::cout << "----------------------------------------" << std::endl;
 
         // Start the server
-        server.start();
+        server.async_start();
 
         // Run the IO context in a separate thread
         std::thread io_thread(

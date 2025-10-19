@@ -75,7 +75,7 @@ TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
     Discoverable service(test_service1, []() { return test_reply1; });
     server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
     server->add_discoverable(service);
-    server->start();
+    server->async_start();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -111,7 +111,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
     server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
     server->add_discoverable(service1);
     server->add_discoverable(service2);
-    server->start();
+    server->async_start();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -176,7 +176,7 @@ TEST_F(DiscoveryIntegrationTest, NonexistentServiceNoResponse)
     Discoverable service(test_service1, []() { return test_reply1; });
     server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
     server->add_discoverable(service);
-    server->start();
+    server->async_start();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -203,7 +203,7 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
 
     server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
     server->add_discoverable(service);
-    server->start();
+    server->async_start();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -273,7 +273,7 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
             Discoverable service(test_service1, []() { return test_reply1; });
             server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
             server->add_discoverable(service);
-            server->start();
+            server->async_start();
         });
 
     std::atomic<bool> found {false};
@@ -307,7 +307,7 @@ TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
     Discoverable service(test_service1, []() { return test_reply1; });
     server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
     server->add_discoverable(service);
-    server->start();
+    server->async_start();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
