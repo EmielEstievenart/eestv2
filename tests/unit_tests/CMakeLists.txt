@@ -26,4 +26,4 @@ target_link_libraries(unit_tests PRIVATE eestv_lib GTest::gtest_main)
 
 # Discover all Google Test cases automatically
 include(GoogleTest)
-gtest_discover_tests(unit_tests)
+gtest_discover_tests(unit_tests DISCOVERY_MODE PRE_TEST)

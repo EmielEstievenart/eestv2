@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 3,
   "configurePresets": [
     {
       "name": "ubuntu-base",
@@ -28,6 +28,19 @@
       "inherits": "ubuntu-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "ubuntu-gcc-tsan",
+      "displayName": "Ubuntu GCC ThreadSanitizer",
+      "description": "Ubuntu - GCC - Ninja - x64 - Debug with ThreadSanitizer",
+      "inherits": "ubuntu-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fsanitize=thread -g -O1",
+        "CMAKE_C_FLAGS": "-fsanitize=thread -g -O1",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
       }
     },
     {
@@ -122,6 +135,12 @@
       "configuration": "Release"
     },
     {
+      "name": "ubuntu-gcc-tsan",
+      "displayName": "Build Ubuntu GCC ThreadSanitizer",
+      "configurePreset": "ubuntu-gcc-tsan",
+      "configuration": "Debug"
+    },
+    {
       "name": "windows-msvc-debug",
       "displayName": "Build Windows MSVC Debug",
       "configurePreset": "windows-msvc-debug",
@@ -159,6 +178,14 @@
       "name": "ubuntu-gcc-release",
       "displayName": "Test Ubuntu GCC Release",
       "configurePreset": "ubuntu-gcc-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ubuntu-gcc-tsan",
+      "displayName": "Test Ubuntu GCC ThreadSanitizer",
+      "configurePreset": "ubuntu-gcc-tsan",
       "output": {
         "outputOnFailure": true
       }
