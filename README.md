@@ -38,6 +38,10 @@ cd out/build
 ctest --output-on-failure -C Release
 ```
 
-To run with TSAN use: setarch -R ./unit_tests
+To run with TSAN use: 
+setarch -R ./unit_tests
+
+To run with a filter use: 
+setarch -R ./unit_tests --gtest_filter="DiscoveryClientLifecycleTest.*"
 
 CTEST no longer works with this enabled, that's why they are disabled with this config. 
