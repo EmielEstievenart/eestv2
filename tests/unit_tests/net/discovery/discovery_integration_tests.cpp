@@ -19,6 +19,10 @@ const std::string test_reply2          = "127.0.0.1:8080";
 const std::string non_existent_service = "missing_service";
 } // namespace
 
+using eestv::Discoverable;
+using eestv::UdpDiscoveryClient;
+using eestv::UdpDiscoveryServer;
+
 /**
  * Integration tests for UDP discovery system - tests realistic multi-component scenarios
  */
@@ -87,7 +91,7 @@ TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
                                                  return true;
                                              });
 
-    client->start();
+    client->async_start();
 
     auto start_time = std::chrono::steady_clock::now();
     while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(2))
@@ -125,7 +129,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
                 return true;
             });
 
-        client->start();
+        client->async_start();
 
         auto start_time = std::chrono::steady_clock::now();
         while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(2))
@@ -136,7 +140,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
         ASSERT_TRUE(found) << "First service was not discovered";
         EXPECT_EQ(received_reply, test_reply1);
 
-        client->stop();
+        client->async_stop([]() { });
         client.reset();
     }
 
@@ -154,7 +158,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
                 return true;
             });
 
-        client->start();
+        client->async_start();
 
         auto start_time = std::chrono::steady_clock::now();
         while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(2))
@@ -185,7 +189,7 @@ TEST_F(DiscoveryIntegrationTest, NonexistentServiceNoResponse)
                                                       return true;
                                                   });
 
-    client->start();
+    client->async_start();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
@@ -217,7 +221,7 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
                 return true;
             });
 
-        client->start();
+        client->async_start();
 
         auto start_time = std::chrono::steady_clock::now();
         while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(2))
@@ -228,7 +232,7 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
         ASSERT_TRUE(found);
         EXPECT_EQ(received_reply, "reply_1");
 
-        client->stop();
+        client->async_stop([]() { });
         client.reset();
     }
 
@@ -246,7 +250,7 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
                 return true;
             });
 
-        client->start();
+        client->async_start();
 
         auto start_time = std::chrono::steady_clock::now();
         while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(2))
@@ -284,7 +288,7 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
                                                  return true;
                                              });
 
-    client->start();
+    client->async_start();
 
     auto start_time = std::chrono::steady_clock::now();
     while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(3))
@@ -333,7 +337,7 @@ TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
                         return true;
                     });
 
-                clients[i]->start();
+                clients[i]->async_start();
                 client_contexts[i].run();
             });
     }
@@ -358,7 +362,7 @@ TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
     {
         if (clients[i])
         {
-            clients[i]->stop();
+            clients[i]->async_stop([]() { });
         }
         client_contexts[i].stop();
     }

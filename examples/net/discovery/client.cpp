@@ -1,10 +1,12 @@
 #include "eestv/net/discovery/udp_discovery_client.hpp"
+#include <atomic>
 #include <boost/asio.hpp>
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
-#include <chrono>
-#include <atomic>
+
+using eestv::UdpDiscoveryClient;
 
 int main(int argc, char* argv[])
 {
@@ -58,7 +60,7 @@ int main(int argc, char* argv[])
             });
 
         // Start the client
-        client.start();
+        client.async_start();
 
         // Run the IO context in a separate thread
         std::thread io_thread(

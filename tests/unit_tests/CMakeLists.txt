@@ -8,6 +8,7 @@ FetchContent_MakeAvailable(googletest)
 # Add executable for unit tests
 add_executable(
   unit_tests
+  net/discovery/discovery_client_lifecycle_tests.cpp
   net/discovery/discovery_integration_tests.cpp
   net/connection/tcp_connection_tests.cpp
   net/connection/tcp_server_life_cycle.cpp

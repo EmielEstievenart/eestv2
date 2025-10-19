@@ -1,10 +1,13 @@
 #include "eestv/net/discovery/discoverable.hpp"
 #include "eestv/net/discovery/udp_discovery_server.hpp"
 #include <boost/asio.hpp>
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
-#include <chrono>
+
+using eestv::Discoverable;
+using eestv::UdpDiscoveryServer;
 
 int main(int argc, char* argv[])
 {
