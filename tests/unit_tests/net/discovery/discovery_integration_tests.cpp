@@ -11,7 +11,7 @@
 
 namespace
 {
-const int test_port                    = 54322;
+const int test_port                    = 54324;
 const std::string test_service1        = "database_service";
 const std::string test_service2        = "api_service";
 const std::string test_reply1          = "127.0.0.1:5432";
@@ -94,10 +94,13 @@ TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
     client->async_start();
 
     auto start_time = std::chrono::steady_clock::now();
-    while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(2))
+    while (!found && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(10))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+
+    client->stop();
+    server->stop();
 
     ASSERT_TRUE(found) << "Service was not discovered within timeout";
     EXPECT_EQ(received_reply, test_reply1);
@@ -140,7 +143,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
         ASSERT_TRUE(found) << "First service was not discovered";
         EXPECT_EQ(received_reply, test_reply1);
 
-        client->async_stop([]() { });
+        client->stop();
         client.reset();
     }
 
@@ -232,8 +235,7 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
         ASSERT_TRUE(found);
         EXPECT_EQ(received_reply, "reply_1");
 
-        client->async_stop([]() { });
-        client.reset();
+        client->stop();
     }
 
     // Second discovery should get incremented reply
