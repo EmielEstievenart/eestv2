@@ -18,7 +18,7 @@ add_executable(
   data/linear_buffer_tests.cpp
   serial/serialization_tests.cpp
   data_bridge/data_bridge_cli_tests.cpp
-  flags/synchronous_flags_tests.cpp)
+  flags/flags_tests.cpp)
 
 # Link libraries (assuming eestv_lib provides sources and Boost)
 target_link_libraries(unit_tests PRIVATE eestv_lib GTest::gtest_main)
