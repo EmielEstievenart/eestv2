@@ -1,7 +1,7 @@
 # AI Coding Guidelines for eestv_lib
 
 ## Building
-- Use CMake and CMakePresets.txt. Prefer the preset with Ninja. 
+- Use CMake and CMakePresets.txt. On Windows, prefer the preset with clang. 
 
 ## Coding Conventions
 - Types: PascalCase (e.g., `UdpDiscoveryClient`)
