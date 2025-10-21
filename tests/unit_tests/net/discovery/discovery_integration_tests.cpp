@@ -31,12 +31,11 @@ class DiscoveryIntegrationTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        io_thread = std::thread(
-            [this]()
-            {
-                auto work_guard = boost::asio::make_work_guard(io_context);
-                io_context.run();
-            });
+        io_context = std::make_unique<boost::asio::io_context>();
+        // Keep io_context alive until explicitly stopped
+        work_guard = std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(io_context->get_executor());
+
+        io_thread = std::thread([this]() { io_context->run(); });
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
@@ -54,17 +53,18 @@ protected:
             server.reset();
         }
 
-        io_context.stop();
+        work_guard.reset();
+
+        io_context->stop();
 
         if (io_thread.joinable())
         {
             io_thread.join();
         }
-
-        io_context.restart();
     }
 
-    boost::asio::io_context io_context;
+    std::unique_ptr<boost::asio::io_context> io_context;
+    std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_guard;
     std::unique_ptr<UdpDiscoveryServer> server;
     std::unique_ptr<UdpDiscoveryClient> client;
     std::thread io_thread;
@@ -73,7 +73,7 @@ protected:
 TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
 {
     Discoverable service(test_service1, []() { return test_reply1; });
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service);
     server->async_start();
 
@@ -83,7 +83,7 @@ TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
     std::string received_reply;
 
     client =
-        std::make_unique<UdpDiscoveryClient>(io_context, test_service1, std::chrono::milliseconds(500), test_port,
+        std::make_unique<UdpDiscoveryClient>(*io_context, test_service1, std::chrono::milliseconds(500), test_port,
                                              [&found, &received_reply](const std::string& response, const boost::asio::ip::udp::endpoint&)
                                              {
                                                  received_reply = response;
@@ -111,7 +111,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
     Discoverable service1(test_service1, []() { return test_reply1; });
     Discoverable service2(test_service2, []() { return test_reply2; });
 
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service1);
     server->add_discoverable(service2);
     server->async_start();
@@ -124,7 +124,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
         std::string received_reply;
 
         client = std::make_unique<UdpDiscoveryClient>(
-            io_context, test_service1, std::chrono::milliseconds(500), test_port,
+            *io_context, test_service1, std::chrono::milliseconds(500), test_port,
             [&found, &received_reply](const std::string& response, const boost::asio::ip::udp::endpoint&)
             {
                 received_reply = response;
@@ -153,7 +153,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
         std::string received_reply;
 
         client = std::make_unique<UdpDiscoveryClient>(
-            io_context, test_service2, std::chrono::milliseconds(500), test_port,
+            *io_context, test_service2, std::chrono::milliseconds(500), test_port,
             [&found, &received_reply](const std::string& response, const boost::asio::ip::udp::endpoint&)
             {
                 received_reply = response;
@@ -177,7 +177,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
 TEST_F(DiscoveryIntegrationTest, NonexistentServiceNoResponse)
 {
     Discoverable service(test_service1, []() { return test_reply1; });
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service);
     server->async_start();
 
@@ -185,7 +185,7 @@ TEST_F(DiscoveryIntegrationTest, NonexistentServiceNoResponse)
 
     std::atomic<bool> found {false};
 
-    client = std::make_unique<UdpDiscoveryClient>(io_context, non_existent_service, std::chrono::milliseconds(300), test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, non_existent_service, std::chrono::milliseconds(300), test_port,
                                                   [&found](const std::string&, const boost::asio::ip::udp::endpoint&)
                                                   {
                                                       found = true;
@@ -204,7 +204,7 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
     int call_count = 0;
     Discoverable service(test_service1, [&call_count]() { return "reply_" + std::to_string(++call_count); });
 
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service);
     server->async_start();
 
@@ -216,7 +216,7 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
         std::string received_reply;
 
         client = std::make_unique<UdpDiscoveryClient>(
-            io_context, test_service1, std::chrono::milliseconds(500), test_port,
+            *io_context, test_service1, std::chrono::milliseconds(500), test_port,
             [&found, &received_reply](const std::string& response, const boost::asio::ip::udp::endpoint&)
             {
                 received_reply = response;
@@ -244,7 +244,7 @@ TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
         std::string received_reply;
 
         client = std::make_unique<UdpDiscoveryClient>(
-            io_context, test_service1, std::chrono::milliseconds(500), test_port,
+            *io_context, test_service1, std::chrono::milliseconds(500), test_port,
             [&found, &received_reply](const std::string& response, const boost::asio::ip::udp::endpoint&)
             {
                 received_reply = response;
@@ -273,7 +273,7 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
             std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
             Discoverable service(test_service1, []() { return test_reply1; });
-            server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+            server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
             server->add_discoverable(service);
             server->async_start();
         });
@@ -282,7 +282,7 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
     std::string received_reply;
 
     client =
-        std::make_unique<UdpDiscoveryClient>(io_context, test_service1, std::chrono::milliseconds(300), test_port,
+        std::make_unique<UdpDiscoveryClient>(*io_context, test_service1, std::chrono::milliseconds(300), test_port,
                                              [&found, &received_reply](const std::string& response, const boost::asio::ip::udp::endpoint&)
                                              {
                                                  received_reply = response;
@@ -307,7 +307,7 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
 TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
 {
     Discoverable service(test_service1, []() { return test_reply1; });
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service);
     server->async_start();
 

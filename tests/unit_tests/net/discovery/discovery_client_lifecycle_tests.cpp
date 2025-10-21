@@ -28,14 +28,16 @@ class DiscoveryClientLifecycleTest : public ::testing::Test
 protected:
     void SetUp() override
     {
+        io_context = std::make_unique<boost::asio::io_context>();
+        // Keep io_context alive until explicitly stopped
+        work_guard = std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(io_context->get_executor());
+
         io_thread = std::thread(
             [this]()
             {
-                auto work_guard = boost::asio::make_work_guard(io_context);
-
                 try
                 {
-                    io_context.run();
+                    io_context->run();
                 }
                 catch (const std::exception& e)
                 {
@@ -60,17 +62,18 @@ protected:
             client.reset();
         }
 
-        io_context.stop();
+        work_guard.reset();
+
+        io_context->stop();
 
         if (io_thread.joinable())
         {
             io_thread.join();
         }
-
-        io_context.restart();
     }
 
-    boost::asio::io_context io_context;
+    std::unique_ptr<boost::asio::io_context> io_context;
+    std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_guard;
     std::unique_ptr<UdpDiscoveryClient> client;
     std::thread io_thread;
 };
@@ -78,7 +81,7 @@ protected:
 TEST_F(DiscoveryClientLifecycleTest, Destruct)
 {
     ASSERT_NO_THROW({
-        client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+        client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                       [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
     });
 
@@ -88,7 +91,7 @@ TEST_F(DiscoveryClientLifecycleTest, Destruct)
 TEST_F(DiscoveryClientLifecycleTest, StartAndDestruct)
 {
     ASSERT_NO_THROW({
-        client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+        client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                       [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
     });
 
@@ -103,7 +106,7 @@ TEST_F(DiscoveryClientLifecycleTest, StartAndDestructImmediately)
 {
     std::atomic<int> callback_count {0};
 
-    client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                   [&callback_count](const std::string&, const boost::asio::ip::udp::endpoint&)
                                                   {
                                                       callback_count++;
@@ -116,7 +119,7 @@ TEST_F(DiscoveryClientLifecycleTest, StartAndDestructImmediately)
 TEST_F(DiscoveryClientLifecycleTest, StartStopAndDestruct)
 {
     ASSERT_NO_THROW({
-        client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+        client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                       [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
     });
 
@@ -132,7 +135,7 @@ TEST_F(DiscoveryClientLifecycleTest, StartStopAndDestruct)
 TEST_F(DiscoveryClientLifecycleTest, StartStopImmediatelyAndDestruct)
 {
     ASSERT_NO_THROW({
-        client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+        client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                       [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
     });
 
@@ -146,7 +149,7 @@ TEST_F(DiscoveryClientLifecycleTest, StartAndAsyncStop)
 {
     std::atomic<bool> stopped {false};
 
-    client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                   [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
 
     client->async_start();
@@ -167,7 +170,7 @@ TEST_F(DiscoveryClientLifecycleTest, StartAndAsyncStop)
 
 TEST_F(DiscoveryClientLifecycleTest, StopWithoutStart)
 {
-    client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                   [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
 
     ASSERT_NO_THROW(client->stop());
@@ -175,7 +178,7 @@ TEST_F(DiscoveryClientLifecycleTest, StopWithoutStart)
 
 TEST_F(DiscoveryClientLifecycleTest, MultipleStartCalls)
 {
-    client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                   [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
 
     client->async_start();
@@ -194,7 +197,7 @@ TEST_F(DiscoveryClientLifecycleTest, MultipleAsyncStopCalls)
 {
     std::atomic<int> stop_callback_count {0};
 
-    client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                   [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
 
     client->async_start();
@@ -215,7 +218,7 @@ TEST_F(DiscoveryClientLifecycleTest, StopThenStart)
 {
     std::atomic<bool> stopped {false};
 
-    client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                   [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
 
     client->async_start();
@@ -238,7 +241,7 @@ TEST_F(DiscoveryClientLifecycleTest, StopThenStart)
 
 TEST_F(DiscoveryClientLifecycleTest, DestructionAfterStart)
 {
-    client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                   [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
 
     client->async_start();
@@ -249,7 +252,7 @@ TEST_F(DiscoveryClientLifecycleTest, DestructionAfterStart)
 
 TEST_F(DiscoveryClientLifecycleTest, DestructionWithoutStart)
 {
-    client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                   [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
 
     ASSERT_NO_THROW(client.reset());
@@ -257,7 +260,7 @@ TEST_F(DiscoveryClientLifecycleTest, DestructionWithoutStart)
 
 TEST_F(DiscoveryClientLifecycleTest, RapidStartStopCycles)
 {
-    client = std::make_unique<UdpDiscoveryClient>(io_context, test_service, short_timeout, test_port,
+    client = std::make_unique<UdpDiscoveryClient>(*io_context, test_service, short_timeout, test_port,
                                                   [](const std::string&, const boost::asio::ip::udp::endpoint&) { return true; });
 
     for (int i = 0; i < 5; ++i)

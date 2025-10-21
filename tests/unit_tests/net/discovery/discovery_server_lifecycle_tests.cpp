@@ -19,8 +19,8 @@ const auto wait_for_async      = std::chrono::milliseconds(50);
 const auto wait_for_operation  = std::chrono::milliseconds(200);
 } // namespace
 
-using eestv::UdpDiscoveryServer;
 using eestv::Discoverable;
+using eestv::UdpDiscoveryServer;
 
 /**
  * Lifecycle tests for UdpDiscoveryServer - tests creation, start, stop, and destruction
@@ -30,14 +30,16 @@ class DiscoveryServerLifecycleTest : public ::testing::Test
 protected:
     void SetUp() override
     {
+        io_context = std::make_unique<boost::asio::io_context>();
+        // Keep io_context alive until explicitly stopped
+        work_guard = std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(io_context->get_executor());
+
         io_thread = std::thread(
             [this]()
             {
-                auto work_guard = boost::asio::make_work_guard(io_context);
-
                 try
                 {
-                    io_context.run();
+                    io_context->run();
                 }
                 catch (const std::exception& e)
                 {
@@ -62,35 +64,32 @@ protected:
             server.reset();
         }
 
-        io_context.stop();
+        work_guard.reset();
+
+        io_context->stop();
 
         if (io_thread.joinable())
         {
             io_thread.join();
         }
-
-        io_context.restart();
     }
 
-    boost::asio::io_context io_context;
+    std::unique_ptr<boost::asio::io_context> io_context;
+    std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_guard;
     std::unique_ptr<UdpDiscoveryServer> server;
     std::thread io_thread;
 };
 
 TEST_F(DiscoveryServerLifecycleTest, Destruct)
 {
-    ASSERT_NO_THROW({
-        server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
-    });
+    ASSERT_NO_THROW({ server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port); });
 
     EXPECT_NE(server, nullptr);
 }
 
 TEST_F(DiscoveryServerLifecycleTest, StartAndDestruct)
 {
-    ASSERT_NO_THROW({
-        server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
-    });
+    ASSERT_NO_THROW({ server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port); });
 
     server->async_start();
 
@@ -101,16 +100,14 @@ TEST_F(DiscoveryServerLifecycleTest, StartAndDestruct)
 
 TEST_F(DiscoveryServerLifecycleTest, StartAndDestructImmediately)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     ASSERT_NO_THROW(server->async_start());
 }
 
 TEST_F(DiscoveryServerLifecycleTest, StartStopAndDestruct)
 {
-    ASSERT_NO_THROW({
-        server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
-    });
+    ASSERT_NO_THROW({ server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port); });
 
     server->async_start();
 
@@ -123,9 +120,7 @@ TEST_F(DiscoveryServerLifecycleTest, StartStopAndDestruct)
 
 TEST_F(DiscoveryServerLifecycleTest, StartStopImmediatelyAndDestruct)
 {
-    ASSERT_NO_THROW({
-        server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
-    });
+    ASSERT_NO_THROW({ server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port); });
 
     server->async_start();
     server->stop();
@@ -137,7 +132,7 @@ TEST_F(DiscoveryServerLifecycleTest, StartAndAsyncStop)
 {
     std::atomic<bool> stopped {false};
 
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     server->async_start();
     std::this_thread::sleep_for(wait_for_async);
@@ -157,14 +152,14 @@ TEST_F(DiscoveryServerLifecycleTest, StartAndAsyncStop)
 
 TEST_F(DiscoveryServerLifecycleTest, StopWithoutStart)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     ASSERT_NO_THROW(server->stop());
 }
 
 TEST_F(DiscoveryServerLifecycleTest, MultipleStartCalls)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     bool first_start = server->async_start();
     std::this_thread::sleep_for(wait_for_async);
@@ -186,7 +181,7 @@ TEST_F(DiscoveryServerLifecycleTest, MultipleAsyncStopCalls)
 {
     std::atomic<int> stop_callback_count {0};
 
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     server->async_start();
     std::this_thread::sleep_for(wait_for_async);
@@ -206,7 +201,7 @@ TEST_F(DiscoveryServerLifecycleTest, StopThenStart)
 {
     std::atomic<bool> stopped {false};
 
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     server->async_start();
     std::this_thread::sleep_for(wait_for_async);
@@ -230,7 +225,7 @@ TEST_F(DiscoveryServerLifecycleTest, StopThenStart)
 
 TEST_F(DiscoveryServerLifecycleTest, DestructionAfterStart)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     server->async_start();
     std::this_thread::sleep_for(wait_for_async);
@@ -240,14 +235,14 @@ TEST_F(DiscoveryServerLifecycleTest, DestructionAfterStart)
 
 TEST_F(DiscoveryServerLifecycleTest, DestructionWithoutStart)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     ASSERT_NO_THROW(server.reset());
 }
 
 TEST_F(DiscoveryServerLifecycleTest, RapidStartStopCycles)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     for (int i = 0; i < 5; ++i)
     {
@@ -260,7 +255,7 @@ TEST_F(DiscoveryServerLifecycleTest, RapidStartStopCycles)
 
 TEST_F(DiscoveryServerLifecycleTest, AddDiscoverableBeforeStart)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     Discoverable discoverable(test_service, []() { return std::string("test_reply"); });
     ASSERT_NO_THROW(server->add_discoverable(discoverable));
@@ -273,7 +268,7 @@ TEST_F(DiscoveryServerLifecycleTest, AddDiscoverableBeforeStart)
 
 TEST_F(DiscoveryServerLifecycleTest, AddDiscoverableAfterStart)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     server->async_start();
     std::this_thread::sleep_for(wait_for_async);
@@ -286,7 +281,7 @@ TEST_F(DiscoveryServerLifecycleTest, AddDiscoverableAfterStart)
 
 TEST_F(DiscoveryServerLifecycleTest, AddMultipleDiscoverables)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     Discoverable discoverable1("service1", []() { return std::string("reply1"); });
     Discoverable discoverable2("service2", []() { return std::string("reply2"); });
@@ -304,7 +299,7 @@ TEST_F(DiscoveryServerLifecycleTest, AddMultipleDiscoverables)
 
 TEST_F(DiscoveryServerLifecycleTest, ResetAfterStop)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     server->async_start();
     std::this_thread::sleep_for(wait_for_async);
@@ -322,7 +317,7 @@ TEST_F(DiscoveryServerLifecycleTest, ResetAfterStop)
 
 TEST_F(DiscoveryServerLifecycleTest, AsyncStopWithoutCallback)
 {
-    server = std::make_unique<UdpDiscoveryServer>(io_context, test_port);
+    server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
     server->async_start();
     std::this_thread::sleep_for(wait_for_async);
