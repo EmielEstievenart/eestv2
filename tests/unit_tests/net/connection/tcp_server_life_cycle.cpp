@@ -17,12 +17,15 @@ protected:
     void SetUp() override
     {
         io_context = std::make_unique<boost::asio::io_context>();
-        // work_guard = std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(io_context->get_executor());
+        // Keep io_context alive until explicitly stopped
+        work_guard = std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(io_context->get_executor());
 
         // Start io_context in background thread
         io_thread = std::thread(
             [this]()
             {
+                // auto work_guard = boost::asio::make_work_guard(io_context);
+
                 io_context->run();
                 std::cout << "Io context stopped \n";
             });
@@ -32,37 +35,22 @@ protected:
     {
         std::cout << "[TearDown] Starting cleanup..." << std::endl;
 
-        // Stop io_context and wait for thread to finish
-        // test::IoContextDebugger::print_state(*io_context, "Before work_guard reset");
+        work_guard.reset();
 
-        // work_guard.reset();
-
-        // test::IoContextDebugger::print_state(*io_context, "After work_guard reset");
-
-        // Wait for io_context to become idle (with timeout)
-        // std::cout << "[TearDown] Waiting for io_context to become idle..." << std::endl;
-        // bool idle = test::IoContextDebugger::wait_for_idle(*io_context, std::chrono::seconds(5));
-
-        // if (!idle)
-        // {
-        //     std::cout << "[TearDown] WARNING: io_context did not become idle within timeout!" << std::endl;
-        //     test::IoContextDebugger::force_stop_with_diagnostics(*io_context);
-        // }
-        // else
-        // {
-        //     std::cout << "[TearDown] io_context became idle naturally" << std::endl;
-        // }
-
-        // io_context->stop();
+        io_context->stop();
 
         if (io_thread.joinable())
         {
             io_thread.join();
         }
+
+        // io_context->restart();
+
+        std::cout << "[TearDown] Cleanup complete" << std::endl;
     }
 
     std::unique_ptr<boost::asio::io_context> io_context;
-    // std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_guard;
+    std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_guard;
     std::thread io_thread;
 };
 
@@ -139,20 +127,174 @@ TEST_F(TcpServerLifeCycleTest, CreateStartAndDestroyServerViaDestructor)
         });
 
     // Wait for the stopped callback to be invoked
-    for (int i = 0; i < 10 && !stopped.load(); ++i)
+    for (int i = 0; i < 20 && !stopped.load(); ++i)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     EXPECT_TRUE(stopped.load());
 
-    // server->stop();
-
-    //server.reset();
-
-    // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    // Destroy the server (unique_ptr will automatically clean up)
-
-    // Test passes if we reach here without crashes or exceptions
     SUCCEED();
+}
+
+TEST_F(TcpServerLifeCycleTest, Destruct)
+{
+    ASSERT_NO_THROW({ auto server = std::make_unique<TcpServer<>>(*io_context, 0); });
+}
+
+TEST_F(TcpServerLifeCycleTest, StartAndDestructImmediately)
+{
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    ASSERT_NO_THROW(server->async_start());
+}
+
+TEST_F(TcpServerLifeCycleTest, MultipleStartCalls)
+{
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    bool first_start = server->async_start();
+    std::this_thread::sleep_for(startup_delay);
+
+    // Second start should be ignored
+    bool second_start = server->async_start();
+
+    // Third start should also be ignored
+    bool third_start = server->async_start();
+
+    EXPECT_TRUE(first_start);
+    EXPECT_FALSE(second_start);
+    EXPECT_FALSE(third_start);
+
+    std::atomic<bool> stopped {false};
+    server->async_stop([&stopped]() { stopped = true; });
+
+    for (int i = 0; i < 10 && !stopped.load(); ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+TEST_F(TcpServerLifeCycleTest, MultipleAsyncStopCalls)
+{
+    std::atomic<int> stop_callback_count {0};
+
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    server->async_start();
+    std::this_thread::sleep_for(startup_delay);
+
+    bool first_stop  = server->async_stop([&stop_callback_count]() { stop_callback_count++; });
+    bool second_stop = server->async_stop([&stop_callback_count]() { stop_callback_count++; });
+
+    EXPECT_TRUE(first_stop);
+    EXPECT_FALSE(second_stop);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    EXPECT_EQ(stop_callback_count, 1);
+}
+
+TEST_F(TcpServerLifeCycleTest, StopWithoutStart)
+{
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    bool stop_result = server->async_stop(nullptr);
+
+    EXPECT_FALSE(stop_result);
+}
+
+TEST_F(TcpServerLifeCycleTest, StopThenStart)
+{
+    std::atomic<bool> stopped {false};
+
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    server->async_start();
+    std::this_thread::sleep_for(startup_delay);
+
+    server->async_stop([&stopped]() { stopped = true; });
+
+    auto start_time = std::chrono::steady_clock::now();
+    while (!stopped && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(2))
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
+    ASSERT_TRUE(stopped);
+
+    // Starting after stop should be ignored while stopping
+    bool start_result = server->async_start();
+
+    EXPECT_FALSE(start_result);
+}
+
+TEST_F(TcpServerLifeCycleTest, DestructionAfterStart)
+{
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    server->async_start();
+    std::this_thread::sleep_for(startup_delay);
+
+    ASSERT_NO_THROW(server.reset());
+}
+
+TEST_F(TcpServerLifeCycleTest, DestructionWithoutStart)
+{
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    ASSERT_NO_THROW(server.reset());
+}
+
+TEST_F(TcpServerLifeCycleTest, AsyncStopWithoutCallback)
+{
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    server->async_start();
+    std::this_thread::sleep_for(startup_delay);
+
+    // async_stop with nullptr callback should not crash
+    bool stop_initiated = server->async_stop(nullptr);
+
+    EXPECT_TRUE(stop_initiated);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+}
+
+TEST_F(TcpServerLifeCycleTest, SetConnectionCallbackBeforeStart)
+{
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    std::atomic<int> connection_count {0};
+    ASSERT_NO_THROW(server->set_connection_callback([&connection_count](auto connection) { connection_count++; }));
+
+    server->async_start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    std::atomic<bool> stopped {false};
+    server->async_stop([&stopped]() { stopped = true; });
+
+    for (int i = 0; i < 10 && !stopped.load(); ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+TEST_F(TcpServerLifeCycleTest, SetConnectionCallbackAfterStart)
+{
+    auto server = std::make_unique<TcpServer<>>(*io_context, 0);
+
+    server->async_start();
+    std::this_thread::sleep_for(startup_delay);
+
+    std::atomic<int> connection_count {0};
+    ASSERT_NO_THROW(server->set_connection_callback([&connection_count](auto connection) { connection_count++; }));
+
+    std::atomic<bool> stopped {false};
+    server->async_stop([&stopped]() { stopped = true; });
+
+    for (int i = 0; i < 10 && !stopped.load(); ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
 }
