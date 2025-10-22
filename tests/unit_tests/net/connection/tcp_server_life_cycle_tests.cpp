@@ -9,7 +9,7 @@
 
 using namespace eestv;
 
-class TcpServerLifeCycleTest : public ::testing::Test
+class TcpServerLifeCycleTests : public ::testing::Test
 {
 protected:
     static constexpr std::chrono::milliseconds startup_delay {100};
@@ -55,7 +55,7 @@ protected:
 };
 
 // Test basic server creation and destruction
-TEST_F(TcpServerLifeCycleTest, CreateStartAndDestroyServer)
+TEST_F(TcpServerLifeCycleTests, CreateStartAndDestroyServer)
 {
     // Create server on any available port
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
@@ -102,7 +102,7 @@ TEST_F(TcpServerLifeCycleTest, CreateStartAndDestroyServer)
 }
 
 // Test server creation with specific endpoint
-TEST_F(TcpServerLifeCycleTest, CreateStartAndDestroyServerViaDestructor)
+TEST_F(TcpServerLifeCycleTests, CreateStartAndDestroyServerViaDestructor)
 {
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
 
@@ -137,19 +137,19 @@ TEST_F(TcpServerLifeCycleTest, CreateStartAndDestroyServerViaDestructor)
     SUCCEED();
 }
 
-TEST_F(TcpServerLifeCycleTest, Destruct)
+TEST_F(TcpServerLifeCycleTests, Destruct)
 {
     ASSERT_NO_THROW({ auto server = std::make_unique<TcpServer<>>(*io_context, 0); });
 }
 
-TEST_F(TcpServerLifeCycleTest, StartAndDestructImmediately)
+TEST_F(TcpServerLifeCycleTests, StartAndDestructImmediately)
 {
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
 
     ASSERT_NO_THROW(server->async_start());
 }
 
-TEST_F(TcpServerLifeCycleTest, MultipleStartCalls)
+TEST_F(TcpServerLifeCycleTests, MultipleStartCalls)
 {
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
 
@@ -175,7 +175,7 @@ TEST_F(TcpServerLifeCycleTest, MultipleStartCalls)
     }
 }
 
-TEST_F(TcpServerLifeCycleTest, MultipleAsyncStopCalls)
+TEST_F(TcpServerLifeCycleTests, MultipleAsyncStopCalls)
 {
     std::atomic<int> stop_callback_count {0};
 
@@ -195,7 +195,7 @@ TEST_F(TcpServerLifeCycleTest, MultipleAsyncStopCalls)
     EXPECT_EQ(stop_callback_count, 1);
 }
 
-TEST_F(TcpServerLifeCycleTest, StopWithoutStart)
+TEST_F(TcpServerLifeCycleTests, StopWithoutStart)
 {
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
 
@@ -204,7 +204,7 @@ TEST_F(TcpServerLifeCycleTest, StopWithoutStart)
     EXPECT_FALSE(stop_result);
 }
 
-TEST_F(TcpServerLifeCycleTest, StopThenStart)
+TEST_F(TcpServerLifeCycleTests, StopThenStart)
 {
     std::atomic<bool> stopped {false};
 
@@ -229,7 +229,7 @@ TEST_F(TcpServerLifeCycleTest, StopThenStart)
     EXPECT_FALSE(start_result);
 }
 
-TEST_F(TcpServerLifeCycleTest, DestructionAfterStart)
+TEST_F(TcpServerLifeCycleTests, DestructionAfterStart)
 {
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
 
@@ -239,14 +239,14 @@ TEST_F(TcpServerLifeCycleTest, DestructionAfterStart)
     ASSERT_NO_THROW(server.reset());
 }
 
-TEST_F(TcpServerLifeCycleTest, DestructionWithoutStart)
+TEST_F(TcpServerLifeCycleTests, DestructionWithoutStart)
 {
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
 
     ASSERT_NO_THROW(server.reset());
 }
 
-TEST_F(TcpServerLifeCycleTest, AsyncStopWithoutCallback)
+TEST_F(TcpServerLifeCycleTests, AsyncStopWithoutCallback)
 {
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
 
@@ -261,7 +261,7 @@ TEST_F(TcpServerLifeCycleTest, AsyncStopWithoutCallback)
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 }
 
-TEST_F(TcpServerLifeCycleTest, SetConnectionCallbackBeforeStart)
+TEST_F(TcpServerLifeCycleTests, SetConnectionCallbackBeforeStart)
 {
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
 
@@ -280,7 +280,7 @@ TEST_F(TcpServerLifeCycleTest, SetConnectionCallbackBeforeStart)
     }
 }
 
-TEST_F(TcpServerLifeCycleTest, SetConnectionCallbackAfterStart)
+TEST_F(TcpServerLifeCycleTests, SetConnectionCallbackAfterStart)
 {
     auto server = std::make_unique<TcpServer<>>(*io_context, 0);
 

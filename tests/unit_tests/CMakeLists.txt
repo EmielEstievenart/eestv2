@@ -11,10 +11,8 @@ add_executable(
   net/discovery/discovery_client_lifecycle_tests.cpp
   net/discovery/discovery_server_lifecycle_tests.cpp
   net/discovery/discovery_integration_tests.cpp
-  net/connection/tcp_connection_tests.cpp
-  net/connection/tcp_server_life_cycle.cpp
-  # net/connection/tcp_server_connection_life_cycle.cpp
-  data/linear_buffer_tests.cpp
+  net/connection/tcp_connection_life_cycle_tests.cpp
+  net/connection/tcp_server_life_cycle_tests.cpp
   data/linear_buffer_tests.cpp
   serial/serialization_tests.cpp
   data_bridge/data_bridge_cli_tests.cpp
