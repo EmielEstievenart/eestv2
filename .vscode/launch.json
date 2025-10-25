@@ -39,6 +39,22 @@
             "cwd": "${command:cmake.buildDirectory}"
         },
         {
+            "name": "Test: StartSendingAndDestruct",
+            "type": "lldb-dap",
+            "request": "launch",
+            "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
+            "args": [
+                "--gtest_filter=TcpConnectionLifeCycleTests.StartSendingAndDestruct"
+            ],
+            "cwd": "${command:cmake.buildDirectory}"
+        },
+        {
+            "name": "Attach to Process",
+            "type": "lldb-dap",
+            "request": "attach",
+            "pid": 4136
+        },
+        {
             "name": "Example: Templates",
             "type": "lldb-dap",
             "request": "launch",
