@@ -23,6 +23,7 @@ protected:
 
     void SetUp() override
     {
+        EESTV_SET_LOG_LEVEL(Trace);
         io_context = std::make_unique<boost::asio::io_context>();
         work_guard = std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(io_context->get_executor());
         io_thread  = std::thread(
@@ -363,7 +364,7 @@ TEST_F(TcpConnectionLifeCycleTests, AsyncStopWithCallback)
     std::this_thread::sleep_for(medium_delay);
 
     std::atomic<bool> stopped {false};
-    bool stop_initiated = connection_from_server->asycn_stop([&stopped]() { stopped = true; });
+    bool stop_initiated = connection_from_server->async_stop([&stopped]() { stopped = true; });
 
     EXPECT_TRUE(stop_initiated);
 
@@ -694,7 +695,7 @@ TEST_F(TcpConnectionLifeCycleTests, StartAfterStop)
     std::this_thread::sleep_for(medium_delay);
 
     std::atomic<bool> stopped {false};
-    connection_from_server->asycn_stop([&stopped]() { stopped = true; });
+    connection_from_server->async_stop([&stopped]() { stopped = true; });
 
     auto start_time = std::chrono::steady_clock::now();
     while (!stopped && std::chrono::steady_clock::now() - start_time < std::chrono::seconds(2))

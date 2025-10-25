@@ -16,6 +16,8 @@ protected:
 
     void SetUp() override
     {
+        EESTV_SET_LOG_LEVEL(Trace);
+
         io_context = std::make_unique<boost::asio::io_context>();
         // Keep io_context alive until explicitly stopped
         work_guard = std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(io_context->get_executor());
