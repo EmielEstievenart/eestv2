@@ -69,7 +69,6 @@ void run_client_example()
     boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address("127.0.0.1"), 12345);
 
     // Create a client connection (will automatically reconnect when lost)
-    // Note: Uses default ArrayBufferAdapter<4096> buffer
     auto client_conn = std::make_shared<eestv::TcpClientConnection<>>(endpoint, io_context, std::chrono::seconds(5));
 
     // Configure reconnection behavior

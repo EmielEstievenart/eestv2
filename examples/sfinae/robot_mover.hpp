@@ -33,6 +33,7 @@ struct always_false : std::false_type
 {
 };
 
+//ADL = Argument Dependant Lookup
 // Main dispatcher: prefer member, otherwise ADL free function, otherwise static assert
 template <typename RobotType>
 void move_the_robot(RobotType& robot)

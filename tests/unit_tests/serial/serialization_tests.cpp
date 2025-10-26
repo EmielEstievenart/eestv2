@@ -46,81 +46,28 @@ struct Outer
     }
 };
 
-/**
- * @brief Simple adapter for LinearBuffer to work with Serializer/Deserializer
- */
-class LinearBufferAdapter
-{
-public:
-    explicit LinearBufferAdapter(LinearBuffer& buffer) : _buffer(buffer) { }
-
-    bool write(const void* data, std::size_t size)
-    {
-        std::size_t writable;
-        std::uint8_t* write_head = _buffer.get_write_head(writable);
-        if (write_head == nullptr || writable < size || data == nullptr || size == 0)
-        {
-            return false;
-        }
-        std::memcpy(write_head, data, size);
-        return _buffer.commit(size);
-    }
-
-    bool read(void* data, std::size_t size)
-    {
-        std::size_t available;
-        const std::uint8_t* ptr = _buffer.get_read_head(available);
-
-        if (available < size)
-        {
-            return false;
-        }
-
-        std::memcpy(data, ptr, size);
-        return _buffer.consume(size);
-    }
-
-    std::size_t available_space() const
-    {
-        std::size_t write_size;
-        _buffer.get_write_head(write_size);
-        return write_size;
-    }
-
-    std::size_t available_data() const
-    {
-        std::size_t read_size;
-        _buffer.get_read_head(read_size);
-        return read_size;
-    }
-
-private:
-    LinearBuffer& _buffer;
-};
-
 class SerializationTest : public ::testing::Test
 {
 protected:
-    void SetUp() override
-    {
-        buffer  = std::make_unique<LinearBuffer>(1024);
-        adapter = std::make_unique<LinearBufferAdapter>(*buffer);
-    }
+    void SetUp() override { buffer = std::make_unique<LinearBuffer>(1024); }
 
-    void TearDown() override
-    {
-        adapter.reset();
-        buffer.reset();
-    }
+    void TearDown() override { buffer.reset(); }
 
     std::unique_ptr<LinearBuffer> buffer;
-    std::unique_ptr<LinearBufferAdapter> adapter;
+
+    std::size_t available_data() const
+    {
+        std::size_t size = 0;
+
+        buffer->get_read_head(size);
+        return size;
+    }
 };
 
 // Test serialization of primitive types
 TEST_F(SerializationTest, SerializePrimitiveTypes)
 {
-    Serializer<LinearBufferAdapter> ser(*adapter);
+    Serializer ser(*buffer);
 
     std::uint8_t u8   = 0x42;
     std::uint16_t u16 = 0x1234;
@@ -137,7 +84,7 @@ TEST_F(SerializationTest, SerializePrimitiveTypes)
     // Verify bytes were written
     std::size_t expected_size = sizeof(u8) + sizeof(u16) + sizeof(u32) + sizeof(u64) + sizeof(i8) + sizeof(i16) + sizeof(i32) + sizeof(i64);
     EXPECT_EQ(ser.bytes_written(), expected_size);
-    EXPECT_EQ(adapter->available_data(), expected_size);
+    EXPECT_EQ(available_data(), expected_size);
 }
 
 // Test deserialization of primitive types
@@ -145,7 +92,7 @@ TEST_F(SerializationTest, DeserializePrimitiveTypes)
 {
     // First serialize some data
     {
-        Serializer<LinearBufferAdapter> ser(*adapter);
+        Serializer ser(*buffer);
 
         std::uint8_t u8   = 0x42;
         std::uint16_t u16 = 0x1234;
@@ -156,7 +103,7 @@ TEST_F(SerializationTest, DeserializePrimitiveTypes)
 
     // Now deserialize
     {
-        Deserializer<LinearBufferAdapter> deser(*adapter);
+        Deserializer deser(*buffer);
 
         std::uint8_t u8   = 0;
         std::uint16_t u16 = 0;
@@ -171,7 +118,7 @@ TEST_F(SerializationTest, DeserializePrimitiveTypes)
     }
 
     // Buffer should be empty after deserialization
-    EXPECT_EQ(adapter->available_data(), 0);
+    EXPECT_EQ(available_data(), 0);
 }
 
 // Test serialization and deserialization of bool
@@ -179,7 +126,7 @@ TEST_F(SerializationTest, SerializeDeserializeBool)
 {
     // Serialize
     {
-        Serializer<LinearBufferAdapter> ser(*adapter);
+        Serializer ser(*buffer);
         bool flag_true  = true;
         bool flag_false = false;
 
@@ -190,7 +137,7 @@ TEST_F(SerializationTest, SerializeDeserializeBool)
 
     // Deserialize
     {
-        Deserializer<LinearBufferAdapter> deser(*adapter);
+        Deserializer deser(*buffer);
         bool flag1 = false;
         bool flag2 = true;
 
@@ -207,7 +154,7 @@ TEST_F(SerializationTest, SerializeUserDefinedStruct)
 
     // Serialize
     {
-        Serializer<LinearBufferAdapter> ser(*adapter);
+        Serializer ser(*buffer);
         TestData data {42, -15, true};
 
         ser & data;
@@ -218,7 +165,7 @@ TEST_F(SerializationTest, SerializeUserDefinedStruct)
 
     // Deserialize
     {
-        Deserializer<LinearBufferAdapter> deser(*adapter);
+        Deserializer deser(*buffer);
         TestData data {0, 0, false};
 
         deser & data;
@@ -238,7 +185,7 @@ TEST_F(SerializationTest, ChainingOperator)
 
     // Serialize with chaining
     {
-        Serializer<LinearBufferAdapter> ser(*adapter);
+        Serializer ser(*buffer);
         ser & a & b & c;
 
         EXPECT_EQ(ser.bytes_written(), sizeof(a) + sizeof(b) + sizeof(c));
@@ -246,7 +193,7 @@ TEST_F(SerializationTest, ChainingOperator)
 
     // Deserialize with chaining
     {
-        Deserializer<LinearBufferAdapter> deser(*adapter);
+        Deserializer deser(*buffer);
         std::uint8_t a_out  = 0;
         std::uint16_t b_out = 0;
         std::uint32_t c_out = 0;
@@ -262,7 +209,7 @@ TEST_F(SerializationTest, ChainingOperator)
 // Test serializer reset functionality
 TEST_F(SerializationTest, SerializerReset)
 {
-    Serializer<LinearBufferAdapter> ser(*adapter);
+    Serializer ser(*buffer);
 
     std::uint32_t value = 0x12345678;
     ser & value;
@@ -278,13 +225,13 @@ TEST_F(SerializationTest, DeserializerReset)
 {
     // First serialize
     {
-        Serializer<LinearBufferAdapter> ser(*adapter);
+        Serializer ser(*buffer);
         std::uint32_t value = 0x12345678;
         ser & value;
     }
 
     // Deserialize and reset
-    Deserializer<LinearBufferAdapter> deser(*adapter);
+    Deserializer deser(*buffer);
     std::uint32_t value = 0;
     deser & value;
 
@@ -299,8 +246,7 @@ TEST_F(SerializationTest, InsufficientBufferSpace)
 {
     // Create a small buffer
     LinearBuffer small_buffer(4);
-    LinearBufferAdapter small_adapter(small_buffer);
-    Serializer<LinearBufferAdapter> ser(small_adapter);
+    Serializer ser(small_buffer);
 
     std::uint32_t value1 = 0x12345678;
     std::uint32_t value2 = 0x87654321;
@@ -320,13 +266,13 @@ TEST_F(SerializationTest, InsufficientDataForDeserialization)
 {
     // Serialize only one value
     {
-        Serializer<LinearBufferAdapter> ser(*adapter);
+        Serializer ser(*buffer);
         std::uint32_t value = 0x12345678;
         ser & value;
     }
 
     // Try to deserialize two values
-    Deserializer<LinearBufferAdapter> deser(*adapter);
+    Deserializer deser(*buffer);
     std::uint32_t value1 = 0;
     std::uint32_t value2 = 0;
 
@@ -345,14 +291,14 @@ TEST_F(SerializationTest, NestedStructs)
 
     // Serialize
     {
-        Serializer<LinearBufferAdapter> ser(*adapter);
+        Serializer ser(*buffer);
         Outer data {100, {50, 75}, true};
         ser & data;
     }
 
     // Deserialize
     {
-        Deserializer<LinearBufferAdapter> deser(*adapter);
+        Deserializer deser(*buffer);
         Outer data {0, {0, 0}, false};
         deser & data;
 

@@ -1,0 +1,3 @@
+add_executable(multi_printer_example main.cpp)
+
+target_link_libraries(multi_printer_example eestv_lib)

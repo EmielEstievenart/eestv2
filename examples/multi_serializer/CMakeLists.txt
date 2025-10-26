@@ -1,0 +1,5 @@
+add_executable(multi_serializer_example main.cpp)
+target_link_libraries(multi_serializer_example eestv_lib)
+
+add_executable(serialization_mux_example serialization_example.cpp)
+target_link_libraries(serialization_mux_example eestv_lib)
