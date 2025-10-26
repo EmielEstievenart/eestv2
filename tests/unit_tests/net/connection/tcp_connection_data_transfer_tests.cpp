@@ -169,20 +169,25 @@ TEST_F(TcpConnectionDataTransferTests, ClientToServerBasicSend)
 
     // Setup server to receive data
     std::atomic<bool> data_received {false};
-    std::string received_data;
+    std::atomic<bool> data_is_identical {false};
 
     server_connection->set_data_received_callback(
-        [this, &data_received, &received_data](LinearBuffer& receive_buffer)
+        [this, &data_received, test_message, &data_is_identical](LinearBuffer& receive_buffer)
         {
             std::size_t available_size    = 0;
             const std::uint8_t* read_head = receive_buffer.get_read_head(available_size);
 
             if (read_head && available_size > 0)
             {
+                std::string received_data;
                 received_data.assign(reinterpret_cast<const char*>(read_head), available_size);
                 server_connection->receive_buffer().consume(available_size);
                 data_received = true;
                 EESTV_LOG_INFO("[SERVER] Received " << available_size << " bytes: " << received_data);
+                if (received_data == test_message)
+                {
+                    data_is_identical = true;
+                }
             }
         });
 
@@ -193,7 +198,7 @@ TEST_F(TcpConnectionDataTransferTests, ClientToServerBasicSend)
         std::unique_lock<std::mutex> lock(client_connection_mutex);
 
         client_connection->call_queue_send_function(
-            [&test_message](LinearBuffer& send_buffer)
+            [test_message](LinearBuffer& send_buffer)
 
             {
                 std::size_t writable_size = 0;
@@ -217,7 +222,7 @@ TEST_F(TcpConnectionDataTransferTests, ClientToServerBasicSend)
     }
 
     ASSERT_TRUE(data_received);
-    EXPECT_EQ(received_data, test_message);
+    ASSERT_TRUE(data_is_identical.load());
 
     EESTV_LOG_INFO("[TEST] ClientToServerBasicSend completed successfully");
     SUCCEED();
