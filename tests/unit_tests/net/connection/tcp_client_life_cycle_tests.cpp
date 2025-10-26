@@ -1,14 +1,16 @@
-#include "eestv/net/connection/tcp_client.hpp"
-#include "eestv/net/connection/tcp_server.hpp"
-#include "eestv/logging/eestv_logging.hpp"
-#include <boost/asio.hpp>
-#include <gtest/gtest.h>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <thread>
+
+#include <boost/asio.hpp>
+#include <gtest/gtest.h>
+
+#include "eestv/logging/eestv_logging.hpp"
+#include "eestv/net/connection/tcp_client.hpp"
+#include "eestv/net/connection/tcp_server.hpp"
 
 using namespace eestv;
 
