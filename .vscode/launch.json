@@ -10,6 +10,14 @@
             "cwd": "${command:cmake.buildDirectory}"
         },
         {
+            "name": "variadic_templates",
+            "type": "lldb-dap",
+            "request": "launch",
+            "program": "${command:cmake.buildDirectory}/bin/variadic_templates.exe",
+            "args": [],
+            "cwd": "${command:cmake.buildDirectory}"
+        },
+        {
             "name": "Tests: allLDAB",
             "type": "lldb-dap",
             "request": "launch",
