@@ -1,4 +1,5 @@
 #include "eestv/net/discovery/discoverable.hpp"
+#include "eestv/net/discovery/discovery_string.hpp"
 #include "eestv/net/discovery/udp_discovery_client.hpp"
 #include "eestv/net/discovery/udp_discovery_server.hpp"
 #include "eestv/logging/eestv_logging.hpp"
@@ -21,6 +22,7 @@ const std::string non_existent_service = "missing_service";
 } // namespace
 
 using eestv::Discoverable;
+using eestv::DiscoveryString;
 using eestv::UdpDiscoveryClient;
 using eestv::UdpDiscoveryServer;
 
@@ -390,4 +392,42 @@ TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
         EXPECT_TRUE(results[i]) << "Client " << i << " did not receive response";
         EXPECT_EQ(replies[i], test_reply1) << "Client " << i << " received incorrect reply";
     }
+}
+
+/**
+ * Unit tests for DiscoveryString class
+ */
+class DiscoveryStringTest : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        // Setup code if needed
+    }
+
+    void TearDown() override
+    {
+        // Cleanup code if needed
+    }
+};
+
+TEST_F(DiscoveryStringTest, ParseDiscoveryResponse)
+{
+    // Test valid response
+    auto result = DiscoveryString::parse("test_service:192.168.1.100:54321");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->service_name, "test_service");
+    EXPECT_EQ(result->ip_address, "192.168.1.100");
+    EXPECT_EQ(result->port, 54321);
+    EXPECT_EQ(result->endpoint.address().to_string(), "192.168.1.100");
+    EXPECT_EQ(result->endpoint.port(), 54321);
+
+    // Test invalid responses
+    EXPECT_FALSE(DiscoveryString::parse("192.168.1.100:54321").has_value());                // Missing service name
+    EXPECT_FALSE(DiscoveryString::parse(":192.168.1.100:54321").has_value());               // Empty service name
+    EXPECT_FALSE(DiscoveryString::parse("test_service:54321").has_value());                 // Missing IP
+    EXPECT_FALSE(DiscoveryString::parse("test_service::54321").has_value());                // Empty IP
+    EXPECT_FALSE(DiscoveryString::parse("test_service:192.168.1.100").has_value());         // Missing port
+    EXPECT_FALSE(DiscoveryString::parse("test_service:192.168.1.100:abc").has_value());     // Invalid port
+    EXPECT_FALSE(DiscoveryString::parse("test_service:999.999.999.999:54321").has_value()); // Invalid IP
 }

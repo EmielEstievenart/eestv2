@@ -15,6 +15,7 @@ add_executable(
   net/connection/tcp_server_life_cycle_tests.cpp
   net/connection/tcp_client_life_cycle_tests.cpp
   net/connection/tcp_connection_data_transfer_tests.cpp
+  net/network_utils_tests.cpp
   data/linear_buffer_tests.cpp
   serial/serialization_tests.cpp
   serial/serialization_mux_tests.cpp
