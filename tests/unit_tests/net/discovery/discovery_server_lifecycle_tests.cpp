@@ -259,7 +259,7 @@ TEST_F(DiscoveryServerLifecycleTest, AddDiscoverableBeforeStart)
 {
     server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
-    Discoverable discoverable(test_service, []() { return std::string("test_reply"); });
+    Discoverable discoverable(test_service, [](const auto&) { return std::string("test_reply"); });
     ASSERT_NO_THROW(server->add_discoverable(discoverable));
 
     server->async_start();
@@ -275,7 +275,7 @@ TEST_F(DiscoveryServerLifecycleTest, AddDiscoverableAfterStart)
     server->async_start();
     std::this_thread::sleep_for(wait_for_async);
 
-    Discoverable discoverable(test_service, []() { return std::string("test_reply"); });
+    Discoverable discoverable(test_service, [](const auto&) { return std::string("test_reply"); });
     ASSERT_NO_THROW(server->add_discoverable(discoverable));
 
     server->stop();
@@ -285,9 +285,9 @@ TEST_F(DiscoveryServerLifecycleTest, AddMultipleDiscoverables)
 {
     server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
 
-    Discoverable discoverable1("service1", []() { return std::string("reply1"); });
-    Discoverable discoverable2("service2", []() { return std::string("reply2"); });
-    Discoverable discoverable3("service3", []() { return std::string("reply3"); });
+    Discoverable discoverable1("service1", [](const auto&) { return std::string("reply1"); });
+    Discoverable discoverable2("service2", [](const auto&) { return std::string("reply2"); });
+    Discoverable discoverable3("service3", [](const auto&) { return std::string("reply3"); });
 
     ASSERT_NO_THROW(server->add_discoverable(discoverable1));
     ASSERT_NO_THROW(server->add_discoverable(discoverable2));

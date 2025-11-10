@@ -75,7 +75,7 @@ protected:
 
 TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
 {
-    Discoverable service(test_service1, []() { return test_reply1; });
+    Discoverable service(test_service1, [](const auto&) { return test_reply1; });
     server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service);
     server->async_start();
@@ -111,8 +111,8 @@ TEST_F(DiscoveryIntegrationTest, SingleServiceDiscovery)
 
 TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
 {
-    Discoverable service1(test_service1, []() { return test_reply1; });
-    Discoverable service2(test_service2, []() { return test_reply2; });
+    Discoverable service1(test_service1, [](const auto&) { return test_reply1; });
+    Discoverable service2(test_service2, [](const auto&) { return test_reply2; });
 
     server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service1);
@@ -179,7 +179,7 @@ TEST_F(DiscoveryIntegrationTest, MultipleServicesDiscovery)
 
 TEST_F(DiscoveryIntegrationTest, NonexistentServiceNoResponse)
 {
-    Discoverable service(test_service1, []() { return test_reply1; });
+    Discoverable service(test_service1, [](const auto&) { return test_reply1; });
     server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service);
     server->async_start();
@@ -205,7 +205,7 @@ TEST_F(DiscoveryIntegrationTest, NonexistentServiceNoResponse)
 TEST_F(DiscoveryIntegrationTest, DynamicCallbackReply)
 {
     int call_count = 0;
-    Discoverable service(test_service1, [&call_count]() { return "reply_" + std::to_string(++call_count); });
+    Discoverable service(test_service1, [&call_count](const auto&) { return "reply_" + std::to_string(++call_count); });
 
     server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service);
@@ -275,7 +275,12 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
-            Discoverable service(test_service1, []() { return test_reply1; });
+            // clang-format off
+            Discoverable service(test_service1, [](const auto&) {
+                EESTV_LOG_INFO("REPLYING");
+                return test_reply1;
+            });
+            // clang-format on
             server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
             server->add_discoverable(service);
             server->async_start();
@@ -309,7 +314,7 @@ TEST_F(DiscoveryIntegrationTest, ClientRetryMechanism)
 
 TEST_F(DiscoveryIntegrationTest, ConcurrentClientRequests)
 {
-    Discoverable service(test_service1, []() { return test_reply1; });
+    Discoverable service(test_service1, [](const auto&) { return test_reply1; });
     server = std::make_unique<UdpDiscoveryServer>(*io_context, test_port);
     server->add_discoverable(service);
     server->async_start();

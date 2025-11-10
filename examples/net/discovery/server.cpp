@@ -31,33 +31,37 @@ int main(int argc, char* argv[])
 
         // Add some example discoverable services
         Discoverable database_service("database",
-                                      []() -> std::string
+                                      [](const auto& remote_endpoint) -> std::string
                                       {
-                                          std::cout << "  -> Received request for 'database' service" << std::endl;
+                                          std::cout << "  -> Received request for 'database' service from "
+                                                    << remote_endpoint.address().to_string() << ":" << remote_endpoint.port() << std::endl;
                                           return "127.0.0.1:5432";
                                       });
 
         Discoverable api_service("api",
-                                 []() -> std::string
+                                 [](const auto& remote_endpoint) -> std::string
                                  {
-                                     std::cout << "  -> Received request for 'api' service" << std::endl;
+                                     std::cout << "  -> Received request for 'api' service from "
+                                               << remote_endpoint.address().to_string() << ":" << remote_endpoint.port() << std::endl;
                                      return "127.0.0.1:8080";
                                  });
 
         Discoverable web_service("web",
-                                 []() -> std::string
+                                 [](const auto& remote_endpoint) -> std::string
                                  {
-                                     std::cout << "  -> Received request for 'web' service" << std::endl;
+                                     std::cout << "  -> Received request for 'web' service from "
+                                               << remote_endpoint.address().to_string() << ":" << remote_endpoint.port() << std::endl;
                                      return "127.0.0.1:3000";
                                  });
 
         // Add a dynamic service that returns the current timestamp
         Discoverable time_service("time",
-                                  []() -> std::string
+                                  [](const auto& remote_endpoint) -> std::string
                                   {
                                       auto now       = std::chrono::system_clock::now();
                                       auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-                                      std::cout << "  -> Received request for 'time' service" << std::endl;
+                                      std::cout << "  -> Received request for 'time' service from "
+                                                << remote_endpoint.address().to_string() << ":" << remote_endpoint.port() << std::endl;
                                       return "current_timestamp:" + std::to_string(timestamp);
                                   });
 
