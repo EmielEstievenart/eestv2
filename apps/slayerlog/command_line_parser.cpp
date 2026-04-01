@@ -17,7 +17,7 @@ Config parse_command_line(int argc, char* argv[])
     // clang-format off
     desc.add_options()
         ("help,h", "Show help message")
-        ("file,f", po::value<std::string>(), "Path to the log file")
+        ("file,f", po::value<std::vector<std::string>>()->composing(), "Path to a log file. Repeat for multiple files.")
         ("poll-interval-ms", po::value<int>()->default_value(250), "Polling interval in milliseconds");
     // clang-format on
 
@@ -29,7 +29,7 @@ Config parse_command_line(int argc, char* argv[])
     }
 
     po::positional_options_description positional;
-    positional.add("file", 1);
+    positional.add("file", -1);
 
     po::variables_map variables;
 
@@ -52,7 +52,7 @@ Config parse_command_line(int argc, char* argv[])
         }
 
         Config config;
-        config.file_path        = variables["file"].as<std::string>();
+        config.file_paths       = variables["file"].as<std::vector<std::string>>();
         config.poll_interval_ms = variables["poll-interval-ms"].as<int>();
 
         if (config.poll_interval_ms <= 0)

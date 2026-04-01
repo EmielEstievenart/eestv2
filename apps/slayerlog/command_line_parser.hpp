@@ -1,13 +1,14 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace slayerlog
 {
 
 struct Config
 {
-    std::string file_path;
+    std::vector<std::string> file_paths;
     int poll_interval_ms = 250;
 };
 
