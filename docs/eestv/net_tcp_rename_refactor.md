@@ -46,10 +46,10 @@ All connection-related classes have been renamed to include the "Tcp" prefix for
 - ✅ `examples/net/tcp_connection/main.cpp`
 
 ### Documentation
-- ✅ `docs/eestv/net/guide.md`
-- ✅ `docs/eestv/net/buffer_interface.md`
-- ✅ `docs/eestv/net/keep_alive_callback.md`
-- ✅ `docs/eestv/net/connection_architecture.md` (if exists)
+- ✅ `docs/eestv/net.md`
+- ✅ `docs/eestv/net_buffer_interface.md`
+- ✅ `docs/eestv/net_keep_alive_callback.md`
+- ✅ `docs/eestv/net_connection_architecture.md` (if exists)
 
 ## Migration Guide
 
