@@ -4,8 +4,11 @@ endif()
 
 file(READ "@CC_SRC@" _contents)
 
-# Normalize drive letter from C: to c: (applies globally)
-string(REPLACE "C:" "c:" _contents "${_contents}")
+# Normalize drive letters to lowercase (applies globally)
+foreach(_drive_letter A B C D E F G H I J K L M N O P Q R S T U V W X Y Z)
+  string(TOLOWER "${_drive_letter}" _drive_letter_lower)
+  string(REPLACE "${_drive_letter}:" "${_drive_letter_lower}:" _contents "${_contents}")
+endforeach()
 
 # Write normalized contents to destination
 file(WRITE "@CC_DST@" "${_contents}")
