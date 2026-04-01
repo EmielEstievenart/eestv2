@@ -414,20 +414,23 @@ protected:
 TEST_F(DiscoveryStringTest, ParseDiscoveryResponse)
 {
     // Test valid response
-    auto result = DiscoveryString::parse("test_service:192.168.1.100:54321");
+    auto result = DiscoveryString::parse("test_service:192.168.1.100:54321:1700000000000");
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result->service_name, "test_service");
     EXPECT_EQ(result->ip_address, "192.168.1.100");
     EXPECT_EQ(result->port, 54321);
     EXPECT_EQ(result->endpoint.address().to_string(), "192.168.1.100");
     EXPECT_EQ(result->endpoint.port(), 54321);
+    EXPECT_EQ(result->timestamp_ms, 1700000000000ULL);
 
     // Test invalid responses
-    EXPECT_FALSE(DiscoveryString::parse("192.168.1.100:54321").has_value());                // Missing service name
-    EXPECT_FALSE(DiscoveryString::parse(":192.168.1.100:54321").has_value());               // Empty service name
-    EXPECT_FALSE(DiscoveryString::parse("test_service:54321").has_value());                 // Missing IP
-    EXPECT_FALSE(DiscoveryString::parse("test_service::54321").has_value());                // Empty IP
-    EXPECT_FALSE(DiscoveryString::parse("test_service:192.168.1.100").has_value());         // Missing port
-    EXPECT_FALSE(DiscoveryString::parse("test_service:192.168.1.100:abc").has_value());     // Invalid port
-    EXPECT_FALSE(DiscoveryString::parse("test_service:999.999.999.999:54321").has_value()); // Invalid IP
+    EXPECT_FALSE(DiscoveryString::parse("192.168.1.100:54321:1700000000000").has_value());                // Missing service name
+    EXPECT_FALSE(DiscoveryString::parse(":192.168.1.100:54321:1700000000000").has_value());               // Empty service name
+    EXPECT_FALSE(DiscoveryString::parse("test_service:54321:1700000000000").has_value());                 // Missing IP
+    EXPECT_FALSE(DiscoveryString::parse("test_service::54321:1700000000000").has_value());                // Empty IP
+    EXPECT_FALSE(DiscoveryString::parse("test_service:192.168.1.100:1700000000000").has_value());         // Missing port
+    EXPECT_FALSE(DiscoveryString::parse("test_service:192.168.1.100:abc:1700000000000").has_value());     // Invalid port
+    EXPECT_FALSE(DiscoveryString::parse("test_service:999.999.999.999:54321:1700000000000").has_value()); // Invalid IP
+    EXPECT_FALSE(DiscoveryString::parse("test_service:192.168.1.100:54321").has_value());                 // Missing timestamp
+    EXPECT_FALSE(DiscoveryString::parse("test_service:192.168.1.100:54321:abc").has_value());             // Invalid timestamp
 }

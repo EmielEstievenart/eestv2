@@ -1,5 +1,5 @@
-#include "eestv/data_bridge/data_bridge.hpp"
-#include "eestv/data_bridge/data_bridge_cli.hpp"
+#include "eestv/data_bridge/bridge.hpp"
+#include "eestv/data_bridge/command_param_parser.hpp"
 #include "eestv/logging/eestv_logging.hpp"
 
 #include <boost/asio/io_context.hpp>
@@ -115,11 +115,11 @@ TEST_F(DataBridgeCliTest, ParsesEndpointWithInfoVerbosity)
 
     ArgumentBuffer arguments {"data_bridge", "--endpoint", "--discovery", "alpha"};
 
-    auto config = eestv::parse_command_line(arguments.argc(), arguments.argv());
-    eestv::DataBridge data_bridge(config, *io_context);
+    auto config = eestv::bridge::parse_command_line(arguments.argc(), arguments.argv());
+    // eestv::bridge::Bridge data_bridge(config, *io_context);
 
-    EXPECT_EQ(eestv::EndpointMode::endpoint, data_bridge.endpoint_mode());
-    EXPECT_EQ("alpha", data_bridge.discovery_target());
+    EXPECT_EQ(eestv::bridge::EndpointMode::endpoint, config.endpoint_mode);
+    EXPECT_EQ("alpha", config.discovery_target);
     EXPECT_EQ(eestv::logging::LogLevel::Info, config.log_level);
 }
 
@@ -130,11 +130,11 @@ TEST_F(DataBridgeCliTest, ParsesDebugVerbosity)
 
     ArgumentBuffer arguments {"data_bridge", "-v", "--endpoint", "--discovery", "beta"};
 
-    auto config = eestv::parse_command_line(arguments.argc(), arguments.argv());
-    eestv::DataBridge data_bridge(config, *io_context);
+    auto config = eestv::bridge::parse_command_line(arguments.argc(), arguments.argv());
+    // eestv::bridge::Bridge data_bridge(config, *io_context);
 
-    EXPECT_EQ(eestv::EndpointMode::endpoint, data_bridge.endpoint_mode());
-    EXPECT_EQ("beta", data_bridge.discovery_target());
+    EXPECT_EQ(eestv::bridge::EndpointMode::endpoint, config.endpoint_mode);
+    EXPECT_EQ("beta", config.discovery_target);
     EXPECT_EQ(eestv::logging::LogLevel::Debug, config.log_level);
 }
 
@@ -145,11 +145,11 @@ TEST_F(DataBridgeCliTest, ParsesTraceVerbosityAndBridgeMode)
 
     ArgumentBuffer arguments {"data_bridge", "-vv", "--bridge", "--discovery", "gamma"};
 
-    auto config = eestv::parse_command_line(arguments.argc(), arguments.argv());
-    eestv::DataBridge data_bridge(config, *io_context);
+    auto config = eestv::bridge::parse_command_line(arguments.argc(), arguments.argv());
+    // eestv::bridge::Bridge data_bridge(config, *io_context);
 
-    EXPECT_EQ(eestv::EndpointMode::bridge, data_bridge.endpoint_mode());
-    EXPECT_EQ("gamma", data_bridge.discovery_target());
+    EXPECT_EQ(eestv::bridge::EndpointMode::bridge, config.endpoint_mode);
+    EXPECT_EQ("gamma", config.discovery_target);
     EXPECT_EQ(eestv::logging::LogLevel::Trace, config.log_level);
 }
 
@@ -159,7 +159,7 @@ TEST_F(DataBridgeCliTest, ThrowsWhenBothEndpointAndBridge)
 
     ArgumentBuffer arguments {"data_bridge", "--endpoint", "--bridge", "--discovery", "epsilon"};
 
-    EXPECT_THROW(eestv::parse_command_line(arguments.argc(), arguments.argv()), boost::program_options::error);
+    EXPECT_THROW(eestv::bridge::parse_command_line(arguments.argc(), arguments.argv()), boost::program_options::error);
 }
 
 TEST_F(DataBridgeCliTest, ThrowsWhenDiscoveryMissing)
@@ -168,7 +168,19 @@ TEST_F(DataBridgeCliTest, ThrowsWhenDiscoveryMissing)
 
     ArgumentBuffer arguments {"data_bridge", "--endpoint"};
 
-    EXPECT_THROW(eestv::parse_command_line(arguments.argc(), arguments.argv()), boost::program_options::error);
+    EXPECT_THROW(eestv::bridge::parse_command_line(arguments.argc(), arguments.argv()), boost::program_options::error);
+}
+
+TEST_F(DataBridgeCliTest, CreationAndDestruction)
+{
+    LogLevelGuard guard;
+    eestv::logging::current_log_level = eestv::logging::LogLevel::Error;
+
+    ArgumentBuffer arguments {"data_bridge", "-vv", "--bridge", "--discovery", "gamma"};
+
+    auto config = eestv::bridge::parse_command_line(arguments.argc(), arguments.argv());
+    eestv::bridge::Bridge data_bridge(config, *io_context);
+    // std::this_thread::sleep_for(wait_for_async);
 }
 
 TEST_F(DataBridgeCliTest, DiscoveryBetweenTwoDataBridges)
@@ -180,16 +192,16 @@ TEST_F(DataBridgeCliTest, DiscoveryBetweenTwoDataBridges)
     ArgumentBuffer arguments1 {"data_bridge", "--endpoint", "-vv", "--discovery", "test_group"};
     ArgumentBuffer arguments2 {"data_bridge", "--endpoint", "-vv", "--discovery", "test_group"};
 
-    auto config1 = eestv::parse_command_line(arguments1.argc(), arguments1.argv());
-    auto config2 = eestv::parse_command_line(arguments2.argc(), arguments2.argv());
+    auto config1 = eestv::bridge::parse_command_line(arguments1.argc(), arguments1.argv());
+    auto config2 = eestv::bridge::parse_command_line(arguments2.argc(), arguments2.argv());
 
     eestv::logging::current_log_level = config1.log_level;
 
-    eestv::DataBridge data_bridge1(config1, *io_context, eestv::DataBridge::default_port);
-    eestv::DataBridge data_bridge2(config2, *io_context, eestv::DataBridge::default_port);
+    eestv::bridge::Bridge data_bridge1(config1, *io_context, eestv::bridge::Bridge::default_port);
+    eestv::bridge::Bridge data_bridge2(config2, *io_context, eestv::bridge::Bridge::default_port);
 
     // Let them discover each other for a couple of seconds
-    std::this_thread::sleep_for(std::chrono::seconds(3));
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // Query their counters - both should have discovered each other
     EXPECT_GT(data_bridge1.discovery_count(), 0U);
@@ -198,4 +210,8 @@ TEST_F(DataBridgeCliTest, DiscoveryBetweenTwoDataBridges)
     // Both should have been discovered at least once
     EXPECT_GT(data_bridge1.discovered_count(), 0U);
     EXPECT_GT(data_bridge2.discovered_count(), 0U);
+
+    // Both should have at least 1 pending incoming connection and 1 pending outgoing connection
+    EXPECT_GE(data_bridge1.pending_connections_count(), 1U);
+    EXPECT_GE(data_bridge2.pending_connections_count(), 1U);
 }

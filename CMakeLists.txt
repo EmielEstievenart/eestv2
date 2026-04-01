@@ -1,5 +1,20 @@
 cmake_minimum_required(VERSION 3.21)
 
+project(academic)
+
+# Allow Boost to be supplied either through the cache or the environment so
+# CMake presets and IDE integrations can configure the project cleanly.
+set(BOOST_ROOT
+    "$ENV{BOOST_ROOT}"
+    CACHE PATH "Path to the Boost source tree used by add_subdirectory()")
+
+if(NOT BOOST_ROOT)
+  message(
+    FATAL_ERROR
+      "BOOST_ROOT is not set. Pass -DBOOST_ROOT=<path-to-boost> or set the BOOST_ROOT environment variable."
+  )
+endif()
+
 # Specify which Boost libraries to include (limits build to essentials; add more
 # if needed)
 set(BOOST_INCLUDE_LIBRARIES asio system program_options) # 'system' is often
@@ -7,10 +22,8 @@ set(BOOST_INCLUDE_LIBRARIES asio system program_options) # 'system' is often
 # error handling
 set(BOOST_ENABLE_CMAKE ON)
 
-# Add Boost as a subdirectory using the env var
-add_subdirectory($ENV{BOOST_ROOT} my_boost)
-
-project(academic)
+# Add Boost as a subdirectory using the configured root path.
+add_subdirectory("${BOOST_ROOT}" my_boost)
 
 # Set output directories for all targets globally
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -34,7 +47,36 @@ if(ENABLE_CTEST)
   enable_testing()
 endif()
 
+set(FTXUI_BUILD_DOCS
+    OFF
+    CACHE BOOL "Disable FTXUI docs in the superproject" FORCE)
+set(FTXUI_BUILD_EXAMPLES
+    OFF
+    CACHE BOOL "Disable FTXUI examples in the superproject" FORCE)
+set(FTXUI_BUILD_TESTS
+    OFF
+    CACHE BOOL "Disable FTXUI tests in the superproject" FORCE)
+set(FTXUI_BUILD_TESTS_FUZZER
+    OFF
+    CACHE BOOL "Disable FTXUI fuzz tests in the superproject" FORCE)
+set(FTXUI_BUILD_MODULES
+    OFF
+    CACHE BOOL "Disable FTXUI C++20 modules in the superproject" FORCE)
+
+add_subdirectory(libs/fxtui)
+set(gtest_force_shared_crt
+    ON
+    CACHE BOOL "Use the shared CRT for GoogleTest on MSVC" FORCE)
+if(WIN32)
+  # GoogleTest's pthread probing is unnecessary on MSVC and can fail in
+  # Windows-only environments that do not provide pthread headers or libs.
+  set(gtest_disable_pthreads
+      ON
+      CACHE BOOL "Disable pthreads for GoogleTest on Windows" FORCE)
+endif()
+add_subdirectory(libs/googletest)
 add_subdirectory(code)
+add_subdirectory(apps)
 add_subdirectory(examples)
 add_subdirectory(tests/unit_tests)
 

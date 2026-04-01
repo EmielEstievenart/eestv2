@@ -1,5 +1,5 @@
-#include "eestv/serial/serialization_multiplexer.hpp"
-#include "eestv/serial/serialization_demultiplexer.hpp"
+#include "eestv/serial/multiplexing_serializer.hpp"
+#include "eestv/serial/demultiplexing_deserializer.hpp"
 #include "eestv/data/linear_buffer.hpp"
 #include <iostream>
 #include <cstdint>
@@ -55,8 +55,8 @@ int main()
     LinearBuffer buffer(1024);
 
     // Create multiplexer and demultiplexer with our message types
-    SerializationMultiplexer<SensorData, CommandMessage, StatusMessage> mux(buffer);
-    SerializationDemultiplexer<SensorData, CommandMessage, StatusMessage> demux(buffer);
+    MultiplexingSerializer<SensorData, CommandMessage, StatusMessage> mux(buffer);
+    DemultiplexingDeserializer<SensorData, CommandMessage, StatusMessage> demux(buffer);
 
     // Serialize different message types
     std::cout << "Serializing messages...\n";

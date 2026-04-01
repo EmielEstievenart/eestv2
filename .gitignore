@@ -5,3 +5,6 @@ build
 .continue/rules
 .idea
 .vs
+.claude
+.github/instructions
+out

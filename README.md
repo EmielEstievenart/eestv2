@@ -10,11 +10,12 @@ Quick start, after cloning
 
 ```bash
 # init and update submodules
-git submodule update --init
+git submodule update --init --recursive
 ```
 
-Configure & build (from repo root). 
-Since boost is used, you need to point the project to the root of boost. 
+Configure & build (from repo root).
+Since Boost is added with `add_subdirectory()`, point the project to the root of
+the Boost source tree first.
 
 On Windows:
 
@@ -25,17 +26,42 @@ On Windows:
 After this, you can configure the project:
 
 ```bash
-mkdir out\build
-cd out\build
-cmake -S ../.. -B . -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
+cmake --preset windows-msvc-release
+cmake --build --preset windows-msvc-release
+```
+
+Run `slayerlog`:
+
+```bash
+out/build/windows-msvc-release/bin/slayerlog --file path/to/log.txt
 ```
 
 Run tests
 
 ```bash
-cd out/build
-ctest --output-on-failure -C Release
+ctest --preset windows-msvc-release
+```
+
+If you prefer Clang on Windows:
+
+```bash
+cmake --preset windows-clang-debug
+cmake --build --preset windows-clang-debug
+ctest --preset windows-clang-debug
+```
+
+On Linux:
+
+```bash
+cmake --preset linux-gcc-release
+cmake --build --preset linux-gcc-release
+ctest --preset linux-gcc-release
+```
+
+You can also run the full configure/build/test flow with a workflow preset:
+
+```bash
+cmake --workflow --preset windows-msvc-release
 ```
 
 To run with TSAN use: 

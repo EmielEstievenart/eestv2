@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "eestv/serial/serialization_multiplexer.hpp"
-#include "eestv/serial/serialization_demultiplexer.hpp"
+#include "eestv/serial/multiplexing_serializer.hpp"
+#include "eestv/serial/demultiplexing_deserializer.hpp"
 #include "eestv/data/linear_buffer.hpp"
 #include <cstdint>
 #include <variant>
@@ -112,7 +112,7 @@ protected:
 // Test basic serialization with single type
 TEST_F(SerializationMuxTest, SerializeSingleType)
 {
-    SerializationMultiplexer<MessageA> mux(*buffer);
+    MultiplexingSerializer<MessageA> mux(*buffer);
 
     MessageA msg {42, 100};
     ASSERT_TRUE(mux.serialize(msg));
@@ -124,7 +124,7 @@ TEST_F(SerializationMuxTest, SerializeSingleType)
 // Test serialization with multiple types
 TEST_F(SerializationMuxTest, SerializeMultipleTypes)
 {
-    SerializationMultiplexer<MessageA, MessageB, MessageC> mux(*buffer);
+    MultiplexingSerializer<MessageA, MessageB, MessageC> mux(*buffer);
 
     MessageA msg_a {1, 10};
     MessageB msg_b {5, -42, true};
@@ -140,7 +140,7 @@ TEST_F(SerializationMuxTest, SerializeMultipleTypes)
 // Test header format (type_index + size)
 TEST_F(SerializationMuxTest, HeaderFormat)
 {
-    SerializationMultiplexer<MessageA, MessageB> mux(*buffer);
+    MultiplexingSerializer<MessageA, MessageB> mux(*buffer);
 
     MessageA msg {42, 100};
     ASSERT_TRUE(mux.serialize(msg));
@@ -160,7 +160,7 @@ TEST_F(SerializationMuxTest, HeaderFormat)
 // Test type indices are correct
 TEST_F(SerializationMuxTest, TypeIndices)
 {
-    SerializationMultiplexer<MessageA, MessageB, MessageC> mux(*buffer);
+    MultiplexingSerializer<MessageA, MessageB, MessageC> mux(*buffer);
 
     // Serialize MessageB (index 1)
     MessageB msg {5, -42, true};
@@ -174,7 +174,7 @@ TEST_F(SerializationMuxTest, TypeIndices)
 // Test empty message serialization
 TEST_F(SerializationMuxTest, EmptyMessage)
 {
-    SerializationMultiplexer<EmptyMessage> mux(*buffer);
+    MultiplexingSerializer<EmptyMessage> mux(*buffer);
 
     EmptyMessage msg;
     ASSERT_TRUE(mux.serialize(msg));
@@ -193,8 +193,8 @@ TEST_F(SerializationMuxTest, EmptyMessage)
 // Test deserialization with single type
 TEST_F(SerializationMuxTest, DeserializeSingleType)
 {
-    SerializationMultiplexer<MessageA> mux(*buffer);
-    SerializationDemultiplexer<MessageA> demux(*buffer);
+    MultiplexingSerializer<MessageA> mux(*buffer);
+    DemultiplexingDeserializer<MessageA> demux(*buffer);
 
     MessageA original {42, 100};
     ASSERT_TRUE(mux.serialize(original));
@@ -211,8 +211,8 @@ TEST_F(SerializationMuxTest, DeserializeSingleType)
 // Test deserialization with multiple types
 TEST_F(SerializationMuxTest, DeserializeMultipleTypes)
 {
-    SerializationMultiplexer<MessageA, MessageB, MessageC> mux(*buffer);
-    SerializationDemultiplexer<MessageA, MessageB, MessageC> demux(*buffer);
+    MultiplexingSerializer<MessageA, MessageB, MessageC> mux(*buffer);
+    DemultiplexingDeserializer<MessageA, MessageB, MessageC> demux(*buffer);
 
     MessageA msg_a {1, 10};
     MessageB msg_b {5, -42, true};
@@ -253,8 +253,8 @@ TEST_F(SerializationMuxTest, DeserializeMultipleTypes)
 // Test round-trip with all types
 TEST_F(SerializationMuxTest, RoundTripAllTypes)
 {
-    SerializationMultiplexer<MessageA, MessageB, MessageC> mux(*buffer);
-    SerializationDemultiplexer<MessageA, MessageB, MessageC> demux(*buffer);
+    MultiplexingSerializer<MessageA, MessageB, MessageC> mux(*buffer);
+    DemultiplexingDeserializer<MessageA, MessageB, MessageC> demux(*buffer);
 
     // Serialize in mixed order
     MessageC msg_c {999};
@@ -294,7 +294,7 @@ TEST_F(SerializationMuxTest, RoundTripAllTypes)
 // Test deserialization with empty buffer
 TEST_F(SerializationMuxTest, DeserializeEmptyBuffer)
 {
-    SerializationDemultiplexer<MessageA> demux(*buffer);
+    DemultiplexingDeserializer<MessageA> demux(*buffer);
 
     bool success = true;
     auto variant = demux.deserialize(success);
@@ -312,7 +312,7 @@ TEST_F(SerializationMuxTest, DeserializeIncompleteHeader)
     write_head[1] = 5;
     ASSERT_TRUE(buffer->commit(2));
 
-    SerializationDemultiplexer<MessageA> demux(*buffer);
+    DemultiplexingDeserializer<MessageA> demux(*buffer);
     bool success = true;
     auto variant = demux.deserialize(success);
     EXPECT_FALSE(success);
@@ -330,7 +330,7 @@ TEST_F(SerializationMuxTest, DeserializeInvalidTypeIndex)
     write_head[2] = 0;
     ASSERT_TRUE(buffer->commit(3));
 
-    SerializationDemultiplexer<MessageA, MessageB> demux(*buffer);
+    DemultiplexingDeserializer<MessageA, MessageB> demux(*buffer);
     bool success = true;
     auto variant = demux.deserialize(success);
     EXPECT_FALSE(success);
@@ -340,7 +340,7 @@ TEST_F(SerializationMuxTest, DeserializeInvalidTypeIndex)
 TEST_F(SerializationMuxTest, BufferExhaustion)
 {
     LinearBuffer small_buffer(10); // Very small buffer
-    SerializationMultiplexer<MessageA> mux(small_buffer);
+    MultiplexingSerializer<MessageA> mux(small_buffer);
 
     MessageA msg {42, 100};
     // Header is 3 bytes, payload is 6 bytes, total 9 bytes - should fit
@@ -354,8 +354,8 @@ TEST_F(SerializationMuxTest, BufferExhaustion)
 // Test multiple messages in same buffer
 TEST_F(SerializationMuxTest, MultipleMessagesInBuffer)
 {
-    SerializationMultiplexer<MessageA, MessageB> mux(*buffer);
-    SerializationDemultiplexer<MessageA, MessageB> demux(*buffer);
+    MultiplexingSerializer<MessageA, MessageB> mux(*buffer);
+    DemultiplexingDeserializer<MessageA, MessageB> demux(*buffer);
 
     // Serialize 5 messages of mixed types
     MessageA msg_a1 {1, 10};
@@ -406,8 +406,8 @@ TEST_F(SerializationMuxTest, MultipleMessagesInBuffer)
 // Test empty message deserialization
 TEST_F(SerializationMuxTest, EmptyMessageRoundTrip)
 {
-    SerializationMultiplexer<EmptyMessage> mux(*buffer);
-    SerializationDemultiplexer<EmptyMessage> demux(*buffer);
+    MultiplexingSerializer<EmptyMessage> mux(*buffer);
+    DemultiplexingDeserializer<EmptyMessage> demux(*buffer);
 
     EmptyMessage msg;
     ASSERT_TRUE(mux.serialize(msg));
@@ -422,8 +422,8 @@ TEST_F(SerializationMuxTest, EmptyMessageRoundTrip)
 TEST_F(SerializationMuxTest, LargeMessage)
 {
     LinearBuffer large_buffer(1024);
-    SerializationMultiplexer<LargeMessage> mux(large_buffer);
-    SerializationDemultiplexer<LargeMessage> demux(large_buffer);
+    MultiplexingSerializer<LargeMessage> mux(large_buffer);
+    DemultiplexingDeserializer<LargeMessage> demux(large_buffer);
 
     LargeMessage msg;
     for (std::size_t i = 0; i < msg.data.size(); ++i)
@@ -443,7 +443,7 @@ TEST_F(SerializationMuxTest, LargeMessage)
 // Test serialization preserves binary representation
 TEST_F(SerializationMuxTest, BinaryRepresentation)
 {
-    SerializationMultiplexer<MessageA> mux(*buffer);
+    MultiplexingSerializer<MessageA> mux(*buffer);
 
     MessageA msg {0x12345678, 0xABCD};
     ASSERT_TRUE(mux.serialize(msg));
@@ -474,7 +474,7 @@ TEST_F(SerializationMuxTest, IncompletePayloadValidation)
     write_head[2] = 0x00; // size high byte
     ASSERT_TRUE(buffer->commit(3));
 
-    SerializationDemultiplexer<MessageA> demux(*buffer);
+    DemultiplexingDeserializer<MessageA> demux(*buffer);
     bool success = true; // Start with true to verify it gets set to false
     auto variant = demux.deserialize(success);
 
@@ -488,8 +488,8 @@ TEST_F(SerializationMuxTest, IncompletePayloadValidation)
 // Test variant correctly identifies types
 TEST_F(SerializationMuxTest, VariantTypeIdentification)
 {
-    SerializationMultiplexer<MessageA, MessageB, MessageC> mux(*buffer);
-    SerializationDemultiplexer<MessageA, MessageB, MessageC> demux(*buffer);
+    MultiplexingSerializer<MessageA, MessageB, MessageC> mux(*buffer);
+    DemultiplexingDeserializer<MessageA, MessageB, MessageC> demux(*buffer);
 
     MessageB msg {99, -1000, true};
     ASSERT_TRUE(mux.serialize(msg));

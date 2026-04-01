@@ -1,10 +1,3 @@
-# Fetch GoogleTest
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip)
-FetchContent_MakeAvailable(googletest)
-
 # Add executable for unit tests
 add_executable(
   unit_tests

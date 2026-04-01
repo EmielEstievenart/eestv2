@@ -5,8 +5,8 @@ A type-safe serialization system that enables multiplexing multiple message type
 ## Files
 
 - **`serialization_mux_common.hpp`** - Shared constants and utilities
-- **`serialization_multiplexer.hpp`** - The multiplexer for serialization
-- **`serialization_demultiplexer.hpp`** - The demultiplexer for deserialization
+- **`multiplexing_serializer.hpp`** - The multiplexing serializer
+- **`demultiplexing_deserializer.hpp`** - The demultiplexing deserializer
 - **`serialization_mux.hpp`** - Convenience header that includes both multiplexer and demultiplexer
 
 ## Overview
@@ -111,7 +111,7 @@ LinearBuffer buffer(1024);
 LinearBufferAdapter adapter(buffer);
 
 // Create multiplexer with your message types
-SerializationMultiplexer<LinearBufferAdapter, SensorData, CommandMessage> mux(adapter);
+MultiplexingSerializer<LinearBufferAdapter, SensorData, CommandMessage> mux(adapter);
 
 // Serialize different message types
 SensorData sensor{42, 23500, 652};
@@ -131,7 +131,7 @@ if (mux.serialize(command))
 
 ```cpp
 // Create demultiplexer with the SAME type list
-SerializationDemultiplexer<LinearBufferAdapter, SensorData, CommandMessage> demux(adapter);
+DemultiplexingDeserializer<LinearBufferAdapter, SensorData, CommandMessage> demux(adapter);
 
 bool success = false;
 auto variant = demux.deserialize(success);
@@ -163,12 +163,12 @@ if (success)
 
    ```cpp
    // Correct - same order on both sides
-   SerializationMultiplexer<Storage, TypeA, TypeB, TypeC> mux(...);
-   SerializationDemultiplexer<Storage, TypeA, TypeB, TypeC> demux(...);
+   MultiplexingSerializer<Storage, TypeA, TypeB, TypeC> mux(...);
+   DemultiplexingDeserializer<Storage, TypeA, TypeB, TypeC> demux(...);
    
    // WRONG - different order will deserialize to wrong types!
-   SerializationMultiplexer<Storage, TypeA, TypeB, TypeC> mux(...);
-   SerializationDemultiplexer<Storage, TypeB, TypeA, TypeC> demux(...);
+   MultiplexingSerializer<Storage, TypeA, TypeB, TypeC> mux(...);
+   DemultiplexingDeserializer<Storage, TypeB, TypeA, TypeC> demux(...);
    ```
 
 2. **Maximum 255 Types**: The type index is a single byte, limiting you to 255 different message types.
@@ -234,7 +234,7 @@ The serialization multiplexer is designed to work with streaming protocols:
 // Sender side
 LinearBuffer send_buffer(4096);
 LinearBufferAdapter send_adapter(send_buffer);
-SerializationMultiplexer<...> mux(send_adapter);
+MultiplexingSerializer<...> mux(send_adapter);
 
 while (true)
 {
@@ -254,7 +254,7 @@ while (true)
 // Receiver side
 LinearBuffer recv_buffer(4096);
 LinearBufferAdapter recv_adapter(recv_buffer);
-SerializationDemultiplexer<...> demux(recv_adapter);
+DemultiplexingDeserializer<...> demux(recv_adapter);
 
 while (true)
 {
@@ -276,8 +276,8 @@ while (true)
 
 ## See Also
 
-- `code/eestv/serial/serialization_multiplexer.hpp` - Multiplexer implementation
-- `code/eestv/serial/serialization_demultiplexer.hpp` - Demultiplexer implementation
+- `code/eestv/serial/multiplexing_serializer.hpp` - Multiplexing serializer implementation
+- `code/eestv/serial/demultiplexing_deserializer.hpp` - Demultiplexing deserializer implementation
 - `code/eestv/serial/serialization_mux_common.hpp` - Shared utilities
 - `code/eestv/serial/serialization_mux.hpp` - Convenience header (includes both)
 - `code/eestv/serial/serializer.hpp` - Base serialization system
