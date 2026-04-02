@@ -5,8 +5,8 @@
 #include <string>
 
 #ifdef _WIN32
-#define NOMINMAX
-#include <windows.h>
+#    define NOMINMAX
+#    include <windows.h>
 #endif
 
 namespace slayerlog
@@ -43,8 +43,7 @@ bool write_text_to_command(const char* command, const std::string& text)
 
 std::string base64_encode(const std::string& text)
 {
-    static constexpr char alphabet[] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
     std::string encoded;
     encoded.reserve(((text.size() + 2) / 3) * 4);
@@ -52,8 +51,7 @@ std::string base64_encode(const std::string& text)
     std::size_t index = 0;
     while (index + 3 <= text.size())
     {
-        const unsigned int value = (static_cast<unsigned char>(text[index]) << 16) |
-                                   (static_cast<unsigned char>(text[index + 1]) << 8) |
+        const unsigned int value = (static_cast<unsigned char>(text[index]) << 16) | (static_cast<unsigned char>(text[index + 1]) << 8) |
                                    static_cast<unsigned char>(text[index + 2]);
         encoded.push_back(alphabet[(value >> 18) & 0x3F]);
         encoded.push_back(alphabet[(value >> 12) & 0x3F]);
@@ -73,8 +71,7 @@ std::string base64_encode(const std::string& text)
     }
     else if (remainder == 2)
     {
-        const unsigned int value = (static_cast<unsigned char>(text[index]) << 16) |
-                                   (static_cast<unsigned char>(text[index + 1]) << 8);
+        const unsigned int value = (static_cast<unsigned char>(text[index]) << 16) | (static_cast<unsigned char>(text[index + 1]) << 8);
         encoded.push_back(alphabet[(value >> 18) & 0x3F]);
         encoded.push_back(alphabet[(value >> 12) & 0x3F]);
         encoded.push_back(alphabet[(value >> 6) & 0x3F]);
@@ -120,12 +117,12 @@ bool write_text_to_terminal_clipboard(const std::string& text)
 
 bool copy_with_local_clipboard_tools(const std::string& text)
 {
-#ifdef __APPLE__
+#    ifdef __APPLE__
     if (write_text_to_command("pbcopy 2>/dev/null", text))
     {
         return true;
     }
-#endif
+#    endif
 
     if (write_text_to_command("wl-copy --type text/plain;charset=utf-8 2>/dev/null", text))
     {
@@ -164,9 +161,7 @@ bool copy_text_to_clipboard_on_unix(const std::string& text)
 } // namespace
 
 InputController::InputController(LogViewModel& model, LogView& view, ftxui::ScreenInteractive& screen)
-    : _model(model),
-      _view(view),
-      _screen(screen)
+    : _model(model), _view(view), _screen(screen)
 {
 }
 

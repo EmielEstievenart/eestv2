@@ -1,13 +1,11 @@
 #pragma once
 
-#include <chrono>
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "file_watcher.hpp"
+#include "log_batch.hpp"
 
 namespace slayerlog
 {
@@ -18,27 +16,11 @@ struct TextPosition
     int column = 0;
 };
 
-using LogTimePoint = std::chrono::system_clock::time_point;
-
-struct ObservedLogUpdate
-{
-    std::string source_path;
-    std::string source_label;
-    FileWatcher::Update::Kind kind = FileWatcher::Update::Kind::Snapshot;
-    std::vector<std::string> lines;
-    LogTimePoint observed_at{};
-    std::size_t source_index = 0;
-    bool is_initial_load     = false;
-    std::uint64_t poll_epoch = 0;
-};
-
 class LogViewModel
 {
 public:
-    /** @brief Applies the startup snapshots as one batch so initial ordering can be resolved globally. */
-    void apply_initial_updates(const std::vector<ObservedLogUpdate>& updates);
-    /** @brief Applies a single live or replacement update while preserving the model ordering rules. */
-    void apply_update(const ObservedLogUpdate& update);
+    /** @brief Appends already ordered lines to the rendered log view. */
+    void append_lines(const std::vector<ObservedLogLine>& lines);
     /** @brief Toggles update buffering so users can inspect the view without live movement. */
     void toggle_pause();
     /** @brief Returns whether incoming updates are currently buffered instead of rendered immediately. */
@@ -83,45 +65,21 @@ public:
     std::string rendered_line(int index) const;
 
 private:
-    enum class SortPhase
-    {
-        InitialTimestamped,
-        InitialUntimestamped,
-        Live,
-    };
-
-    struct LogEntry
-    {
-        std::string source_path;
-        std::string source_label;
-        std::string text;
-        SortPhase phase = SortPhase::InitialTimestamped;
-        std::optional<LogTimePoint> anchor_timestamp;
-        std::size_t source_index = 0;
-        int source_group_order   = 0;
-        int line_order           = 0;
-        std::uint64_t poll_epoch = 0;
-        std::uint64_t sequence = 0;
-    };
-
-    void append_entries_for_update(const ObservedLogUpdate& update);
-    void apply_update_immediately(const ObservedLogUpdate& update);
+    void append_lines_immediately(const std::vector<ObservedLogLine>& lines);
     void flush_paused_updates();
-    void sort_entries();
     void clamp_scroll_offset();
     int max_scroll_offset() const;
     void update_follow_bottom();
     void clamp_selection();
 
-    std::vector<LogEntry> _entries;
-    std::vector<ObservedLogUpdate> _paused_updates;
-    std::uint64_t _next_sequence      = 0;
-    int _scroll_offset            = 0;
-    int _visible_line_count       = 1;
-    bool _follow_bottom           = true;
-    bool _updates_paused          = false;
-    bool _show_source_labels      = false;
-    bool _selection_in_progress   = false;
+    std::vector<ObservedLogLine> _entries;
+    std::vector<ObservedLogLine> _paused_updates;
+    int _scroll_offset          = 0;
+    int _visible_line_count     = 1;
+    bool _follow_bottom         = true;
+    bool _updates_paused        = false;
+    bool _show_source_labels    = false;
+    bool _selection_in_progress = false;
     std::optional<TextPosition> _selection_anchor;
     std::optional<TextPosition> _selection_focus;
 };

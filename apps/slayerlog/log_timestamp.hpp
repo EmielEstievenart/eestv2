@@ -1,12 +1,13 @@
 #pragma once
 
+#include <chrono>
 #include <optional>
 #include <string>
 
-#include "log_view_model.hpp"
-
 namespace slayerlog
 {
+
+using LogTimePoint = std::chrono::system_clock::time_point;
 
 std::optional<LogTimePoint> parse_log_timestamp(const std::string& line);
 

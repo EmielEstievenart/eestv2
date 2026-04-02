@@ -1,6 +1,5 @@
 #include <atomic>
 #include <chrono>
-#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -9,14 +8,17 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 
 #include "command_line_parser.hpp"
+#include "debug_log.hpp"
 #include "file_watcher.hpp"
 #include "input_controller.hpp"
+#include "log_batch.hpp"
 #include "log_view.hpp"
 #include "log_view_model.hpp"
 
@@ -75,130 +77,125 @@ std::string build_header_text(const std::vector<std::string>& labels)
     return output.str();
 }
 
-struct WatcherUpdateContext
+struct WatchedFile
 {
-    std::mutex& model_mutex;
-    slayerlog::LogViewModel& model;
-    ftxui::ScreenInteractive& screen;
-    std::vector<slayerlog::ObservedLogUpdate>& initial_updates;
-    std::atomic<bool>& collecting_initial;
-    std::atomic<std::uint64_t>& current_poll_epoch;
-    slayerlog::LogTimePoint open_time;
+    std::string file_path;
+    std::string source_label;
+    std::unique_ptr<slayerlog::FileWatcher> watcher;
 };
 
-slayerlog::ObservedLogUpdate build_observed_update(
-    const slayerlog::FileWatcher::Update& update,
-    const std::string& source_path,
-    const std::string& source_label,
-    std::size_t source_index,
-    WatcherUpdateContext& context)
+std::vector<WatchedFile> create_file_watchers(
+    const std::vector<std::string>& file_paths,
+    const std::vector<std::string>& source_labels)
 {
-    slayerlog::ObservedLogUpdate observed_update;
-    observed_update.source_path  = source_path;
-    observed_update.source_label = source_label;
-    observed_update.kind         = update.kind;
-    observed_update.lines        = update.lines;
-    observed_update.source_index = source_index;
-    observed_update.is_initial_load =
-        context.collecting_initial.load() && update.kind == slayerlog::FileWatcher::Update::Kind::Snapshot;
-    observed_update.poll_epoch = observed_update.is_initial_load ? 0 : context.current_poll_epoch.load();
-    observed_update.observed_at = update.kind == slayerlog::FileWatcher::Update::Kind::Snapshot
-                                      ? context.open_time
-                                      : std::chrono::system_clock::now();
-    return observed_update;
+    std::vector<WatchedFile> watched_files;
+    watched_files.reserve(file_paths.size());
+
+    for (std::size_t index = 0; index < file_paths.size(); ++index)
+    {
+        watched_files.push_back(WatchedFile{
+            file_paths[index],
+            source_labels[index],
+            std::make_unique<slayerlog::FileWatcher>(file_paths[index]),
+        });
+    }
+
+    return watched_files;
 }
 
-void handle_watcher_update(
-    const slayerlog::FileWatcher::Update& update,
-    const std::string& source_path,
-    const std::string& source_label,
-    std::size_t source_index,
-    WatcherUpdateContext& context)
+std::vector<slayerlog::WatcherLineBatch> collect_watcher_batches(std::vector<WatchedFile>& watched_files)
 {
-    auto observed_update = build_observed_update(update, source_path, source_label, source_index, context);
-    if (observed_update.is_initial_load)
+    std::vector<slayerlog::WatcherLineBatch> watcher_batches;
+    watcher_batches.reserve(watched_files.size());
+
+    for (auto& watched_file : watched_files)
     {
-        context.initial_updates.push_back(std::move(observed_update));
+        slayerlog::WatcherLineBatch watcher_batch;
+        watched_file.watcher->poll(watcher_batch);
+        SLAYERLOG_LOG_TRACE(
+            "Initial poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
+        watcher_batches.push_back(std::move(watcher_batch));
+    }
+
+    return watcher_batches;
+}
+
+void append_batch_to_model(
+    const std::vector<slayerlog::WatcherLineBatch>& watcher_batches,
+    const std::vector<std::string>& source_labels,
+    std::mutex& model_mutex,
+    slayerlog::LogViewModel& model,
+    ftxui::ScreenInteractive& screen)
+{
+    const auto merged_lines = slayerlog::merge_log_batch(watcher_batches, source_labels);
+    SLAYERLOG_LOG_TRACE(
+        "Merging watcher batches watcher_count=" << watcher_batches.size() << " merged_lines=" << merged_lines.size());
+    if (merged_lines.empty())
+    {
         return;
     }
 
     {
-        std::lock_guard lock(context.model_mutex);
-        context.model.apply_update(observed_update);
-    }
-
-    context.screen.PostEvent(ftxui::Event::Custom);
-}
-
-std::vector<std::unique_ptr<slayerlog::FileWatcher>> create_file_watchers(
-    const std::vector<std::string>& file_paths,
-    const std::vector<std::string>& source_labels,
-    WatcherUpdateContext& context)
-{
-    std::vector<std::unique_ptr<slayerlog::FileWatcher>> watchers;
-    watchers.reserve(file_paths.size());
-
-    for (std::size_t index = 0; index < file_paths.size(); ++index)
-    {
-        const auto source_path  = file_paths[index];
-        const auto source_label = source_labels[index];
-
-        watchers.push_back(std::make_unique<slayerlog::FileWatcher>(
-            source_path,
-            [&, source_path, source_label, index](const slayerlog::FileWatcher::Update& update)
-            {
-                handle_watcher_update(update, source_path, source_label, index, context);
-            }));
-    }
-
-    return watchers;
-}
-
-void apply_initial_snapshots(
-    slayerlog::LogViewModel& model,
-    std::mutex& model_mutex,
-    std::vector<slayerlog::ObservedLogUpdate>& initial_updates,
-    std::atomic<bool>& collecting_initial,
-    ftxui::ScreenInteractive& screen)
-{
-    {
         std::lock_guard lock(model_mutex);
-        model.apply_initial_updates(initial_updates);
+        model.append_lines(merged_lines);
     }
 
-    collecting_initial = false;
     screen.PostEvent(ftxui::Event::Custom);
 }
 
 std::thread start_watcher_thread(
     int poll_interval_ms,
-    std::vector<std::unique_ptr<slayerlog::FileWatcher>>& watchers,
-    std::atomic<bool>& keep_running,
-    std::atomic<std::uint64_t>& current_poll_epoch)
+    std::vector<WatchedFile>& watched_files,
+    const std::vector<std::string>& source_labels,
+    std::mutex& model_mutex,
+    slayerlog::LogViewModel& model,
+    ftxui::ScreenInteractive& screen,
+    std::atomic<bool>& keep_running)
 {
     return std::thread(
-        [&]
+        [poll_interval_ms,
+         watched_files = &watched_files,
+         source_labels = &source_labels,
+         model_mutex = &model_mutex,
+         model = &model,
+         screen = &screen,
+         keep_running = &keep_running]
         {
-            while (keep_running)
+            while (*keep_running)
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms));
-                if (!keep_running)
+                if (!*keep_running)
                 {
                     break;
                 }
 
-                current_poll_epoch.fetch_add(1);
-                for (auto& watcher : watchers)
+                std::vector<slayerlog::WatcherLineBatch> watcher_batches;
+                watcher_batches.reserve(watched_files->size());
+
+                for (auto& watched_file : *watched_files)
                 {
+                    slayerlog::WatcherLineBatch watcher_batch;
                     try
                     {
-                        watcher->process_once();
+                        watched_file.watcher->poll(watcher_batch);
+                    }
+                    catch (const std::exception& ex)
+                    {
+                        // Ignore transient read errors while another process is writing.
+                        SLAYERLOG_LOG_WARNING("Watcher poll threw for file=" << watched_file.file_path << " error=" << ex.what());
                     }
                     catch (...)
                     {
                         // Ignore transient read errors while another process is writing.
+                        SLAYERLOG_LOG_WARNING("Watcher poll threw for file=" << watched_file.file_path << " error=<unknown>");
                     }
+
+                    SLAYERLOG_LOG_TRACE(
+                        "Live poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
+                    watcher_batches.push_back(std::move(watcher_batch));
                 }
+
+                append_batch_to_model(watcher_batches, *source_labels, *model_mutex, *model, *screen);
             }
         });
 }
@@ -207,9 +204,19 @@ std::thread start_watcher_thread(
 
 int main(int argc, char** argv)
 {
+    slayerlog::debug_log::initialize();
+    SLAYERLOG_LOG_INFO("Debug log initialized at " << slayerlog::debug_log::log_file_path().string());
+
     const auto config        = slayerlog::parse_command_line(argc, argv);
     const auto source_labels = build_source_labels(config.file_paths);
     const auto header_text   = build_header_text(source_labels);
+    SLAYERLOG_LOG_INFO(
+        "Starting slayerlog poll_interval_ms=" << config.poll_interval_ms << " watched_files=" << config.file_paths.size());
+    for (std::size_t index = 0; index < config.file_paths.size(); ++index)
+    {
+        SLAYERLOG_LOG_INFO(
+            "Configured watcher[" << index << "] file=" << config.file_paths[index] << " label=" << source_labels[index]);
+    }
 
     auto screen = ftxui::ScreenInteractive::Fullscreen();
     screen.TrackMouse();
@@ -219,44 +226,28 @@ int main(int argc, char** argv)
     model.set_show_source_labels(config.file_paths.size() > 1);
     slayerlog::LogView view;
     slayerlog::InputController input_controller(model, view, screen);
-    // FileWatcher emits its initial snapshot from the constructor, so collect
-    // those callbacks first and apply them as one startup batch.
-    std::vector<slayerlog::ObservedLogUpdate> initial_updates;
-    initial_updates.reserve(config.file_paths.size());
-    std::atomic<bool> collecting_initial = true;
-    std::atomic<std::uint64_t> current_poll_epoch = 0;
-    WatcherUpdateContext watcher_context {
-        model_mutex,
-        model,
-        screen,
-        initial_updates,
-        collecting_initial,
-        current_poll_epoch,
-        std::chrono::system_clock::now(),
-    };
 
-    std::vector<std::unique_ptr<slayerlog::FileWatcher>> watchers;
+    auto watched_files = create_file_watchers(config.file_paths, source_labels);
     try
     {
-        watchers = create_file_watchers(config.file_paths, source_labels, watcher_context);
+        append_batch_to_model(collect_watcher_batches(watched_files), source_labels, model_mutex, model, screen);
     }
     catch (const std::exception& ex)
     {
+        SLAYERLOG_LOG_ERROR("Initial watcher collection failed: " << ex.what());
         std::cerr << ex.what() << '\n';
         return 1;
     }
 
-    apply_initial_snapshots(model, model_mutex, initial_updates, collecting_initial, screen);
-
     std::atomic<bool> keep_running = true;
     std::thread watcher_thread =
-        start_watcher_thread(config.poll_interval_ms, watchers, keep_running, current_poll_epoch);
+        start_watcher_thread(config.poll_interval_ms, watched_files, source_labels, model_mutex, model, screen, keep_running);
 
     auto viewer = ftxui::Renderer(
         [&]
         {
             std::lock_guard lock(model_mutex);
-            return view.render(model, header_text);
+            return view.render(model, header_text, screen.dimy());
         });
 
     viewer |= ftxui::CatchEvent(
@@ -267,11 +258,14 @@ int main(int argc, char** argv)
         });
 
     screen.Loop(viewer);
+    SLAYERLOG_LOG_INFO("Screen loop exited");
     keep_running = false;
     if (watcher_thread.joinable())
     {
         watcher_thread.join();
     }
+
+    SLAYERLOG_LOG_INFO("Slayerlog shutdown complete");
 
     return 0;
 }

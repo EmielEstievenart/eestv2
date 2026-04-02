@@ -8,9 +8,26 @@
 namespace slayerlog
 {
 
-ftxui::Element LogView::render(LogViewModel& model, const std::string& header_text)
+namespace
 {
-    model.set_visible_line_count(std::max(1, _viewport_box.y_max - _viewport_box.y_min + 1));
+
+constexpr int window_chrome_height = 6;
+
+int estimate_visible_line_count(const ftxui::Box& viewport_box, int screen_height)
+{
+    if (viewport_box.y_max > viewport_box.y_min)
+    {
+        return viewport_box.y_max - viewport_box.y_min + 1;
+    }
+
+    return std::max(1, screen_height - window_chrome_height);
+}
+
+} // namespace
+
+ftxui::Element LogView::render(LogViewModel& model, const std::string& header_text, int screen_height)
+{
+    model.set_visible_line_count(estimate_visible_line_count(_viewport_box, screen_height));
 
     ftxui::Elements content;
     content.reserve(static_cast<std::size_t>(std::max(1, model.visible_line_count())));

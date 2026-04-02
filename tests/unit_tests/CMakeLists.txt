@@ -14,13 +14,27 @@ add_executable(
   serial/serialization_mux_tests.cpp
   data_bridge/data_bridge_cli_tests.cpp
   flags/flags_tests.cpp
+  slayerlog/file_watcher_tests.cpp
+  slayerlog/log_batch_tests.cpp
   slayerlog/log_timestamp_tests.cpp
   slayerlog/log_view_model_tests.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/debug_log.hpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/file_watcher.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_batch.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_timestamp.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_view_model.cpp)
 
 # Link libraries (assuming eestv_lib provides sources and Boost)
-target_link_libraries(unit_tests PRIVATE eestv_lib GTest::gtest_main)
+target_link_libraries(
+  unit_tests
+  PRIVATE eestv_lib
+          GTest::gtest_main
+          Boost::log
+          Boost::log_setup
+          Boost::filesystem
+          Boost::thread)
+
+target_compile_definitions(unit_tests PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
 target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog)
 
 # Conditionally discover tests (disabled for TSAN where it doesn't work well)

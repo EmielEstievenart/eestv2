@@ -15,7 +15,7 @@ namespace slayerlog
 class LogView
 {
 public:
-    ftxui::Element render(LogViewModel& model, const std::string& header_text);
+    ftxui::Element render(LogViewModel& model, const std::string& header_text, int screen_height);
     std::optional<TextPosition> mouse_to_text_position(const LogViewModel& model, const ftxui::Mouse& mouse) const;
 
 private:

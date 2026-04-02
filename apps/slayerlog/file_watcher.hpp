@@ -1,9 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace slayerlog
@@ -12,44 +12,33 @@ namespace slayerlog
 class FileWatcher
 {
 public:
-    struct Update
-    {
-        enum class Kind
-        {
-            Snapshot,
-            Append,
-        };
-
-        Kind kind = Kind::Snapshot;
-        std::vector<std::string> lines;
-    };
-
-    using Callback = std::function<void(const Update&)>;
-
-    FileWatcher(std::string file_path, Callback callback);
+    explicit FileWatcher(std::string file_path);
 
     FileWatcher(const FileWatcher&) = delete;
     FileWatcher& operator=(const FileWatcher&) = delete;
 
-    void process_once();
+    bool poll(std::vector<std::string>& lines);
 
 private:
     struct State
     {
         std::uintmax_t offset = 0;
         std::string pending_fragment;
+        std::string offset_tail_bytes;
+        bool awaiting_regrowth_after_shrink = false;
+        std::uintmax_t shrink_candidate_size = 0;
     };
 
-    static std::vector<std::string> parse_lines_from_chunk(std::string chunk, State& state);
-    static std::vector<std::string> read_file_lines(const std::string& path, State& state);
+    static void parse_lines_from_chunk(std::string chunk, State& state, std::vector<std::string>& lines);
+    static void update_offset_tail_bytes(std::string_view chunk, State& state);
     static std::string read_file_tail(const std::string& path, std::uintmax_t offset);
+    static std::string read_window_ending_at(const std::string& path, std::uintmax_t offset);
     static std::uintmax_t get_file_size(const std::string& path);
 
-    void notify(Update update);
+    bool collect_update_locked(std::vector<std::string>& lines);
 
     std::string _file_path;
     State _state;
-    Callback _callback;
     std::mutex _mutex;
 };
 
