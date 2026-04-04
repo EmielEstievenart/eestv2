@@ -1,6 +1,7 @@
 #include "log_view_model.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <sstream>
 #include <utility>
@@ -57,6 +58,80 @@ void LogViewModel::set_show_source_labels(bool show_source_labels)
     clamp_selection();
 }
 
+void LogViewModel::add_include_filter(std::string filter_text)
+{
+    const bool was_following_bottom = _follow_bottom;
+    filter_text                     = trim_filter_text(filter_text);
+    if (filter_text.empty())
+    {
+        return;
+    }
+
+    _include_filters.push_back(std::move(filter_text));
+    rebuild_visible_entries();
+    clamp_selection();
+    if (was_following_bottom)
+    {
+        _scroll_offset = max_scroll_offset();
+    }
+    else
+    {
+        clamp_scroll_offset();
+    }
+    update_follow_bottom();
+}
+
+void LogViewModel::add_exclude_filter(std::string filter_text)
+{
+    const bool was_following_bottom = _follow_bottom;
+    filter_text                     = trim_filter_text(filter_text);
+    if (filter_text.empty())
+    {
+        return;
+    }
+
+    _exclude_filters.push_back(std::move(filter_text));
+    rebuild_visible_entries();
+    clamp_selection();
+    if (was_following_bottom)
+    {
+        _scroll_offset = max_scroll_offset();
+    }
+    else
+    {
+        clamp_scroll_offset();
+    }
+    update_follow_bottom();
+}
+
+void LogViewModel::reset_filters()
+{
+    const bool was_following_bottom = _follow_bottom;
+    _include_filters.clear();
+    _exclude_filters.clear();
+    rebuild_visible_entries();
+    clamp_selection();
+    if (was_following_bottom)
+    {
+        _scroll_offset = max_scroll_offset();
+    }
+    else
+    {
+        clamp_scroll_offset();
+    }
+    update_follow_bottom();
+}
+
+const std::vector<std::string>& LogViewModel::include_filters() const
+{
+    return _include_filters;
+}
+
+const std::vector<std::string>& LogViewModel::exclude_filters() const
+{
+    return _exclude_filters;
+}
+
 void LogViewModel::set_visible_line_count(int count)
 {
     _visible_line_count = std::max(1, count);
@@ -83,7 +158,12 @@ int LogViewModel::scroll_offset() const
 
 int LogViewModel::line_count() const
 {
-    return static_cast<int>(_entries.size());
+    return static_cast<int>(_visible_entry_indices.size());
+}
+
+int LogViewModel::total_line_count() const
+{
+    return static_cast<int>(_all_entries.size());
 }
 
 void LogViewModel::scroll_up(int amount)
@@ -173,7 +253,7 @@ std::optional<std::pair<TextPosition, TextPosition>> LogViewModel::selection_bou
 std::string LogViewModel::selection_text() const
 {
     const auto bounds = selection_bounds();
-    if (!bounds.has_value() || _entries.empty())
+    if (!bounds.has_value() || _visible_entry_indices.empty())
     {
         return {};
     }
@@ -202,8 +282,9 @@ std::string LogViewModel::selection_text() const
 std::string LogViewModel::rendered_line(int index) const
 {
     std::ostringstream output;
-    output << index + 1 << " ";
-    const auto& entry = _entries[static_cast<std::size_t>(index)];
+    const int visible_index = _visible_entry_indices[static_cast<std::size_t>(index)];
+    const auto& entry       = _all_entries[static_cast<std::size_t>(visible_index)];
+    output << visible_index + 1 << " ";
     if (_show_source_labels)
     {
         output << "[" << entry.source_label << "] ";
@@ -215,7 +296,15 @@ std::string LogViewModel::rendered_line(int index) const
 
 void LogViewModel::append_lines_immediately(const std::vector<ObservedLogLine>& lines)
 {
-    _entries.insert(_entries.end(), lines.begin(), lines.end());
+    for (const auto& line : lines)
+    {
+        _all_entries.push_back(line);
+        if (entry_matches_filters(line))
+        {
+            _visible_entry_indices.push_back(static_cast<int>(_all_entries.size()) - 1);
+        }
+    }
+
     if (_follow_bottom)
     {
         _scroll_offset = max_scroll_offset();
@@ -228,6 +317,20 @@ void LogViewModel::flush_paused_updates()
     _paused_updates.clear();
 }
 
+void LogViewModel::rebuild_visible_entries()
+{
+    _visible_entry_indices.clear();
+    _visible_entry_indices.reserve(_all_entries.size());
+
+    for (std::size_t index = 0; index < _all_entries.size(); ++index)
+    {
+        if (entry_matches_filters(_all_entries[index]))
+        {
+            _visible_entry_indices.push_back(static_cast<int>(index));
+        }
+    }
+}
+
 void LogViewModel::clamp_scroll_offset()
 {
     _scroll_offset = std::clamp(_scroll_offset, 0, max_scroll_offset());
@@ -235,7 +338,7 @@ void LogViewModel::clamp_scroll_offset()
 
 int LogViewModel::max_scroll_offset() const
 {
-    return std::max(0, static_cast<int>(_entries.size()) - _visible_line_count);
+    return std::max(0, static_cast<int>(_visible_entry_indices.size()) - _visible_line_count);
 }
 
 void LogViewModel::update_follow_bottom()
@@ -245,7 +348,7 @@ void LogViewModel::update_follow_bottom()
 
 void LogViewModel::clamp_selection()
 {
-    if (_entries.empty())
+    if (_visible_entry_indices.empty())
     {
         clear_selection();
         return;
@@ -253,7 +356,7 @@ void LogViewModel::clamp_selection()
 
     auto clamp_position = [&](TextPosition& position)
     {
-        position.line = std::clamp(position.line, 0, static_cast<int>(_entries.size()) - 1);
+        position.line          = std::clamp(position.line, 0, static_cast<int>(_visible_entry_indices.size()) - 1);
         const auto line_length = static_cast<int>(rendered_line(position.line).size());
         position.column        = std::clamp(position.column, 0, line_length);
     };
@@ -267,6 +370,37 @@ void LogViewModel::clamp_selection()
     {
         clamp_position(*_selection_focus);
     }
+}
+
+bool LogViewModel::entry_matches_filters(const ObservedLogLine& entry) const
+{
+    const std::string searchable_text = entry.source_label + "\n" + entry.text;
+    const bool matches_include        = _include_filters.empty() || matches_any_filter(searchable_text, _include_filters);
+    const bool matches_exclude        = matches_any_filter(searchable_text, _exclude_filters);
+    return matches_include && !matches_exclude;
+}
+
+bool LogViewModel::matches_any_filter(std::string_view haystack, const std::vector<std::string>& filters) const
+{
+    return std::any_of(filters.begin(), filters.end(),
+                       [&](const std::string& filter) { return haystack.find(filter) != std::string_view::npos; });
+}
+
+std::string LogViewModel::trim_filter_text(std::string_view text)
+{
+    std::size_t start = 0;
+    while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start])) != 0)
+    {
+        ++start;
+    }
+
+    std::size_t end = text.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0)
+    {
+        --end;
+    }
+
+    return std::string(text.substr(start, end - start));
 }
 
 } // namespace slayerlog

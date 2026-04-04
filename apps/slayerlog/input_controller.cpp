@@ -160,13 +160,25 @@ bool copy_text_to_clipboard_on_unix(const std::string& text)
 
 } // namespace
 
-InputController::InputController(LogViewModel& model, LogView& view, ftxui::ScreenInteractive& screen)
-    : _model(model), _view(view), _screen(screen)
+InputController::InputController(LogViewModel& model, LogView& view, ftxui::ScreenInteractive& screen,
+                                 CommandPaletteController& command_palette_controller)
+    : _model(model), _view(view), _screen(screen), _command_palette_controller(command_palette_controller)
 {
 }
 
 bool InputController::handle_event(ftxui::Event event)
 {
+    if (event == ftxui::Event::CtrlP)
+    {
+        _command_palette_controller.open();
+        return true;
+    }
+
+    if (_command_palette_controller.is_open())
+    {
+        return _command_palette_controller.handle_event(event);
+    }
+
     if (event == ftxui::Event::Character('q') || event == ftxui::Event::Escape)
     {
         _screen.Exit();
@@ -277,6 +289,11 @@ bool InputController::handle_event(ftxui::Event event)
     }
 
     return false;
+}
+
+const CommandPaletteModel& InputController::command_palette() const
+{
+    return _command_palette_controller.model();
 }
 
 bool InputController::copy_selection_to_clipboard() const

@@ -3,6 +3,11 @@ project(slayerlog)
 add_executable(
   slayerlog
   main.cpp
+  command_palette_controller.cpp
+  command_palette_controller.hpp
+  command_palette_model.hpp
+  command_manager.cpp
+  command_manager.hpp
   command_line_parser.cpp
   command_line_parser.hpp
   debug_log.hpp

@@ -15,9 +15,16 @@ add_executable(
   data_bridge/data_bridge_cli_tests.cpp
   flags/flags_tests.cpp
   slayerlog/file_watcher_tests.cpp
+  slayerlog/command_palette_controller_tests.cpp
+  slayerlog/command_manager_tests.cpp
   slayerlog/log_batch_tests.cpp
   slayerlog/log_timestamp_tests.cpp
   slayerlog/log_view_model_tests.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.hpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_model.hpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_manager.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_manager.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/debug_log.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/file_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_batch.cpp
@@ -28,6 +35,7 @@ add_executable(
 target_link_libraries(
   unit_tests
   PRIVATE eestv_lib
+          component
           GTest::gtest_main
           Boost::log
           Boost::log_setup

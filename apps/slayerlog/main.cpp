@@ -15,6 +15,9 @@
 #include <ftxui/component/screen_interactive.hpp>
 
 #include "command_line_parser.hpp"
+#include "command_palette_controller.hpp"
+#include "command_palette_model.hpp"
+#include "command_manager.hpp"
 #include "debug_log.hpp"
 #include "file_watcher.hpp"
 #include "input_controller.hpp"
@@ -84,16 +87,14 @@ struct WatchedFile
     std::unique_ptr<slayerlog::FileWatcher> watcher;
 };
 
-std::vector<WatchedFile> create_file_watchers(
-    const std::vector<std::string>& file_paths,
-    const std::vector<std::string>& source_labels)
+std::vector<WatchedFile> create_file_watchers(const std::vector<std::string>& file_paths, const std::vector<std::string>& source_labels)
 {
     std::vector<WatchedFile> watched_files;
     watched_files.reserve(file_paths.size());
 
     for (std::size_t index = 0; index < file_paths.size(); ++index)
     {
-        watched_files.push_back(WatchedFile{
+        watched_files.push_back(WatchedFile {
             file_paths[index],
             source_labels[index],
             std::make_unique<slayerlog::FileWatcher>(file_paths[index]),
@@ -112,24 +113,18 @@ std::vector<slayerlog::WatcherLineBatch> collect_watcher_batches(std::vector<Wat
     {
         slayerlog::WatcherLineBatch watcher_batch;
         watched_file.watcher->poll(watcher_batch);
-        SLAYERLOG_LOG_TRACE(
-            "Initial poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
+        SLAYERLOG_LOG_TRACE("Initial poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
         watcher_batches.push_back(std::move(watcher_batch));
     }
 
     return watcher_batches;
 }
 
-void append_batch_to_model(
-    const std::vector<slayerlog::WatcherLineBatch>& watcher_batches,
-    const std::vector<std::string>& source_labels,
-    std::mutex& model_mutex,
-    slayerlog::LogViewModel& model,
-    ftxui::ScreenInteractive& screen)
+void append_batch_to_model(const std::vector<slayerlog::WatcherLineBatch>& watcher_batches, const std::vector<std::string>& source_labels,
+                           std::mutex& model_mutex, slayerlog::LogViewModel& model, ftxui::ScreenInteractive& screen)
 {
     const auto merged_lines = slayerlog::merge_log_batch(watcher_batches, source_labels);
-    SLAYERLOG_LOG_TRACE(
-        "Merging watcher batches watcher_count=" << watcher_batches.size() << " merged_lines=" << merged_lines.size());
+    SLAYERLOG_LOG_TRACE("Merging watcher batches watcher_count=" << watcher_batches.size() << " merged_lines=" << merged_lines.size());
     if (merged_lines.empty())
     {
         return;
@@ -143,23 +138,13 @@ void append_batch_to_model(
     screen.PostEvent(ftxui::Event::Custom);
 }
 
-std::thread start_watcher_thread(
-    int poll_interval_ms,
-    std::vector<WatchedFile>& watched_files,
-    const std::vector<std::string>& source_labels,
-    std::mutex& model_mutex,
-    slayerlog::LogViewModel& model,
-    ftxui::ScreenInteractive& screen,
-    std::atomic<bool>& keep_running)
+std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>& watched_files,
+                                 const std::vector<std::string>& source_labels, std::mutex& model_mutex, slayerlog::LogViewModel& model,
+                                 ftxui::ScreenInteractive& screen, std::atomic<bool>& keep_running)
 {
     return std::thread(
-        [poll_interval_ms,
-         watched_files = &watched_files,
-         source_labels = &source_labels,
-         model_mutex = &model_mutex,
-         model = &model,
-         screen = &screen,
-         keep_running = &keep_running]
+        [poll_interval_ms, watched_files = &watched_files, source_labels = &source_labels, model_mutex = &model_mutex, model = &model,
+         screen = &screen, keep_running = &keep_running]
         {
             while (*keep_running)
             {
@@ -190,14 +175,52 @@ std::thread start_watcher_thread(
                         SLAYERLOG_LOG_WARNING("Watcher poll threw for file=" << watched_file.file_path << " error=<unknown>");
                     }
 
-                    SLAYERLOG_LOG_TRACE(
-                        "Live poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
+                    SLAYERLOG_LOG_TRACE("Live poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
                     watcher_batches.push_back(std::move(watcher_batch));
                 }
 
                 append_batch_to_model(watcher_batches, *source_labels, *model_mutex, *model, *screen);
             }
         });
+}
+
+void register_commands(slayerlog::CommandManager& command_manager, slayerlog::LogViewModel& model)
+{
+    command_manager.register_command({"filter-in", "Show lines containing text", "filter-in <text>"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (arguments.empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: filter-in <text>"};
+                                         }
+
+                                         model.add_include_filter(std::string(arguments));
+                                         return slayerlog::CommandResult {true, "Added include filter: " + std::string(arguments)};
+                                     });
+
+    command_manager.register_command({"filter-out", "Hide lines containing text", "filter-out <text>"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (arguments.empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: filter-out <text>"};
+                                         }
+
+                                         model.add_exclude_filter(std::string(arguments));
+                                         return slayerlog::CommandResult {true, "Added exclude filter: " + std::string(arguments)};
+                                     });
+
+    command_manager.register_command({"reset-filters", "Clear all active filters", "reset-filters"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!arguments.empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: reset-filters"};
+                                         }
+
+                                         model.reset_filters();
+                                         return slayerlog::CommandResult {true, "Cleared all filters"};
+                                     });
 }
 
 } // namespace
@@ -210,12 +233,10 @@ int main(int argc, char** argv)
     const auto config        = slayerlog::parse_command_line(argc, argv);
     const auto source_labels = build_source_labels(config.file_paths);
     const auto header_text   = build_header_text(source_labels);
-    SLAYERLOG_LOG_INFO(
-        "Starting slayerlog poll_interval_ms=" << config.poll_interval_ms << " watched_files=" << config.file_paths.size());
+    SLAYERLOG_LOG_INFO("Starting slayerlog poll_interval_ms=" << config.poll_interval_ms << " watched_files=" << config.file_paths.size());
     for (std::size_t index = 0; index < config.file_paths.size(); ++index)
     {
-        SLAYERLOG_LOG_INFO(
-            "Configured watcher[" << index << "] file=" << config.file_paths[index] << " label=" << source_labels[index]);
+        SLAYERLOG_LOG_INFO("Configured watcher[" << index << "] file=" << config.file_paths[index] << " label=" << source_labels[index]);
     }
 
     auto screen = ftxui::ScreenInteractive::Fullscreen();
@@ -224,8 +245,12 @@ int main(int argc, char** argv)
     std::mutex model_mutex;
     slayerlog::LogViewModel model;
     model.set_show_source_labels(config.file_paths.size() > 1);
+    slayerlog::CommandPaletteModel command_palette_model;
+    slayerlog::CommandManager command_manager;
+    register_commands(command_manager, model);
+    slayerlog::CommandPaletteController command_palette_controller(command_palette_model, command_manager);
     slayerlog::LogView view;
-    slayerlog::InputController input_controller(model, view, screen);
+    slayerlog::InputController input_controller(model, view, screen, command_palette_controller);
 
     auto watched_files = create_file_watchers(config.file_paths, source_labels);
     try
@@ -247,7 +272,7 @@ int main(int argc, char** argv)
         [&]
         {
             std::lock_guard lock(model_mutex);
-            return view.render(model, header_text, screen.dimy());
+            return view.render(model, header_text, screen.dimy(), input_controller.command_palette());
         });
 
     viewer |= ftxui::CatchEvent(

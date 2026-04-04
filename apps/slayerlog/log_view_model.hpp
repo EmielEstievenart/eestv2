@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -27,6 +28,16 @@ public:
     bool updates_paused() const;
     /** @brief Enables source labels when multiple files are shown in the same view. */
     void set_show_source_labels(bool show_source_labels);
+    /** @brief Adds an include filter and rebuilds the visible log. */
+    void add_include_filter(std::string filter_text);
+    /** @brief Adds an exclude filter and rebuilds the visible log. */
+    void add_exclude_filter(std::string filter_text);
+    /** @brief Removes every active filter and restores the full log view. */
+    void reset_filters();
+    /** @brief Returns active include filters in registration order. */
+    const std::vector<std::string>& include_filters() const;
+    /** @brief Returns active exclude filters in registration order. */
+    const std::vector<std::string>& exclude_filters() const;
 
     /** @brief Sets the visible viewport height so scrolling and follow-bottom can be clamped correctly. */
     void set_visible_line_count(int count);
@@ -36,6 +47,8 @@ public:
     int scroll_offset() const;
     /** @brief Returns the total number of rendered log lines in the model. */
     int line_count() const;
+    /** @brief Returns the total number of observed log lines before filtering. */
+    int total_line_count() const;
 
     /** @brief Scrolls upward and disables follow-bottom until the bottom is reached again. */
     void scroll_up(int amount = 1);
@@ -67,13 +80,20 @@ public:
 private:
     void append_lines_immediately(const std::vector<ObservedLogLine>& lines);
     void flush_paused_updates();
+    void rebuild_visible_entries();
     void clamp_scroll_offset();
     int max_scroll_offset() const;
     void update_follow_bottom();
     void clamp_selection();
+    bool entry_matches_filters(const ObservedLogLine& entry) const;
+    bool matches_any_filter(std::string_view haystack, const std::vector<std::string>& filters) const;
+    static std::string trim_filter_text(std::string_view text);
 
-    std::vector<ObservedLogLine> _entries;
+    std::vector<ObservedLogLine> _all_entries;
+    std::vector<int> _visible_entry_indices;
     std::vector<ObservedLogLine> _paused_updates;
+    std::vector<std::string> _include_filters;
+    std::vector<std::string> _exclude_filters;
     int _scroll_offset          = 0;
     int _visible_line_count     = 1;
     bool _follow_bottom         = true;
