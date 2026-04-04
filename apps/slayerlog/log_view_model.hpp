@@ -58,6 +58,8 @@ public:
     void scroll_to_top();
     /** @brief Jumps to the newest visible content. */
     void scroll_to_bottom();
+    /** @brief Centers the viewport on the requested 1-based line number when it is visible. */
+    bool center_on_line_number(int line_number);
 
     /** @brief Starts a text selection at the given rendered position. */
     void begin_selection(TextPosition position);

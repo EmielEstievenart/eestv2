@@ -1,5 +1,6 @@
 #include <atomic>
 #include <chrono>
+#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -220,6 +221,51 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
 
                                          model.reset_filters();
                                          return slayerlog::CommandResult {true, "Cleared all filters"};
+                                     });
+
+    command_manager.register_command({"go-to-line", "Center the view on a line number", "go-to-line <line-number>"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (arguments.empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: go-to-line <line-number>"};
+                                         }
+
+                                         const std::string line_text(arguments);
+                                         std::size_t parsed_length = 0;
+                                         int line_number           = 0;
+                                         try
+                                         {
+                                             line_number = std::stoi(line_text, &parsed_length);
+                                         }
+                                         catch (const std::exception&)
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: go-to-line <line-number>"};
+                                         }
+
+                                         if (parsed_length != line_text.size() || line_number <= 0)
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: go-to-line <line-number>"};
+                                         }
+
+                                         if (line_number > model.total_line_count())
+                                         {
+                                             return slayerlog::CommandResult {false,
+                                                                              "Line " + std::to_string(line_number) + " is out of range"};
+                                         }
+
+                                         if (!model.center_on_line_number(line_number))
+                                         {
+                                             return slayerlog::CommandResult {
+                                                 false,
+                                                 "Line " + std::to_string(line_number) + " is hidden by current filters",
+                                             };
+                                         }
+
+                                         return slayerlog::CommandResult {
+                                             true,
+                                             "Centered view on line " + std::to_string(line_number),
+                                         };
                                      });
 }
 

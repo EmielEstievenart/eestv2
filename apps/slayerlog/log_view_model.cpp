@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <iterator>
 #include <sstream>
 #include <utility>
 
@@ -190,6 +191,27 @@ void LogViewModel::scroll_to_bottom()
 {
     _scroll_offset = max_scroll_offset();
     update_follow_bottom();
+}
+
+bool LogViewModel::center_on_line_number(int line_number)
+{
+    if (line_number <= 0)
+    {
+        return false;
+    }
+
+    const int target_entry_index    = line_number - 1;
+    const auto target_visible_entry = std::find(_visible_entry_indices.begin(), _visible_entry_indices.end(), target_entry_index);
+    if (target_visible_entry == _visible_entry_indices.end())
+    {
+        return false;
+    }
+
+    const int target_visible_index = static_cast<int>(std::distance(_visible_entry_indices.begin(), target_visible_entry));
+    _scroll_offset                 = target_visible_index - (_visible_line_count / 2);
+    clamp_scroll_offset();
+    update_follow_bottom();
+    return true;
 }
 
 void LogViewModel::begin_selection(TextPosition position)

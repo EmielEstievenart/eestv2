@@ -164,4 +164,87 @@ TEST(LogViewModelTest, PausedUpdatesRespectActiveFiltersWhenFlushed)
     EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {"keep this"}));
 }
 
+TEST(LogViewModelTest, CenterOnLineNumberCentersRequestedLineWhenPossible)
+{
+    LogViewModel model;
+    model.set_visible_line_count(5);
+
+    std::vector<ObservedLogLine> lines;
+    for (int index = 1; index <= 10; ++index)
+    {
+        lines.push_back({"alpha.log", "line " + std::to_string(index)});
+    }
+
+    model.append_lines(lines);
+
+    EXPECT_TRUE(model.center_on_line_number(7));
+    EXPECT_EQ(model.scroll_offset(), 4);
+}
+
+TEST(LogViewModelTest, CenterOnLineNumberClampsNearTop)
+{
+    LogViewModel model;
+    model.set_visible_line_count(5);
+
+    std::vector<ObservedLogLine> lines;
+    for (int index = 1; index <= 10; ++index)
+    {
+        lines.push_back({"alpha.log", "line " + std::to_string(index)});
+    }
+
+    model.append_lines(lines);
+
+    EXPECT_TRUE(model.center_on_line_number(2));
+    EXPECT_EQ(model.scroll_offset(), 0);
+}
+
+TEST(LogViewModelTest, CenterOnLineNumberClampsNearBottom)
+{
+    LogViewModel model;
+    model.set_visible_line_count(5);
+
+    std::vector<ObservedLogLine> lines;
+    for (int index = 1; index <= 10; ++index)
+    {
+        lines.push_back({"alpha.log", "line " + std::to_string(index)});
+    }
+
+    model.append_lines(lines);
+
+    EXPECT_TRUE(model.center_on_line_number(10));
+    EXPECT_EQ(model.scroll_offset(), 5);
+}
+
+TEST(LogViewModelTest, CenterOnLineNumberUsesRenderedLineNumbersAfterFiltering)
+{
+    LogViewModel model;
+    model.set_visible_line_count(1);
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "info first"},
+        ObservedLogLine {"alpha.log", "error second"},
+        ObservedLogLine {"alpha.log", "info third"},
+        ObservedLogLine {"alpha.log", "info fourth"},
+        ObservedLogLine {"alpha.log", "error fifth"},
+    });
+    model.add_include_filter("error");
+
+    EXPECT_TRUE(model.center_on_line_number(5));
+    EXPECT_EQ(model.scroll_offset(), 1);
+}
+
+TEST(LogViewModelTest, CenterOnLineNumberFailsWhenLineIsHiddenByFilters)
+{
+    LogViewModel model;
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "info first"},
+        ObservedLogLine {"alpha.log", "error second"},
+        ObservedLogLine {"alpha.log", "info third"},
+    });
+    model.add_include_filter("error");
+
+    EXPECT_FALSE(model.center_on_line_number(1));
+}
+
 } // namespace slayerlog
