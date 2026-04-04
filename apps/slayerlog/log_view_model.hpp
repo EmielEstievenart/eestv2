@@ -38,6 +38,10 @@ public:
     const std::vector<std::string>& include_filters() const;
     /** @brief Returns active exclude filters in registration order. */
     const std::vector<std::string>& exclude_filters() const;
+    /** @brief Hides all raw lines before the provided 1-based line number. */
+    void hide_before_line_number(int line_number);
+    /** @brief Returns the active raw-line cutoff, if any. */
+    std::optional<int> hidden_before_line_number() const;
 
     /** @brief Sets the visible viewport height so scrolling and follow-bottom can be clamped correctly. */
     void set_visible_line_count(int count);
@@ -88,6 +92,7 @@ private:
     void update_follow_bottom();
     void clamp_selection();
     bool entry_matches_filters(const ObservedLogLine& entry) const;
+    bool line_number_is_visible(int line_number) const;
     bool matches_any_filter(std::string_view haystack, const std::vector<std::string>& filters) const;
     static std::string trim_filter_text(std::string_view text);
 
@@ -96,6 +101,7 @@ private:
     std::vector<ObservedLogLine> _paused_updates;
     std::vector<std::string> _include_filters;
     std::vector<std::string> _exclude_filters;
+    std::optional<int> _hidden_before_line_number;
     int _scroll_offset          = 0;
     int _visible_line_count     = 1;
     bool _follow_bottom         = true;

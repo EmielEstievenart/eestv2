@@ -133,6 +133,28 @@ const std::vector<std::string>& LogViewModel::exclude_filters() const
     return _exclude_filters;
 }
 
+void LogViewModel::hide_before_line_number(int line_number)
+{
+    const bool was_following_bottom = _follow_bottom;
+    _hidden_before_line_number      = line_number > 1 ? std::optional<int>(line_number) : std::nullopt;
+    rebuild_visible_entries();
+    clamp_selection();
+    if (was_following_bottom)
+    {
+        _scroll_offset = max_scroll_offset();
+    }
+    else
+    {
+        clamp_scroll_offset();
+    }
+    update_follow_bottom();
+}
+
+std::optional<int> LogViewModel::hidden_before_line_number() const
+{
+    return _hidden_before_line_number;
+}
+
 void LogViewModel::set_visible_line_count(int count)
 {
     _visible_line_count = std::max(1, count);
@@ -321,7 +343,7 @@ void LogViewModel::append_lines_immediately(const std::vector<ObservedLogLine>& 
     for (const auto& line : lines)
     {
         _all_entries.push_back(line);
-        if (entry_matches_filters(line))
+        if (line_number_is_visible(static_cast<int>(_all_entries.size())) && entry_matches_filters(line))
         {
             _visible_entry_indices.push_back(static_cast<int>(_all_entries.size()) - 1);
         }
@@ -346,7 +368,7 @@ void LogViewModel::rebuild_visible_entries()
 
     for (std::size_t index = 0; index < _all_entries.size(); ++index)
     {
-        if (entry_matches_filters(_all_entries[index]))
+        if (line_number_is_visible(static_cast<int>(index) + 1) && entry_matches_filters(_all_entries[index]))
         {
             _visible_entry_indices.push_back(static_cast<int>(index));
         }
@@ -400,6 +422,11 @@ bool LogViewModel::entry_matches_filters(const ObservedLogLine& entry) const
     const bool matches_include        = _include_filters.empty() || matches_any_filter(searchable_text, _include_filters);
     const bool matches_exclude        = matches_any_filter(searchable_text, _exclude_filters);
     return matches_include && !matches_exclude;
+}
+
+bool LogViewModel::line_number_is_visible(int line_number) const
+{
+    return !_hidden_before_line_number.has_value() || line_number >= *_hidden_before_line_number;
 }
 
 bool LogViewModel::matches_any_filter(std::string_view haystack, const std::vector<std::string>& filters) const

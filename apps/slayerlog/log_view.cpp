@@ -27,9 +27,14 @@ int estimate_visible_line_count(const ftxui::Box& viewport_box, int screen_heigh
 std::string build_filter_status_text(const LogViewModel& model)
 {
     std::ostringstream output;
+    const auto hidden_before_line_number = model.hidden_before_line_number();
     if (model.include_filters().empty() && model.exclude_filters().empty())
     {
         output << "Filters: none";
+        if (hidden_before_line_number.has_value())
+        {
+            output << " | Hidden before line " << *hidden_before_line_number;
+        }
         return output.str();
     }
 
@@ -64,6 +69,11 @@ std::string build_filter_status_text(const LogViewModel& model)
         }
 
         output << ")";
+    }
+
+    if (hidden_before_line_number.has_value())
+    {
+        output << " | Hidden before line " << *hidden_before_line_number;
     }
 
     return output.str();

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -79,6 +80,33 @@ std::string build_header_text(const std::vector<std::string>& labels)
     }
 
     return output.str();
+}
+
+std::optional<int> parse_positive_line_number(std::string_view text)
+{
+    if (text.empty())
+    {
+        return std::nullopt;
+    }
+
+    const std::string line_text(text);
+    std::size_t parsed_length = 0;
+    int line_number           = 0;
+    try
+    {
+        line_number = std::stoi(line_text, &parsed_length);
+    }
+    catch (const std::exception&)
+    {
+        return std::nullopt;
+    }
+
+    if (parsed_length != line_text.size() || line_number <= 0)
+    {
+        return std::nullopt;
+    }
+
+    return line_number;
 }
 
 struct WatchedFile
@@ -226,45 +254,50 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
     command_manager.register_command({"go-to-line", "Center the view on a line number", "go-to-line <line-number>"},
                                      [&](std::string_view arguments)
                                      {
-                                         if (arguments.empty())
+                                         const auto line_number = parse_positive_line_number(arguments);
+                                         if (!line_number.has_value())
                                          {
                                              return slayerlog::CommandResult {false, "Usage: go-to-line <line-number>"};
                                          }
 
-                                         const std::string line_text(arguments);
-                                         std::size_t parsed_length = 0;
-                                         int line_number           = 0;
-                                         try
-                                         {
-                                             line_number = std::stoi(line_text, &parsed_length);
-                                         }
-                                         catch (const std::exception&)
-                                         {
-                                             return slayerlog::CommandResult {false, "Usage: go-to-line <line-number>"};
-                                         }
-
-                                         if (parsed_length != line_text.size() || line_number <= 0)
-                                         {
-                                             return slayerlog::CommandResult {false, "Usage: go-to-line <line-number>"};
-                                         }
-
-                                         if (line_number > model.total_line_count())
+                                         if (*line_number > model.total_line_count())
                                          {
                                              return slayerlog::CommandResult {false,
-                                                                              "Line " + std::to_string(line_number) + " is out of range"};
+                                                                              "Line " + std::to_string(*line_number) + " is out of range"};
                                          }
 
-                                         if (!model.center_on_line_number(line_number))
+                                         if (!model.center_on_line_number(*line_number))
                                          {
                                              return slayerlog::CommandResult {
                                                  false,
-                                                 "Line " + std::to_string(line_number) + " is hidden by current filters",
+                                                 "Line " + std::to_string(*line_number) + " is hidden by current filters or line cutoff",
                                              };
                                          }
 
                                          return slayerlog::CommandResult {
                                              true,
-                                             "Centered view on line " + std::to_string(line_number),
+                                             "Centered view on line " + std::to_string(*line_number),
+                                         };
+                                     });
+
+    command_manager.register_command({"hide-before-line", "Hide all raw lines before a line number", "hide-before-line <line-number>"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         const auto line_number = parse_positive_line_number(arguments);
+                                         if (!line_number.has_value())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: hide-before-line <line-number>"};
+                                         }
+
+                                         model.hide_before_line_number(*line_number);
+                                         if (*line_number == 1)
+                                         {
+                                             return slayerlog::CommandResult {true, "Showing all lines"};
+                                         }
+
+                                         return slayerlog::CommandResult {
+                                             true,
+                                             "Hidden all lines before line " + std::to_string(*line_number),
                                          };
                                      });
 }

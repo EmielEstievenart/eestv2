@@ -247,4 +247,88 @@ TEST(LogViewModelTest, CenterOnLineNumberFailsWhenLineIsHiddenByFilters)
     EXPECT_FALSE(model.center_on_line_number(1));
 }
 
+TEST(LogViewModelTest, HideBeforeLineUsesRawLineNumbers)
+{
+    LogViewModel model;
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "line 1"},
+        ObservedLogLine {"alpha.log", "line 2"},
+        ObservedLogLine {"alpha.log", "line 3"},
+        ObservedLogLine {"alpha.log", "line 4"},
+    });
+    model.hide_before_line_number(3);
+
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "line 3",
+                                         "line 4",
+                                     }));
+    EXPECT_EQ(model.rendered_line(0), "3 line 3");
+    EXPECT_EQ(model.hidden_before_line_number(), 3);
+}
+
+TEST(LogViewModelTest, HideBeforeLineAppliesBeforeTextFilters)
+{
+    LogViewModel model;
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error first"},
+        ObservedLogLine {"alpha.log", "error second"},
+        ObservedLogLine {"alpha.log", "error third"},
+        ObservedLogLine {"alpha.log", "info fourth"},
+    });
+    model.hide_before_line_number(3);
+    model.add_include_filter("error");
+
+    EXPECT_EQ(model.line_count(), 1);
+    EXPECT_EQ(model.rendered_line(0), "3 error third");
+}
+
+TEST(LogViewModelTest, HideBeforeLineAppliesToNewlyAppendedLines)
+{
+    LogViewModel model;
+
+    model.hide_before_line_number(4);
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "line 1"},
+        ObservedLogLine {"alpha.log", "line 2"},
+        ObservedLogLine {"alpha.log", "line 3"},
+    });
+
+    EXPECT_EQ(model.line_count(), 0);
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "line 4"},
+        ObservedLogLine {"alpha.log", "line 5"},
+    });
+
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "line 4",
+                                         "line 5",
+                                     }));
+    EXPECT_EQ(model.rendered_line(0), "4 line 4");
+}
+
+TEST(LogViewModelTest, HideBeforeLineOneRestoresAllLines)
+{
+    LogViewModel model;
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "line 1"},
+        ObservedLogLine {"alpha.log", "line 2"},
+        ObservedLogLine {"alpha.log", "line 3"},
+    });
+    model.hide_before_line_number(3);
+    ASSERT_EQ(model.line_count(), 1);
+
+    model.hide_before_line_number(1);
+
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "line 1",
+                                         "line 2",
+                                         "line 3",
+                                     }));
+    EXPECT_FALSE(model.hidden_before_line_number().has_value());
+}
+
 } // namespace slayerlog
