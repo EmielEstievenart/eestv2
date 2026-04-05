@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -10,6 +11,90 @@
 
 namespace slayerlog
 {
+
+struct VisibleLineIndex
+{
+    int value = 0;
+};
+
+inline bool operator==(VisibleLineIndex lhs, VisibleLineIndex rhs)
+{
+    return lhs.value == rhs.value;
+}
+
+inline bool operator<(VisibleLineIndex lhs, VisibleLineIndex rhs)
+{
+    return lhs.value < rhs.value;
+}
+
+struct AllLineIndex
+{
+    int value = 0;
+};
+
+inline bool operator==(AllLineIndex lhs, AllLineIndex rhs)
+{
+    return lhs.value == rhs.value;
+}
+
+inline bool operator<(AllLineIndex lhs, AllLineIndex rhs)
+{
+    return lhs.value < rhs.value;
+}
+
+struct FindResultIndex
+{
+    int value = 0;
+};
+
+inline bool operator==(FindResultIndex lhs, FindResultIndex rhs)
+{
+    return lhs.value == rhs.value;
+}
+
+inline bool operator<(FindResultIndex lhs, FindResultIndex rhs)
+{
+    return lhs.value < rhs.value;
+}
+
+template <typename T, typename Index>
+class IndexedVector
+{
+public:
+    using iterator       = typename std::vector<T>::iterator;
+    using const_iterator = typename std::vector<T>::const_iterator;
+
+    T& operator[](Index index) { return _items[static_cast<std::size_t>(index.value)]; }
+
+    const T& operator[](Index index) const { return _items[static_cast<std::size_t>(index.value)]; }
+
+    void clear() { _items.clear(); }
+
+    void reserve(std::size_t count) { _items.reserve(count); }
+
+    void push_back(const T& value) { _items.push_back(value); }
+
+    void push_back(T&& value) { _items.push_back(std::move(value)); }
+
+    [[nodiscard]] std::size_t size() const { return _items.size(); }
+
+    [[nodiscard]] bool empty() const { return _items.empty(); }
+
+    iterator begin() { return _items.begin(); }
+
+    iterator end() { return _items.end(); }
+
+    const_iterator begin() const { return _items.begin(); }
+
+    const_iterator end() const { return _items.end(); }
+
+    const_iterator cbegin() const { return _items.cbegin(); }
+
+    const_iterator cend() const { return _items.cend(); }
+
+private:
+    std::vector<T> _items;
+};
 
 struct TextPosition
 {
@@ -43,103 +128,73 @@ public:
     /** @brief Returns the active raw-line cutoff, if any. */
     std::optional<int> hidden_before_line_number() const;
 
-    /** @brief Sets the active find query and focuses the first visible match. */
+    /** @brief Sets the active find query and rebuilds find results. */
     bool set_find_query(std::string query);
     /** @brief Clears the active find query and all find results. */
-    void clear_find();
+    void clear_find_query();
     /** @brief Returns whether find mode is currently active. */
     bool find_active() const;
     /** @brief Returns the currently active find query text. */
     const std::string& find_query() const;
     /** @brief Returns total matches across all loaded lines. */
     int total_find_match_count() const;
-    /** @brief Returns matches that are currently visible in the viewport model. */
+    /** @brief Returns matches that are currently visible in the rendered model. */
     int visible_find_match_count() const;
-    /** @brief Returns the active matched visible-line index, if any. */
-    std::optional<int> active_find_visible_index() const;
-    /** @brief Jumps to the next visible find match. */
-    bool go_to_next_find_match();
-    /** @brief Jumps to the previous visible find match. */
-    bool go_to_previous_find_match();
+    /** @brief Returns the entry index for a find result position. */
+    std::optional<AllLineIndex> find_match_entry_index(FindResultIndex find_result_index) const;
+    /** @brief Returns the find result position for an entry index. */
+    std::optional<FindResultIndex> find_match_position_for_entry_index(AllLineIndex entry_index) const;
+    /** @brief Returns the visible index for an entry index, if currently visible. */
+    std::optional<VisibleLineIndex> visible_line_index_for_entry(AllLineIndex entry_index) const;
+    /** @brief Returns the visible index for a 1-based raw line number, if currently visible. */
+    std::optional<VisibleLineIndex> visible_line_index_for_line_number(int line_number) const;
     /** @brief Returns whether a visible line index is a find match. */
     bool visible_line_matches_find(int visible_index) const;
+    /** @brief Returns whether an entry index is currently visible. */
+    bool entry_index_is_visible(AllLineIndex entry_index) const;
 
-    /** @brief Sets the visible viewport height so scrolling and follow-bottom can be clamped correctly. */
-    void set_visible_line_count(int count);
-    /** @brief Returns the current viewport height in rendered lines. */
-    int visible_line_count() const;
-    /** @brief Returns the index of the first visible line. */
-    int scroll_offset() const;
     /** @brief Returns the total number of rendered log lines in the model. */
     int line_count() const;
     /** @brief Returns the total number of observed log lines before filtering. */
     int total_line_count() const;
 
-    /** @brief Scrolls upward and disables follow-bottom until the bottom is reached again. */
-    void scroll_up(int amount = 1);
-    /** @brief Scrolls downward and re-enables follow-bottom once the bottom is reached. */
-    void scroll_down(int amount = 1);
-    /** @brief Jumps to the first available line. */
-    void scroll_to_top();
-    /** @brief Jumps to the newest visible content. */
-    void scroll_to_bottom();
-    /** @brief Centers the viewport on the requested 1-based line number when it is visible. */
-    bool center_on_line_number(int line_number);
-
-    /** @brief Starts a text selection at the given rendered position. */
-    void begin_selection(TextPosition position);
-    /** @brief Extends the active selection while dragging. */
-    void update_selection(TextPosition position);
-    /** @brief Finishes the selection, optionally updating the final focus position. */
-    void end_selection(std::optional<TextPosition> position);
-    /** @brief Clears the current selection state. */
-    void clear_selection();
-    /** @brief Returns whether a mouse-driven selection gesture is currently active. */
-    bool selection_in_progress() const;
-    /** @brief Returns normalized selection bounds for rendering and copying. */
-    std::optional<std::pair<TextPosition, TextPosition>> selection_bounds() const;
-    /** @brief Extracts the selected text from the rendered view. */
-    std::string selection_text() const;
-
     /** @brief Returns a fully rendered line including line number and optional source label. */
     std::string rendered_line(int index) const;
+    /** @brief Returns a contiguous slice of fully rendered visible lines. */
+    std::vector<std::string> rendered_lines(int first_index, int count) const;
 
 private:
+    std::string render_entry(AllLineIndex entry_index) const;
+
     void append_lines_immediately(const std::vector<ObservedLogLine>& lines);
+
     void flush_paused_updates();
+
     void rebuild_visible_entries();
+    void expand_visible_entries(AllLineIndex first_new_entry_index);
+
     void rebuild_find_matches();
-    void rebuild_visible_find_matches();
-    bool focus_find_match_by_position(int position);
-    std::optional<int> visible_find_match_position_for_entry_index(int entry_index) const;
+    void expand_find_matches(AllLineIndex first_new_entry_index);
+
     bool entry_matches_find_query(const ObservedLogLine& entry) const;
-    void clamp_scroll_offset();
-    int max_scroll_offset() const;
-    void update_follow_bottom();
-    void clamp_selection();
     bool entry_matches_filters(const ObservedLogLine& entry) const;
-    bool line_number_is_visible(int line_number) const;
     bool matches_any_filter(std::string_view haystack, const std::vector<std::string>& filters) const;
     static std::string trim_filter_text(std::string_view text);
 
-    std::vector<ObservedLogLine> _all_entries;
-    std::vector<int> _visible_entry_indices;
+    IndexedVector<ObservedLogLine, AllLineIndex> _all_entries;
+    IndexedVector<AllLineIndex, VisibleLineIndex> _visible_entry_indices;
     std::vector<ObservedLogLine> _paused_updates;
+
     std::vector<std::string> _include_filters;
     std::vector<std::string> _exclude_filters;
+
     std::string _find_query;
-    std::vector<int> _find_match_entry_indices;
-    std::vector<int> _visible_find_match_entry_indices;
-    std::optional<int> _active_find_entry_index;
+    IndexedVector<AllLineIndex, FindResultIndex> _find_match_entry_indices;
+
     std::optional<int> _hidden_before_line_number;
-    int _scroll_offset          = 0;
-    int _visible_line_count     = 1;
-    bool _follow_bottom         = true;
-    bool _updates_paused        = false;
-    bool _show_source_labels    = false;
-    bool _selection_in_progress = false;
-    std::optional<TextPosition> _selection_anchor;
-    std::optional<TextPosition> _selection_focus;
+
+    bool _updates_paused     = false;
+    bool _show_source_labels = false;
 };
 
 } // namespace slayerlog

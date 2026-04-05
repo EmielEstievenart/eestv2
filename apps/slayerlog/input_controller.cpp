@@ -160,9 +160,9 @@ bool copy_text_to_clipboard_on_unix(const std::string& text)
 
 } // namespace
 
-InputController::InputController(LogViewModel& model, LogView& view, ftxui::ScreenInteractive& screen,
+InputController::InputController(LogViewModel& model, LogController& controller, LogView& view, ftxui::ScreenInteractive& screen,
                                  CommandPaletteController& command_palette_controller)
-    : _model(model), _view(view), _screen(screen), _command_palette_controller(command_palette_controller)
+    : _model(model), _controller(controller), _view(view), _screen(screen), _command_palette_controller(command_palette_controller)
 {
 }
 
@@ -183,7 +183,7 @@ bool InputController::handle_event(ftxui::Event event)
     {
         if (_model.find_active())
         {
-            _model.clear_find();
+            _controller.clear_find(_model);
             return true;
         }
 
@@ -210,12 +210,12 @@ bool InputController::handle_event(ftxui::Event event)
 
     if (_model.find_active() && event == ftxui::Event::ArrowRight)
     {
-        return _model.go_to_next_find_match();
+        return _controller.go_to_next_find_match(_model, _view.visible_line_count(_screen.dimy()));
     }
 
     if (_model.find_active() && event == ftxui::Event::ArrowLeft)
     {
-        return _model.go_to_previous_find_match();
+        return _controller.go_to_previous_find_match(_model, _view.visible_line_count(_screen.dimy()));
     }
 
     if (event == ftxui::Event::C)
@@ -225,37 +225,39 @@ bool InputController::handle_event(ftxui::Event event)
 
     if (event == ftxui::Event::ArrowUp || event == ftxui::Event::Character('k'))
     {
-        _model.scroll_up();
+        _controller.scroll_up(_model, _view.visible_line_count(_screen.dimy()));
         return true;
     }
 
     if (event == ftxui::Event::ArrowDown || event == ftxui::Event::Character('j'))
     {
-        _model.scroll_down();
+        _controller.scroll_down(_model, _view.visible_line_count(_screen.dimy()));
         return true;
     }
 
     if (event == ftxui::Event::PageUp)
     {
-        _model.scroll_up(_model.visible_line_count());
+        const int visible_line_count = _view.visible_line_count(_screen.dimy());
+        _controller.scroll_up(_model, visible_line_count, visible_line_count);
         return true;
     }
 
     if (event == ftxui::Event::PageDown)
     {
-        _model.scroll_down(_model.visible_line_count());
+        const int visible_line_count = _view.visible_line_count(_screen.dimy());
+        _controller.scroll_down(_model, visible_line_count, visible_line_count);
         return true;
     }
 
     if (event == ftxui::Event::Home)
     {
-        _model.scroll_to_top();
+        _controller.scroll_to_top(_model, _view.visible_line_count(_screen.dimy()));
         return true;
     }
 
     if (event == ftxui::Event::End)
     {
-        _model.scroll_to_bottom();
+        _controller.scroll_to_bottom();
         return true;
     }
 
@@ -263,31 +265,31 @@ bool InputController::handle_event(ftxui::Event event)
     {
         if (event.mouse().button == ftxui::Mouse::Left)
         {
-            const auto position = _view.mouse_to_text_position(_model, event.mouse());
+            const auto position = _view.mouse_to_text_position(_model, _controller, event.mouse());
             if (event.mouse().motion == ftxui::Mouse::Pressed)
             {
                 if (position.has_value())
                 {
-                    _model.begin_selection(*position);
+                    _controller.begin_selection(_model, *position);
                     return true;
                 }
 
-                _model.clear_selection();
+                _controller.clear_selection();
                 return false;
             }
 
-            if (event.mouse().motion == ftxui::Mouse::Moved && _model.selection_in_progress())
+            if (event.mouse().motion == ftxui::Mouse::Moved && _controller.selection_in_progress())
             {
                 if (position.has_value())
                 {
-                    _model.update_selection(*position);
+                    _controller.update_selection(_model, *position);
                     return true;
                 }
             }
 
             if (event.mouse().motion == ftxui::Mouse::Released)
             {
-                _model.end_selection(position);
+                _controller.end_selection(_model, position);
                 return position.has_value();
             }
         }
@@ -299,13 +301,13 @@ bool InputController::handle_event(ftxui::Event event)
 
         if (event.mouse().button == ftxui::Mouse::WheelUp)
         {
-            _model.scroll_up();
+            _controller.scroll_up(_model, _view.visible_line_count(_screen.dimy()));
             return true;
         }
 
         if (event.mouse().button == ftxui::Mouse::WheelDown)
         {
-            _model.scroll_down();
+            _controller.scroll_down(_model, _view.visible_line_count(_screen.dimy()));
             return true;
         }
     }
@@ -320,7 +322,7 @@ const CommandPaletteModel& InputController::command_palette() const
 
 bool InputController::copy_selection_to_clipboard() const
 {
-    const auto text = _model.selection_text();
+    const auto text = _controller.selection_text(_model);
     if (text.empty())
     {
         return false;

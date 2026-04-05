@@ -3,6 +3,7 @@
 #include <cctype>
 #include <exception>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -25,6 +26,7 @@
 #include "file_watcher.hpp"
 #include "input_controller.hpp"
 #include "log_batch.hpp"
+#include "log_controller.hpp"
 #include "log_view.hpp"
 #include "log_view_model.hpp"
 
@@ -231,7 +233,8 @@ std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>&
         });
 }
 
-void register_commands(slayerlog::CommandManager& command_manager, slayerlog::LogViewModel& model)
+void register_commands(slayerlog::CommandManager& command_manager, slayerlog::LogViewModel& model, slayerlog::LogController& controller,
+                       std::function<int()> viewport_line_count)
 {
     command_manager.register_command({"filter-in", "Show lines containing text", "filter-in <text>"},
                                      [&](std::string_view arguments)
@@ -270,7 +273,7 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                      });
 
     command_manager.register_command({"go-to-line", "Center the view on a line number", "go-to-line <line-number>"},
-                                     [&](std::string_view arguments)
+                                     [&, viewport_line_count](std::string_view arguments)
                                      {
                                          const auto line_number = parse_positive_line_number(arguments);
                                          if (!line_number.has_value())
@@ -284,7 +287,7 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                                                               "Line " + std::to_string(*line_number) + " is out of range"};
                                          }
 
-                                         if (!model.center_on_line_number(*line_number))
+                                         if (!controller.go_to_line(model, *line_number, viewport_line_count()))
                                          {
                                              return slayerlog::CommandResult {
                                                  false,
@@ -320,7 +323,7 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                      });
 
     command_manager.register_command({"find", "Find lines containing text", "find <text>"},
-                                     [&](std::string_view arguments)
+                                     [&, viewport_line_count](std::string_view arguments)
                                      {
                                          const std::string query = trim_text(arguments);
                                          if (query.empty())
@@ -328,7 +331,7 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                              return slayerlog::CommandResult {false, "Usage: find <text>"};
                                          }
 
-                                         const bool focused_visible_match = model.set_find_query(query);
+                                         const bool focused_visible_match = controller.set_find_query(model, query, viewport_line_count());
                                          const int visible_matches        = model.visible_find_match_count();
                                          const int total_matches          = model.total_find_match_count();
                                          if (focused_visible_match)
@@ -372,10 +375,11 @@ int main(int argc, char** argv)
     model.set_show_source_labels(config.file_paths.size() > 1);
     slayerlog::CommandPaletteModel command_palette_model;
     slayerlog::CommandManager command_manager;
-    register_commands(command_manager, model);
-    slayerlog::CommandPaletteController command_palette_controller(command_palette_model, command_manager);
     slayerlog::LogView view;
-    slayerlog::InputController input_controller(model, view, screen, command_palette_controller);
+    slayerlog::LogController controller;
+    register_commands(command_manager, model, controller, [&] { return view.visible_line_count(screen.dimy()); });
+    slayerlog::CommandPaletteController command_palette_controller(command_palette_model, command_manager);
+    slayerlog::InputController input_controller(model, controller, view, screen, command_palette_controller);
 
     auto watched_files = create_file_watchers(config.file_paths, source_labels);
     try
@@ -397,7 +401,7 @@ int main(int argc, char** argv)
         [&]
         {
             std::lock_guard lock(model_mutex);
-            return view.render(model, header_text, screen.dimy(), input_controller.command_palette());
+            return view.render(model, controller, header_text, screen.dimy(), input_controller.command_palette());
         });
 
     viewer |= ftxui::CatchEvent(

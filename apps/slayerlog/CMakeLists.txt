@@ -15,6 +15,8 @@ add_executable(
   file_watcher.hpp
   input_controller.cpp
   input_controller.hpp
+  log_controller.cpp
+  log_controller.hpp
   log_batch.cpp
   log_batch.hpp
   log_view.cpp

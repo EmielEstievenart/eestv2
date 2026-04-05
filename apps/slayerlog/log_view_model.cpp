@@ -10,16 +10,6 @@
 namespace slayerlog
 {
 
-namespace
-{
-
-bool is_before(const TextPosition& lhs, const TextPosition& rhs)
-{
-    return lhs.line < rhs.line || (lhs.line == rhs.line && lhs.column < rhs.column);
-}
-
-} // namespace
-
 void LogViewModel::append_lines(const std::vector<ObservedLogLine>& lines)
 {
     if (_updates_paused)
@@ -30,11 +20,6 @@ void LogViewModel::append_lines(const std::vector<ObservedLogLine>& lines)
     {
         append_lines_immediately(lines);
     }
-
-    rebuild_find_matches();
-    clamp_selection();
-    clamp_scroll_offset();
-    update_follow_bottom();
 }
 
 void LogViewModel::toggle_pause()
@@ -43,10 +28,6 @@ void LogViewModel::toggle_pause()
     if (!_updates_paused)
     {
         flush_paused_updates();
-        rebuild_find_matches();
-        clamp_selection();
-        clamp_scroll_offset();
-        update_follow_bottom();
     }
 }
 
@@ -58,14 +39,11 @@ bool LogViewModel::updates_paused() const
 void LogViewModel::set_show_source_labels(bool show_source_labels)
 {
     _show_source_labels = show_source_labels;
-    rebuild_find_matches();
-    clamp_selection();
 }
 
 void LogViewModel::add_include_filter(std::string filter_text)
 {
-    const bool was_following_bottom = _follow_bottom;
-    filter_text                     = trim_filter_text(filter_text);
+    filter_text = trim_filter_text(filter_text);
     if (filter_text.empty())
     {
         return;
@@ -73,23 +51,12 @@ void LogViewModel::add_include_filter(std::string filter_text)
 
     _include_filters.push_back(std::move(filter_text));
     rebuild_visible_entries();
-    rebuild_visible_find_matches();
-    clamp_selection();
-    if (was_following_bottom)
-    {
-        _scroll_offset = max_scroll_offset();
-    }
-    else
-    {
-        clamp_scroll_offset();
-    }
-    update_follow_bottom();
+    rebuild_find_matches();
 }
 
 void LogViewModel::add_exclude_filter(std::string filter_text)
 {
-    const bool was_following_bottom = _follow_bottom;
-    filter_text                     = trim_filter_text(filter_text);
+    filter_text = trim_filter_text(filter_text);
     if (filter_text.empty())
     {
         return;
@@ -97,36 +64,15 @@ void LogViewModel::add_exclude_filter(std::string filter_text)
 
     _exclude_filters.push_back(std::move(filter_text));
     rebuild_visible_entries();
-    rebuild_visible_find_matches();
-    clamp_selection();
-    if (was_following_bottom)
-    {
-        _scroll_offset = max_scroll_offset();
-    }
-    else
-    {
-        clamp_scroll_offset();
-    }
-    update_follow_bottom();
+    rebuild_find_matches();
 }
 
 void LogViewModel::reset_filters()
 {
-    const bool was_following_bottom = _follow_bottom;
     _include_filters.clear();
     _exclude_filters.clear();
     rebuild_visible_entries();
-    rebuild_visible_find_matches();
-    clamp_selection();
-    if (was_following_bottom)
-    {
-        _scroll_offset = max_scroll_offset();
-    }
-    else
-    {
-        clamp_scroll_offset();
-    }
-    update_follow_bottom();
+    rebuild_find_matches();
 }
 
 const std::vector<std::string>& LogViewModel::include_filters() const
@@ -141,20 +87,9 @@ const std::vector<std::string>& LogViewModel::exclude_filters() const
 
 void LogViewModel::hide_before_line_number(int line_number)
 {
-    const bool was_following_bottom = _follow_bottom;
-    _hidden_before_line_number      = line_number > 1 ? std::optional<int>(line_number) : std::nullopt;
+    _hidden_before_line_number = line_number > 1 ? std::optional<int>(line_number) : std::nullopt;
     rebuild_visible_entries();
-    rebuild_visible_find_matches();
-    clamp_selection();
-    if (was_following_bottom)
-    {
-        _scroll_offset = max_scroll_offset();
-    }
-    else
-    {
-        clamp_scroll_offset();
-    }
-    update_follow_bottom();
+    rebuild_find_matches();
 }
 
 std::optional<int> LogViewModel::hidden_before_line_number() const
@@ -167,27 +102,19 @@ bool LogViewModel::set_find_query(std::string query)
     query = trim_filter_text(query);
     if (query.empty())
     {
-        clear_find();
+        clear_find_query();
         return false;
     }
 
     _find_query = std::move(query);
-    _active_find_entry_index.reset();
     rebuild_find_matches();
-    if (_visible_find_match_entry_indices.empty())
-    {
-        return false;
-    }
-
-    return focus_find_match_by_position(0);
+    return !_find_match_entry_indices.empty();
 }
 
-void LogViewModel::clear_find()
+void LogViewModel::clear_find_query()
 {
     _find_query.clear();
     _find_match_entry_indices.clear();
-    _visible_find_match_entry_indices.clear();
-    _active_find_entry_index.reset();
 }
 
 bool LogViewModel::find_active() const
@@ -207,64 +134,50 @@ int LogViewModel::total_find_match_count() const
 
 int LogViewModel::visible_find_match_count() const
 {
-    return static_cast<int>(_visible_find_match_entry_indices.size());
+    return static_cast<int>(std::count_if(_find_match_entry_indices.begin(), _find_match_entry_indices.end(),
+                                          [this](AllLineIndex entry_index) { return entry_index_is_visible(entry_index); }));
 }
 
-std::optional<int> LogViewModel::active_find_visible_index() const
+std::optional<AllLineIndex> LogViewModel::find_match_entry_index(FindResultIndex find_result_index) const
 {
-    if (!_active_find_entry_index.has_value())
+    if (find_result_index.value < 0 || find_result_index.value >= static_cast<int>(_find_match_entry_indices.size()))
     {
         return std::nullopt;
     }
 
-    const auto visible_line = std::find(_visible_entry_indices.begin(), _visible_entry_indices.end(), *_active_find_entry_index);
+    return _find_match_entry_indices[find_result_index];
+}
+
+std::optional<FindResultIndex> LogViewModel::find_match_position_for_entry_index(AllLineIndex entry_index) const
+{
+    const auto position = std::find(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), entry_index);
+    if (position == _find_match_entry_indices.end())
+    {
+        return std::nullopt;
+    }
+
+    return FindResultIndex {static_cast<int>(std::distance(_find_match_entry_indices.begin(), position))};
+}
+
+std::optional<VisibleLineIndex> LogViewModel::visible_line_index_for_entry(AllLineIndex entry_index) const
+{
+    const auto visible_line = std::find(_visible_entry_indices.begin(), _visible_entry_indices.end(), entry_index);
     if (visible_line == _visible_entry_indices.end())
     {
         return std::nullopt;
     }
 
-    return static_cast<int>(std::distance(_visible_entry_indices.begin(), visible_line));
+    return VisibleLineIndex {static_cast<int>(std::distance(_visible_entry_indices.begin(), visible_line))};
 }
 
-bool LogViewModel::go_to_next_find_match()
+std::optional<VisibleLineIndex> LogViewModel::visible_line_index_for_line_number(int line_number) const
 {
-    if (_visible_find_match_entry_indices.empty())
+    if (line_number <= 0)
     {
-        return false;
+        return std::nullopt;
     }
 
-    int next_position = 0;
-    if (_active_find_entry_index.has_value())
-    {
-        const auto current_position = visible_find_match_position_for_entry_index(*_active_find_entry_index);
-        if (current_position.has_value())
-        {
-            next_position = (*current_position + 1) % static_cast<int>(_visible_find_match_entry_indices.size());
-        }
-    }
-
-    return focus_find_match_by_position(next_position);
-}
-
-bool LogViewModel::go_to_previous_find_match()
-{
-    if (_visible_find_match_entry_indices.empty())
-    {
-        return false;
-    }
-
-    int previous_position = static_cast<int>(_visible_find_match_entry_indices.size()) - 1;
-    if (_active_find_entry_index.has_value())
-    {
-        const auto current_position = visible_find_match_position_for_entry_index(*_active_find_entry_index);
-        if (current_position.has_value())
-        {
-            previous_position =
-                *current_position == 0 ? static_cast<int>(_visible_find_match_entry_indices.size()) - 1 : *current_position - 1;
-        }
-    }
-
-    return focus_find_match_by_position(previous_position);
+    return visible_line_index_for_entry(AllLineIndex {line_number - 1});
 }
 
 bool LogViewModel::visible_line_matches_find(int visible_index) const
@@ -274,32 +187,14 @@ bool LogViewModel::visible_line_matches_find(int visible_index) const
         return false;
     }
 
-    const int entry_index = _visible_entry_indices[static_cast<std::size_t>(visible_index)];
-    return std::binary_search(_visible_find_match_entry_indices.begin(), _visible_find_match_entry_indices.end(), entry_index);
+    const VisibleLineIndex visible_line_index {visible_index};
+    const AllLineIndex entry_index = _visible_entry_indices[visible_line_index];
+    return std::binary_search(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), entry_index);
 }
 
-void LogViewModel::set_visible_line_count(int count)
+bool LogViewModel::entry_index_is_visible(AllLineIndex entry_index) const
 {
-    _visible_line_count = std::max(1, count);
-    if (_follow_bottom)
-    {
-        _scroll_offset = max_scroll_offset();
-    }
-    else
-    {
-        clamp_scroll_offset();
-        update_follow_bottom();
-    }
-}
-
-int LogViewModel::visible_line_count() const
-{
-    return _visible_line_count;
-}
-
-int LogViewModel::scroll_offset() const
-{
-    return _scroll_offset;
+    return std::binary_search(_visible_entry_indices.begin(), _visible_entry_indices.end(), entry_index);
 }
 
 int LogViewModel::line_count() const
@@ -312,146 +207,43 @@ int LogViewModel::total_line_count() const
     return static_cast<int>(_all_entries.size());
 }
 
-void LogViewModel::scroll_up(int amount)
+std::string LogViewModel::rendered_line(int index) const
 {
-    _scroll_offset -= std::max(1, amount);
-    clamp_scroll_offset();
-    update_follow_bottom();
+    const VisibleLineIndex visible_line_index {index};
+    const AllLineIndex entry_index = _visible_entry_indices[visible_line_index];
+    return render_entry(entry_index);
 }
 
-void LogViewModel::scroll_down(int amount)
+std::vector<std::string> LogViewModel::rendered_lines(int first_index, int count) const
 {
-    _scroll_offset += std::max(1, amount);
-    clamp_scroll_offset();
-    update_follow_bottom();
-}
-
-void LogViewModel::scroll_to_top()
-{
-    _scroll_offset = 0;
-    update_follow_bottom();
-}
-
-void LogViewModel::scroll_to_bottom()
-{
-    _scroll_offset = max_scroll_offset();
-    update_follow_bottom();
-}
-
-bool LogViewModel::center_on_line_number(int line_number)
-{
-    if (line_number <= 0)
-    {
-        return false;
-    }
-
-    const int target_entry_index    = line_number - 1;
-    const auto target_visible_entry = std::find(_visible_entry_indices.begin(), _visible_entry_indices.end(), target_entry_index);
-    if (target_visible_entry == _visible_entry_indices.end())
-    {
-        return false;
-    }
-
-    const int target_visible_index = static_cast<int>(std::distance(_visible_entry_indices.begin(), target_visible_entry));
-    _scroll_offset                 = target_visible_index - (_visible_line_count / 2);
-    clamp_scroll_offset();
-    update_follow_bottom();
-    return true;
-}
-
-void LogViewModel::begin_selection(TextPosition position)
-{
-    _selection_anchor      = position;
-    _selection_focus       = position;
-    _selection_in_progress = true;
-    clamp_selection();
-}
-
-void LogViewModel::update_selection(TextPosition position)
-{
-    if (!_selection_in_progress || !_selection_anchor.has_value())
-    {
-        return;
-    }
-
-    _selection_focus = position;
-    clamp_selection();
-}
-
-void LogViewModel::end_selection(std::optional<TextPosition> position)
-{
-    _selection_in_progress = false;
-    if (position.has_value() && _selection_anchor.has_value())
-    {
-        _selection_focus = *position;
-        clamp_selection();
-    }
-}
-
-void LogViewModel::clear_selection()
-{
-    _selection_anchor.reset();
-    _selection_focus.reset();
-    _selection_in_progress = false;
-}
-
-bool LogViewModel::selection_in_progress() const
-{
-    return _selection_in_progress;
-}
-
-std::optional<std::pair<TextPosition, TextPosition>> LogViewModel::selection_bounds() const
-{
-    if (!_selection_anchor.has_value() || !_selection_focus.has_value())
-    {
-        return std::nullopt;
-    }
-
-    auto start = *_selection_anchor;
-    auto end   = *_selection_focus;
-    if (is_before(end, start))
-    {
-        std::swap(start, end);
-    }
-
-    return std::pair(start, end);
-}
-
-std::string LogViewModel::selection_text() const
-{
-    const auto bounds = selection_bounds();
-    if (!bounds.has_value() || _visible_entry_indices.empty())
+    if (count <= 0)
     {
         return {};
     }
 
-    const auto [start, end] = *bounds;
-    std::ostringstream output;
-    for (int line_index = start.line; line_index <= end.line; ++line_index)
+    const int clamped_first = std::max(0, first_index);
+    if (clamped_first >= static_cast<int>(_visible_entry_indices.size()))
     {
-        const auto line            = rendered_line(line_index);
-        const int line_start       = (line_index == start.line) ? start.column : 0;
-        const int line_end         = (line_index == end.line) ? end.column : static_cast<int>(line.size());
-        const int clamped_start    = std::clamp(line_start, 0, static_cast<int>(line.size()));
-        const int clamped_end      = std::clamp(line_end, clamped_start, static_cast<int>(line.size()));
-        const auto selection_count = static_cast<std::size_t>(clamped_end - clamped_start);
-
-        output << line.substr(static_cast<std::size_t>(clamped_start), selection_count);
-        if (line_index != end.line)
-        {
-            output << '\n';
-        }
+        return {};
     }
 
-    return output.str();
+    const int last_index = std::min(static_cast<int>(_visible_entry_indices.size()), clamped_first + count);
+    std::vector<std::string> lines;
+    lines.reserve(static_cast<std::size_t>(last_index - clamped_first));
+    for (int index = clamped_first; index < last_index; ++index)
+    {
+        const VisibleLineIndex visible_line_index {index};
+        lines.push_back(render_entry(_visible_entry_indices[visible_line_index]));
+    }
+
+    return lines;
 }
 
-std::string LogViewModel::rendered_line(int index) const
+std::string LogViewModel::render_entry(AllLineIndex entry_index) const
 {
     std::ostringstream output;
-    const int visible_index = _visible_entry_indices[static_cast<std::size_t>(index)];
-    const auto& entry       = _all_entries[static_cast<std::size_t>(visible_index)];
-    output << visible_index + 1 << " ";
+    const auto& entry = _all_entries[entry_index];
+    output << entry_index.value + 1 << " ";
     if (_show_source_labels)
     {
         output << "[" << entry.source_label << "] ";
@@ -463,19 +255,15 @@ std::string LogViewModel::rendered_line(int index) const
 
 void LogViewModel::append_lines_immediately(const std::vector<ObservedLogLine>& lines)
 {
+    const AllLineIndex first_new_entry_index {static_cast<int>(_all_entries.size())};
+
     for (const auto& line : lines)
     {
         _all_entries.push_back(line);
-        if (line_number_is_visible(static_cast<int>(_all_entries.size())) && entry_matches_filters(line))
-        {
-            _visible_entry_indices.push_back(static_cast<int>(_all_entries.size()) - 1);
-        }
     }
 
-    if (_follow_bottom)
-    {
-        _scroll_offset = max_scroll_offset();
-    }
+    expand_visible_entries(first_new_entry_index);
+    expand_find_matches(first_new_entry_index);
 }
 
 void LogViewModel::flush_paused_updates()
@@ -488,12 +276,35 @@ void LogViewModel::rebuild_visible_entries()
 {
     _visible_entry_indices.clear();
     _visible_entry_indices.reserve(_all_entries.size());
-
-    for (std::size_t index = 0; index < _all_entries.size(); ++index)
+    std::size_t index = 0;
+    if (_hidden_before_line_number.has_value())
     {
-        if (line_number_is_visible(static_cast<int>(index) + 1) && entry_matches_filters(_all_entries[index]))
+        index = static_cast<std::size_t>(std::max(0, *_hidden_before_line_number - 1));
+    }
+    for (; index < _all_entries.size(); ++index)
+    {
+        const AllLineIndex entry_index {static_cast<int>(index)};
+        if (entry_matches_filters(_all_entries[entry_index]))
         {
-            _visible_entry_indices.push_back(static_cast<int>(index));
+            _visible_entry_indices.push_back(entry_index);
+        }
+    }
+}
+
+void LogViewModel::expand_visible_entries(AllLineIndex first_new_entry_index)
+{
+    int index = first_new_entry_index.value;
+    if (_hidden_before_line_number.has_value())
+    {
+        index = std::max(index, std::max(0, *_hidden_before_line_number - 1));
+    }
+
+    for (; index < static_cast<int>(_all_entries.size()); ++index)
+    {
+        const AllLineIndex entry_index {index};
+        if (entry_matches_filters(_all_entries[entry_index]))
+        {
+            _visible_entry_indices.push_back(entry_index);
         }
     }
 }
@@ -503,113 +314,40 @@ void LogViewModel::rebuild_find_matches()
     _find_match_entry_indices.clear();
     if (_find_query.empty())
     {
-        _visible_find_match_entry_indices.clear();
-        _active_find_entry_index.reset();
         return;
     }
 
     _find_match_entry_indices.reserve(_all_entries.size());
     for (std::size_t index = 0; index < _all_entries.size(); ++index)
     {
-        if (entry_matches_find_query(_all_entries[index]))
+        const AllLineIndex entry_index {static_cast<int>(index)};
+        if (entry_matches_find_query(_all_entries[entry_index]))
         {
-            _find_match_entry_indices.push_back(static_cast<int>(index));
+            _find_match_entry_indices.push_back(entry_index);
         }
     }
-
-    rebuild_visible_find_matches();
 }
 
-void LogViewModel::rebuild_visible_find_matches()
+void LogViewModel::expand_find_matches(AllLineIndex first_new_entry_index)
 {
-    _visible_find_match_entry_indices.clear();
-    _visible_find_match_entry_indices.reserve(_visible_entry_indices.size());
-    for (const int entry_index : _visible_entry_indices)
-    {
-        if (std::binary_search(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), entry_index))
-        {
-            _visible_find_match_entry_indices.push_back(entry_index);
-        }
-    }
-
-    if (!_active_find_entry_index.has_value())
+    if (_find_query.empty())
     {
         return;
     }
 
-    if (!std::binary_search(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), *_active_find_entry_index))
+    for (int index = first_new_entry_index.value; index < static_cast<int>(_all_entries.size()); ++index)
     {
-        _active_find_entry_index.reset();
+        const AllLineIndex entry_index {index};
+        if (entry_matches_find_query(_all_entries[entry_index]))
+        {
+            _find_match_entry_indices.push_back(entry_index);
+        }
     }
-}
-
-bool LogViewModel::focus_find_match_by_position(int position)
-{
-    if (position < 0 || position >= static_cast<int>(_visible_find_match_entry_indices.size()))
-    {
-        return false;
-    }
-
-    const int entry_index    = _visible_find_match_entry_indices[static_cast<std::size_t>(position)];
-    _active_find_entry_index = entry_index;
-    return center_on_line_number(entry_index + 1);
-}
-
-std::optional<int> LogViewModel::visible_find_match_position_for_entry_index(int entry_index) const
-{
-    const auto position = std::find(_visible_find_match_entry_indices.begin(), _visible_find_match_entry_indices.end(), entry_index);
-    if (position == _visible_find_match_entry_indices.end())
-    {
-        return std::nullopt;
-    }
-
-    return static_cast<int>(std::distance(_visible_find_match_entry_indices.begin(), position));
 }
 
 bool LogViewModel::entry_matches_find_query(const ObservedLogLine& entry) const
 {
     return !_find_query.empty() && entry.text.find(_find_query) != std::string::npos;
-}
-
-void LogViewModel::clamp_scroll_offset()
-{
-    _scroll_offset = std::clamp(_scroll_offset, 0, max_scroll_offset());
-}
-
-int LogViewModel::max_scroll_offset() const
-{
-    return std::max(0, static_cast<int>(_visible_entry_indices.size()) - _visible_line_count);
-}
-
-void LogViewModel::update_follow_bottom()
-{
-    _follow_bottom = _scroll_offset >= max_scroll_offset();
-}
-
-void LogViewModel::clamp_selection()
-{
-    if (_visible_entry_indices.empty())
-    {
-        clear_selection();
-        return;
-    }
-
-    auto clamp_position = [&](TextPosition& position)
-    {
-        position.line          = std::clamp(position.line, 0, static_cast<int>(_visible_entry_indices.size()) - 1);
-        const auto line_length = static_cast<int>(rendered_line(position.line).size());
-        position.column        = std::clamp(position.column, 0, line_length);
-    };
-
-    if (_selection_anchor.has_value())
-    {
-        clamp_position(*_selection_anchor);
-    }
-
-    if (_selection_focus.has_value())
-    {
-        clamp_position(*_selection_focus);
-    }
 }
 
 bool LogViewModel::entry_matches_filters(const ObservedLogLine& entry) const
@@ -618,11 +356,6 @@ bool LogViewModel::entry_matches_filters(const ObservedLogLine& entry) const
     const bool matches_include        = _include_filters.empty() || matches_any_filter(searchable_text, _include_filters);
     const bool matches_exclude        = matches_any_filter(searchable_text, _exclude_filters);
     return matches_include && !matches_exclude;
-}
-
-bool LogViewModel::line_number_is_visible(int line_number) const
-{
-    return !_hidden_before_line_number.has_value() || line_number >= *_hidden_before_line_number;
 }
 
 bool LogViewModel::matches_any_filter(std::string_view haystack, const std::vector<std::string>& filters) const

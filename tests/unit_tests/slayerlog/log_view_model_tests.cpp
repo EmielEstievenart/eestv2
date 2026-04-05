@@ -25,6 +25,18 @@ std::vector<std::string> rendered_texts(const LogViewModel& model)
     return lines;
 }
 
+std::vector<ObservedLogLine> numbered_lines(int count)
+{
+    std::vector<ObservedLogLine> lines;
+    lines.reserve(static_cast<std::size_t>(count));
+    for (int index = 1; index <= count; ++index)
+    {
+        lines.push_back({"alpha.log", "line " + std::to_string(index)});
+    }
+
+    return lines;
+}
+
 } // namespace
 
 TEST(LogViewModelTest, AppendsLinesInProvidedOrder)
@@ -76,23 +88,24 @@ TEST(LogViewModelTest, RendersSourceLabelsWhenEnabled)
     EXPECT_EQ(model.rendered_line(0), "1 [alpha.log] hello");
 }
 
-TEST(LogViewModelTest, IncludeFiltersApplyRetroactively)
+TEST(LogViewModelTest, RenderedLinesReturnsVisibleSlice)
 {
     LogViewModel model;
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "debug one"},
-        ObservedLogLine {"alpha.log", "error two"},
-        ObservedLogLine {"alpha.log", "warn three"},
+        ObservedLogLine {"alpha.log", "first"},
+        ObservedLogLine {"alpha.log", "second"},
+        ObservedLogLine {"alpha.log", "third"},
     });
+    model.add_exclude_filter("second");
 
-    model.add_include_filter("error");
-
-    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {"error two"}));
-    EXPECT_EQ(model.rendered_line(0), "2 error two");
+    EXPECT_EQ(model.rendered_lines(0, 2), (std::vector<std::string> {
+                                              "1 first",
+                                              "3 third",
+                                          }));
 }
 
-TEST(LogViewModelTest, MultipleIncludeAndExcludeFiltersWorkTogether)
+TEST(LogViewModelTest, FiltersApplyRetroactivelyAndToNewLines)
 {
     LogViewModel model;
 
@@ -111,231 +124,74 @@ TEST(LogViewModelTest, MultipleIncludeAndExcludeFiltersWorkTogether)
                                          "error critical",
                                          "warn useful",
                                      }));
-}
-
-TEST(LogViewModelTest, ResetFiltersRestoresPreviouslyHiddenLines)
-{
-    LogViewModel model;
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "first"},
-        ObservedLogLine {"alpha.log", "second"},
+        ObservedLogLine {"alpha.log", "warn newest"},
+        ObservedLogLine {"alpha.log", "debug newest"},
     });
-
-    model.add_include_filter("second");
-    ASSERT_EQ(rendered_texts(model), (std::vector<std::string> {"second"}));
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "error critical",
+                                         "warn useful",
+                                         "warn newest",
+                                     }));
 
     model.reset_filters();
-
-    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
-                                         "first",
-                                         "second",
-                                     }));
-}
-
-TEST(LogViewModelTest, ActiveFiltersApplyToNewlyAppendedLines)
-{
-    LogViewModel model;
-    model.add_include_filter("error");
-
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "info first"},
-        ObservedLogLine {"alpha.log", "error second"},
-    });
-
-    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {"error second"}));
-}
-
-TEST(LogViewModelTest, PausedUpdatesRespectActiveFiltersWhenFlushed)
-{
-    LogViewModel model;
-    model.add_exclude_filter("skip");
-    model.toggle_pause();
-
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "keep this"},
-        ObservedLogLine {"alpha.log", "skip this"},
-    });
-
-    EXPECT_EQ(model.line_count(), 0);
-
-    model.toggle_pause();
-
-    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {"keep this"}));
-}
-
-TEST(LogViewModelTest, CenterOnLineNumberCentersRequestedLineWhenPossible)
-{
-    LogViewModel model;
-    model.set_visible_line_count(5);
-
-    std::vector<ObservedLogLine> lines;
-    for (int index = 1; index <= 10; ++index)
-    {
-        lines.push_back({"alpha.log", "line " + std::to_string(index)});
-    }
-
-    model.append_lines(lines);
-
-    EXPECT_TRUE(model.center_on_line_number(7));
-    EXPECT_EQ(model.scroll_offset(), 4);
-}
-
-TEST(LogViewModelTest, CenterOnLineNumberClampsNearTop)
-{
-    LogViewModel model;
-    model.set_visible_line_count(5);
-
-    std::vector<ObservedLogLine> lines;
-    for (int index = 1; index <= 10; ++index)
-    {
-        lines.push_back({"alpha.log", "line " + std::to_string(index)});
-    }
-
-    model.append_lines(lines);
-
-    EXPECT_TRUE(model.center_on_line_number(2));
-    EXPECT_EQ(model.scroll_offset(), 0);
-}
-
-TEST(LogViewModelTest, CenterOnLineNumberClampsNearBottom)
-{
-    LogViewModel model;
-    model.set_visible_line_count(5);
-
-    std::vector<ObservedLogLine> lines;
-    for (int index = 1; index <= 10; ++index)
-    {
-        lines.push_back({"alpha.log", "line " + std::to_string(index)});
-    }
-
-    model.append_lines(lines);
-
-    EXPECT_TRUE(model.center_on_line_number(10));
-    EXPECT_EQ(model.scroll_offset(), 5);
-}
-
-TEST(LogViewModelTest, CenterOnLineNumberUsesRenderedLineNumbersAfterFiltering)
-{
-    LogViewModel model;
-    model.set_visible_line_count(1);
-
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "info first"},
-        ObservedLogLine {"alpha.log", "error second"},
-        ObservedLogLine {"alpha.log", "info third"},
-        ObservedLogLine {"alpha.log", "info fourth"},
-        ObservedLogLine {"alpha.log", "error fifth"},
-    });
-    model.add_include_filter("error");
-
-    EXPECT_TRUE(model.center_on_line_number(5));
-    EXPECT_EQ(model.scroll_offset(), 1);
-}
-
-TEST(LogViewModelTest, CenterOnLineNumberFailsWhenLineIsHiddenByFilters)
-{
-    LogViewModel model;
-
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "info first"},
-        ObservedLogLine {"alpha.log", "error second"},
-        ObservedLogLine {"alpha.log", "info third"},
-    });
-    model.add_include_filter("error");
-
-    EXPECT_FALSE(model.center_on_line_number(1));
+    EXPECT_EQ(model.line_count(), 6);
 }
 
 TEST(LogViewModelTest, HideBeforeLineUsesRawLineNumbers)
 {
     LogViewModel model;
+    model.append_lines(numbered_lines(5));
 
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "line 1"},
-        ObservedLogLine {"alpha.log", "line 2"},
-        ObservedLogLine {"alpha.log", "line 3"},
-        ObservedLogLine {"alpha.log", "line 4"},
-    });
     model.hide_before_line_number(3);
 
     EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
                                          "line 3",
-                                         "line 4",
-                                     }));
-    EXPECT_EQ(model.rendered_line(0), "3 line 3");
-    EXPECT_EQ(model.hidden_before_line_number(), 3);
-}
-
-TEST(LogViewModelTest, HideBeforeLineAppliesBeforeTextFilters)
-{
-    LogViewModel model;
-
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "error first"},
-        ObservedLogLine {"alpha.log", "error second"},
-        ObservedLogLine {"alpha.log", "error third"},
-        ObservedLogLine {"alpha.log", "info fourth"},
-    });
-    model.hide_before_line_number(3);
-    model.add_include_filter("error");
-
-    EXPECT_EQ(model.line_count(), 1);
-    EXPECT_EQ(model.rendered_line(0), "3 error third");
-}
-
-TEST(LogViewModelTest, HideBeforeLineAppliesToNewlyAppendedLines)
-{
-    LogViewModel model;
-
-    model.hide_before_line_number(4);
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "line 1"},
-        ObservedLogLine {"alpha.log", "line 2"},
-        ObservedLogLine {"alpha.log", "line 3"},
-    });
-
-    EXPECT_EQ(model.line_count(), 0);
-
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "line 4"},
-        ObservedLogLine {"alpha.log", "line 5"},
-    });
-
-    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
                                          "line 4",
                                          "line 5",
                                      }));
-    EXPECT_EQ(model.rendered_line(0), "4 line 4");
+    EXPECT_EQ(model.hidden_before_line_number(), 3);
+    ASSERT_TRUE(model.visible_line_index_for_line_number(3).has_value());
+    EXPECT_EQ(model.visible_line_index_for_line_number(3)->value, 0);
+    EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
 }
 
-TEST(LogViewModelTest, HideBeforeLineOneRestoresAllLines)
+TEST(LogViewModelTest, FindQueryBuildsMatchIndexesAndLookupHelpers)
 {
     LogViewModel model;
-
     model.append_lines({
-        ObservedLogLine {"alpha.log", "line 1"},
-        ObservedLogLine {"alpha.log", "line 2"},
-        ObservedLogLine {"alpha.log", "line 3"},
+        ObservedLogLine {"alpha.log", "error first"},
+        ObservedLogLine {"alpha.log", "info second"},
+        ObservedLogLine {"alpha.log", "error third"},
     });
-    model.hide_before_line_number(3);
-    ASSERT_EQ(model.line_count(), 1);
 
-    model.hide_before_line_number(1);
+    EXPECT_TRUE(model.set_find_query("error"));
+    EXPECT_TRUE(model.find_active());
+    EXPECT_EQ(model.total_find_match_count(), 2);
+    EXPECT_EQ(model.visible_find_match_count(), 2);
 
-    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
-                                         "line 1",
-                                         "line 2",
-                                         "line 3",
-                                     }));
-    EXPECT_FALSE(model.hidden_before_line_number().has_value());
+    ASSERT_TRUE(model.find_match_entry_index(FindResultIndex {0}).has_value());
+    EXPECT_EQ(*model.find_match_entry_index(FindResultIndex {0}), (AllLineIndex {0}));
+    ASSERT_TRUE(model.find_match_entry_index(FindResultIndex {1}).has_value());
+    EXPECT_EQ(*model.find_match_entry_index(FindResultIndex {1}), (AllLineIndex {2}));
+
+    ASSERT_TRUE(model.find_match_position_for_entry_index(AllLineIndex {2}).has_value());
+    EXPECT_EQ(model.find_match_position_for_entry_index(AllLineIndex {2})->value, 1);
+
+    ASSERT_TRUE(model.visible_line_index_for_entry(AllLineIndex {2}).has_value());
+    EXPECT_EQ(model.visible_line_index_for_entry(AllLineIndex {2})->value, 2);
+    ASSERT_TRUE(model.visible_line_index_for_line_number(1).has_value());
+    EXPECT_EQ(model.visible_line_index_for_line_number(1)->value, 0);
+
+    EXPECT_TRUE(model.visible_line_matches_find(0));
+    EXPECT_FALSE(model.visible_line_matches_find(1));
+    EXPECT_TRUE(model.visible_line_matches_find(2));
 }
 
-TEST(LogViewModelTest, FindIndexesAllLoadedLinesButVisibleNavigationSkipsHiddenMatches)
+TEST(LogViewModelTest, FindCountsAllMatchesWhileVisibleCountRespectsFilters)
 {
     LogViewModel model;
-    model.set_visible_line_count(1);
-
     model.append_lines({
         ObservedLogLine {"alpha.log", "error first"},
         ObservedLogLine {"alpha.log", "error hidden"},
@@ -346,72 +202,24 @@ TEST(LogViewModelTest, FindIndexesAllLoadedLinesButVisibleNavigationSkipsHiddenM
     EXPECT_TRUE(model.set_find_query("error"));
     EXPECT_EQ(model.total_find_match_count(), 3);
     EXPECT_EQ(model.visible_find_match_count(), 2);
-    ASSERT_TRUE(model.active_find_visible_index().has_value());
-    EXPECT_EQ(*model.active_find_visible_index(), 0);
-    EXPECT_EQ(model.scroll_offset(), 0);
-
-    EXPECT_TRUE(model.go_to_next_find_match());
-    ASSERT_TRUE(model.active_find_visible_index().has_value());
-    EXPECT_EQ(*model.active_find_visible_index(), 1);
-    EXPECT_EQ(model.scroll_offset(), 1);
-
-    EXPECT_TRUE(model.go_to_next_find_match());
-    ASSERT_TRUE(model.active_find_visible_index().has_value());
-    EXPECT_EQ(*model.active_find_visible_index(), 0);
-    EXPECT_EQ(model.scroll_offset(), 0);
-
-    EXPECT_TRUE(model.go_to_previous_find_match());
-    ASSERT_TRUE(model.active_find_visible_index().has_value());
-    EXPECT_EQ(*model.active_find_visible_index(), 1);
-    EXPECT_EQ(model.scroll_offset(), 1);
+    EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
 }
 
-TEST(LogViewModelTest, FindKeepsActiveHiddenMatchAndResumesFromVisibleResults)
+TEST(LogViewModelTest, ClearingFindQueryRemovesAllFindState)
 {
     LogViewModel model;
-    model.set_visible_line_count(1);
-
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error one"},
-        ObservedLogLine {"alpha.log", "error two"},
-        ObservedLogLine {"alpha.log", "error three"},
+        ObservedLogLine {"alpha.log", "needle"},
     });
 
-    ASSERT_TRUE(model.set_find_query("error"));
-    EXPECT_TRUE(model.go_to_next_find_match());
-    ASSERT_TRUE(model.active_find_visible_index().has_value());
-    EXPECT_EQ(*model.active_find_visible_index(), 1);
+    ASSERT_TRUE(model.set_find_query("needle"));
+    ASSERT_TRUE(model.find_active());
 
-    model.add_include_filter("three");
-    EXPECT_EQ(model.total_find_match_count(), 3);
-    EXPECT_EQ(model.visible_find_match_count(), 1);
-    EXPECT_FALSE(model.active_find_visible_index().has_value());
+    model.clear_find_query();
 
-    EXPECT_TRUE(model.go_to_next_find_match());
-    ASSERT_TRUE(model.active_find_visible_index().has_value());
-    EXPECT_EQ(*model.active_find_visible_index(), 0);
-    EXPECT_EQ(model.rendered_line(*model.active_find_visible_index()), "3 error three");
-}
-
-TEST(LogViewModelTest, FindRebuildsAfterAppendingNewMatchingLines)
-{
-    LogViewModel model;
-    model.set_visible_line_count(1);
-
-    EXPECT_FALSE(model.set_find_query("needle"));
+    EXPECT_FALSE(model.find_active());
     EXPECT_EQ(model.total_find_match_count(), 0);
     EXPECT_EQ(model.visible_find_match_count(), 0);
-
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "other line"},
-        ObservedLogLine {"alpha.log", "needle appears"},
-    });
-
-    EXPECT_EQ(model.total_find_match_count(), 1);
-    EXPECT_EQ(model.visible_find_match_count(), 1);
-    EXPECT_TRUE(model.go_to_next_find_match());
-    ASSERT_TRUE(model.active_find_visible_index().has_value());
-    EXPECT_EQ(model.rendered_line(*model.active_find_visible_index()), "2 needle appears");
 }
 
 } // namespace slayerlog

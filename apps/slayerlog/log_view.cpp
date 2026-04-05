@@ -79,7 +79,7 @@ std::string build_filter_status_text(const LogViewModel& model)
     return output.str();
 }
 
-std::string build_find_status_text(const LogViewModel& model)
+std::string build_find_status_text(const LogViewModel& model, const LogController& controller)
 {
     if (!model.find_active())
     {
@@ -90,14 +90,14 @@ std::string build_find_status_text(const LogViewModel& model)
     output << "Find: \"" << model.find_query() << "\" (" << model.visible_find_match_count() << " visible / "
            << model.total_find_match_count() << " total)";
 
-    const auto active_visible_index = model.active_find_visible_index();
+    const auto active_visible_index = controller.active_find_visible_index(model);
     if (active_visible_index.has_value())
     {
-        output << " | Active line " << (*active_visible_index + 1);
+        output << " | Active line " << (active_visible_index->value + 1);
     }
     else
     {
-        output << " | Active line hidden";
+        output << " | No active line";
     }
 
     return output.str();
@@ -181,13 +181,14 @@ ftxui::Element render_command_palette(const CommandPaletteModel& command_palette
 
 } // namespace
 
-ftxui::Element LogView::render(LogViewModel& model, const std::string& header_text, int screen_height,
-                               const CommandPaletteModel& command_palette)
+ftxui::Element LogView::render(const LogViewModel& model, const LogController& controller, const std::string& header_text,
+                               int screen_height, const CommandPaletteModel& command_palette)
 {
-    model.set_visible_line_count(estimate_visible_line_count(_viewport_box, screen_height));
+    const int visible_line_count = estimate_visible_line_count(_viewport_box, screen_height);
+    const int first_visible_line = controller.first_visible_line_index(model, visible_line_count).value;
 
     ftxui::Elements content;
-    content.reserve(static_cast<std::size_t>(std::max(1, model.visible_line_count())));
+    content.reserve(static_cast<std::size_t>(std::max(1, visible_line_count)));
 
     if (model.line_count() == 0)
     {
@@ -198,16 +199,16 @@ ftxui::Element LogView::render(LogViewModel& model, const std::string& header_te
     }
     else
     {
-        const int first_visible_line = model.scroll_offset();
-        const int last_visible_line  = std::min(model.line_count(), first_visible_line + model.visible_line_count());
-        const auto selected_range    = model.selection_bounds();
-        const auto active_find_index = model.active_find_visible_index();
+        const auto selected_range    = controller.selection_bounds(model);
+        const auto active_find_index = controller.active_find_visible_index(model);
+        const auto rendered_lines    = model.rendered_lines(first_visible_line, visible_line_count);
 
-        for (int index = first_visible_line; index < last_visible_line; ++index)
+        for (std::size_t offset = 0; offset < rendered_lines.size(); ++offset)
         {
+            const int index            = first_visible_line + static_cast<int>(offset);
             const bool is_find_match   = model.find_active() && model.visible_line_matches_find(index);
-            const bool is_active_match = active_find_index.has_value() && *active_find_index == index;
-            const auto rendered_line   = model.rendered_line(index);
+            const bool is_active_match = active_find_index.has_value() && active_find_index->value == index;
+            const auto& rendered_line  = rendered_lines[offset];
             if (!selected_range.has_value() || index < selected_range->first.line || index > selected_range->second.line)
             {
                 auto row = ftxui::text(rendered_line);
@@ -266,18 +267,17 @@ ftxui::Element LogView::render(LogViewModel& model, const std::string& header_te
     }
 
     ftxui::Element scrollbar = ftxui::text("");
-    if (model.line_count() > model.visible_line_count())
+    if (model.line_count() > visible_line_count)
     {
         const int total_lines = model.line_count();
-        const int thumb_size =
-            std::max(1, (model.visible_line_count() * model.visible_line_count()) / std::max(total_lines, model.visible_line_count()));
-        const int track_size = std::max(1, model.visible_line_count() - thumb_size);
-        const int max_offset = std::max(1, total_lines - model.visible_line_count());
-        const int thumb_top  = (model.scroll_offset() * track_size) / max_offset;
+        const int thumb_size  = std::max(1, (visible_line_count * visible_line_count) / std::max(total_lines, visible_line_count));
+        const int track_size  = std::max(1, visible_line_count - thumb_size);
+        const int max_offset  = std::max(1, total_lines - visible_line_count);
+        const int thumb_top   = (first_visible_line * track_size) / max_offset;
 
         ftxui::Elements thumb;
-        thumb.reserve(static_cast<std::size_t>(model.visible_line_count()));
-        for (int row = 0; row < model.visible_line_count(); ++row)
+        thumb.reserve(static_cast<std::size_t>(visible_line_count));
+        for (int row = 0; row < visible_line_count; ++row)
         {
             thumb.push_back(ftxui::text(row >= thumb_top && row < (thumb_top + thumb_size) ? "┃" : " "));
         }
@@ -299,7 +299,7 @@ ftxui::Element LogView::render(LogViewModel& model, const std::string& header_te
             log_view,
             ftxui::separator(),
             ftxui::text(build_filter_status_text(model)) | ftxui::color(ftxui::Color::GrayDark),
-            ftxui::text(build_find_status_text(model)) | ftxui::color(ftxui::Color::GrayDark),
+            ftxui::text(build_find_status_text(model, controller)) | ftxui::color(ftxui::Color::GrayDark),
             ftxui::text("Ctrl+P commands | Right next | Left previous | Esc exits find | q quits") | ftxui::color(ftxui::Color::GrayDark),
         }));
 
@@ -314,7 +314,13 @@ ftxui::Element LogView::render(LogViewModel& model, const std::string& header_te
     });
 }
 
-std::optional<TextPosition> LogView::mouse_to_text_position(const LogViewModel& model, const ftxui::Mouse& mouse) const
+int LogView::visible_line_count(int screen_height) const
+{
+    return estimate_visible_line_count(_viewport_box, screen_height);
+}
+
+std::optional<TextPosition> LogView::mouse_to_text_position(const LogViewModel& model, const LogController& controller,
+                                                            const ftxui::Mouse& mouse) const
 {
     if (model.line_count() == 0)
     {
@@ -326,7 +332,8 @@ std::optional<TextPosition> LogView::mouse_to_text_position(const LogViewModel& 
         return std::nullopt;
     }
 
-    const int line_index = model.scroll_offset() + (mouse.y - _viewport_box.y_min);
+    const int viewport_line_count = std::max(1, _viewport_box.y_max - _viewport_box.y_min + 1);
+    const int line_index          = controller.first_visible_line_index(model, viewport_line_count).value + (mouse.y - _viewport_box.y_min);
     if (line_index < 0 || line_index >= model.line_count())
     {
         return std::nullopt;
