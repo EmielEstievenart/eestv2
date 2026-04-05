@@ -23,8 +23,8 @@ add_executable(
   log_view.hpp
   log_timestamp.cpp
   log_timestamp.hpp
-  log_view_model.cpp
-  log_view_model.hpp)
+  log_model.cpp
+  log_model.hpp)
 
 target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
 

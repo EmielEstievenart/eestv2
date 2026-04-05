@@ -16,7 +16,7 @@ bool is_before(const TextPosition& lhs, const TextPosition& rhs)
 
 } // namespace
 
-VisibleLineIndex LogController::first_visible_line_index(const LogViewModel& model, int viewport_line_count) const
+VisibleLineIndex LogController::first_visible_line_index(const LogModel& model, int viewport_line_count) const
 {
     if (_follow_bottom)
     {
@@ -26,21 +26,21 @@ VisibleLineIndex LogController::first_visible_line_index(const LogViewModel& mod
     return VisibleLineIndex {std::clamp(_first_visible_line_index.value, 0, max_first_visible_line_index(model, viewport_line_count))};
 }
 
-void LogController::scroll_up(const LogViewModel& model, int viewport_line_count, int amount)
+void LogController::scroll_up(const LogModel& model, int viewport_line_count, int amount)
 {
     _first_visible_line_index =
         VisibleLineIndex {std::max(0, first_visible_line_index(model, viewport_line_count).value - std::max(1, amount))};
     _follow_bottom = _first_visible_line_index.value >= max_first_visible_line_index(model, viewport_line_count);
 }
 
-void LogController::scroll_down(const LogViewModel& model, int viewport_line_count, int amount)
+void LogController::scroll_down(const LogModel& model, int viewport_line_count, int amount)
 {
     _first_visible_line_index = VisibleLineIndex {std::min(first_visible_line_index(model, viewport_line_count).value + std::max(1, amount),
                                                            max_first_visible_line_index(model, viewport_line_count))};
     _follow_bottom            = _first_visible_line_index.value >= max_first_visible_line_index(model, viewport_line_count);
 }
 
-void LogController::scroll_to_top(const LogViewModel& model, int viewport_line_count)
+void LogController::scroll_to_top(const LogModel& model, int viewport_line_count)
 {
     _first_visible_line_index = VisibleLineIndex {0};
     _follow_bottom            = _first_visible_line_index.value >= max_first_visible_line_index(model, viewport_line_count);
@@ -51,7 +51,7 @@ void LogController::scroll_to_bottom()
     _follow_bottom = true;
 }
 
-bool LogController::go_to_line(const LogViewModel& model, int line_number, int viewport_line_count)
+bool LogController::go_to_line(const LogModel& model, int line_number, int viewport_line_count)
 {
     const auto target_visible_index = model.visible_line_index_for_line_number(line_number);
     if (!target_visible_index.has_value())
@@ -63,7 +63,7 @@ bool LogController::go_to_line(const LogViewModel& model, int line_number, int v
     return true;
 }
 
-bool LogController::set_find_query(LogViewModel& model, std::string query, int viewport_line_count)
+bool LogController::set_find_query(LogModel& model, std::string query, int viewport_line_count)
 {
     const bool has_matches = model.set_find_query(std::move(query));
     _active_find_entry_index.reset();
@@ -75,13 +75,13 @@ bool LogController::set_find_query(LogViewModel& model, std::string query, int v
     return go_to_next_find_match(model, viewport_line_count);
 }
 
-void LogController::clear_find(LogViewModel& model)
+void LogController::clear_find(LogModel& model)
 {
     model.clear_find_query();
     _active_find_entry_index.reset();
 }
 
-bool LogController::go_to_next_find_match(const LogViewModel& model, int viewport_line_count)
+bool LogController::go_to_next_find_match(const LogModel& model, int viewport_line_count)
 {
     if (!model.find_active() || model.total_find_match_count() == 0)
     {
@@ -121,7 +121,7 @@ bool LogController::go_to_next_find_match(const LogViewModel& model, int viewpor
     return false;
 }
 
-bool LogController::go_to_previous_find_match(const LogViewModel& model, int viewport_line_count)
+bool LogController::go_to_previous_find_match(const LogModel& model, int viewport_line_count)
 {
     if (!model.find_active() || model.total_find_match_count() == 0)
     {
@@ -161,7 +161,7 @@ bool LogController::go_to_previous_find_match(const LogViewModel& model, int vie
     return false;
 }
 
-std::optional<VisibleLineIndex> LogController::active_find_visible_index(const LogViewModel& model) const
+std::optional<VisibleLineIndex> LogController::active_find_visible_index(const LogModel& model) const
 {
     if (!_active_find_entry_index.has_value())
     {
@@ -171,14 +171,14 @@ std::optional<VisibleLineIndex> LogController::active_find_visible_index(const L
     return model.visible_line_index_for_entry(*_active_find_entry_index);
 }
 
-void LogController::begin_selection(const LogViewModel& model, TextPosition position)
+void LogController::begin_selection(const LogModel& model, TextPosition position)
 {
     _selection_anchor      = clamp_selection_position(model, position);
     _selection_focus       = _selection_anchor;
     _selection_in_progress = _selection_anchor.has_value();
 }
 
-void LogController::update_selection(const LogViewModel& model, TextPosition position)
+void LogController::update_selection(const LogModel& model, TextPosition position)
 {
     if (!_selection_in_progress || !_selection_anchor.has_value())
     {
@@ -188,7 +188,7 @@ void LogController::update_selection(const LogViewModel& model, TextPosition pos
     _selection_focus = clamp_selection_position(model, position);
 }
 
-void LogController::end_selection(const LogViewModel& model, std::optional<TextPosition> position)
+void LogController::end_selection(const LogModel& model, std::optional<TextPosition> position)
 {
     _selection_in_progress = false;
     if (position.has_value() && _selection_anchor.has_value())
@@ -209,7 +209,7 @@ bool LogController::selection_in_progress() const
     return _selection_in_progress;
 }
 
-std::optional<std::pair<TextPosition, TextPosition>> LogController::selection_bounds(const LogViewModel& model) const
+std::optional<std::pair<TextPosition, TextPosition>> LogController::selection_bounds(const LogModel& model) const
 {
     if (!_selection_anchor.has_value() || !_selection_focus.has_value() || model.line_count() == 0)
     {
@@ -226,7 +226,7 @@ std::optional<std::pair<TextPosition, TextPosition>> LogController::selection_bo
     return std::pair(start, end);
 }
 
-std::string LogController::selection_text(const LogViewModel& model) const
+std::string LogController::selection_text(const LogModel& model) const
 {
     const auto bounds = selection_bounds(model);
     if (!bounds.has_value())
@@ -255,12 +255,12 @@ std::string LogController::selection_text(const LogViewModel& model) const
     return output.str();
 }
 
-int LogController::max_first_visible_line_index(const LogViewModel& model, int viewport_line_count) const
+int LogController::max_first_visible_line_index(const LogModel& model, int viewport_line_count) const
 {
     return std::max(0, model.line_count() - std::max(1, viewport_line_count));
 }
 
-void LogController::center_on_visible_line(const LogViewModel& model, VisibleLineIndex target_visible_index, int viewport_line_count)
+void LogController::center_on_visible_line(const LogModel& model, VisibleLineIndex target_visible_index, int viewport_line_count)
 {
     _first_visible_line_index = VisibleLineIndex {target_visible_index.value - (std::max(1, viewport_line_count) / 2)};
     _first_visible_line_index.value =
@@ -268,7 +268,7 @@ void LogController::center_on_visible_line(const LogViewModel& model, VisibleLin
     _follow_bottom = _first_visible_line_index.value >= max_first_visible_line_index(model, viewport_line_count);
 }
 
-TextPosition LogController::clamp_selection_position(const LogViewModel& model, TextPosition position) const
+TextPosition LogController::clamp_selection_position(const LogModel& model, TextPosition position) const
 {
     if (model.line_count() == 0)
     {

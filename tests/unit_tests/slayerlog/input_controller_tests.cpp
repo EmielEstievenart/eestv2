@@ -8,14 +8,14 @@
 #include "input_controller.hpp"
 #include "log_controller.hpp"
 #include "log_view.hpp"
-#include "log_view_model.hpp"
+#include "log_model.hpp"
 
 namespace slayerlog
 {
 
 TEST(InputControllerTest, EscapeClearsFindBeforeQuitting)
 {
-    LogViewModel model;
+    LogModel model;
     LogController controller;
     model.append_lines({
         ObservedLogLine {"alpha.log", "error one"},
@@ -38,7 +38,7 @@ TEST(InputControllerTest, EscapeClearsFindBeforeQuitting)
 
 TEST(InputControllerTest, LeftAndRightArrowNavigateFindResults)
 {
-    LogViewModel model;
+    LogModel model;
     LogController controller;
     model.append_lines({
         ObservedLogLine {"alpha.log", "error one"},

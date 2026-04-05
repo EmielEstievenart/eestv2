@@ -160,7 +160,7 @@ bool copy_text_to_clipboard_on_unix(const std::string& text)
 
 } // namespace
 
-InputController::InputController(LogViewModel& model, LogController& controller, LogView& view, ftxui::ScreenInteractive& screen,
+InputController::InputController(LogModel& model, LogController& controller, LogView& view, ftxui::ScreenInteractive& screen,
                                  CommandPaletteController& command_palette_controller)
     : _model(model), _controller(controller), _view(view), _screen(screen), _command_palette_controller(command_palette_controller)
 {

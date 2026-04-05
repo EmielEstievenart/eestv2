@@ -6,7 +6,7 @@
 #include "command_palette_controller.hpp"
 #include "log_controller.hpp"
 #include "log_view.hpp"
-#include "log_view_model.hpp"
+#include "log_model.hpp"
 
 namespace slayerlog
 {
@@ -14,7 +14,7 @@ namespace slayerlog
 class InputController
 {
 public:
-    InputController(LogViewModel& model, LogController& controller, LogView& view, ftxui::ScreenInteractive& screen,
+    InputController(LogModel& model, LogController& controller, LogView& view, ftxui::ScreenInteractive& screen,
                     CommandPaletteController& command_palette_controller);
 
     bool handle_event(ftxui::Event event);
@@ -23,7 +23,7 @@ public:
 private:
     bool copy_selection_to_clipboard() const;
 
-    LogViewModel& _model;
+    LogModel& _model;
     LogController& _controller;
     LogView& _view;
     ftxui::ScreenInteractive& _screen;

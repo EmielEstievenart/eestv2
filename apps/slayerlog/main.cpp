@@ -28,7 +28,7 @@
 #include "log_batch.hpp"
 #include "log_controller.hpp"
 #include "log_view.hpp"
-#include "log_view_model.hpp"
+#include "log_model.hpp"
 
 namespace
 {
@@ -170,7 +170,7 @@ std::vector<slayerlog::WatcherLineBatch> collect_watcher_batches(std::vector<Wat
 }
 
 void append_batch_to_model(const std::vector<slayerlog::WatcherLineBatch>& watcher_batches, const std::vector<std::string>& source_labels,
-                           std::mutex& model_mutex, slayerlog::LogViewModel& model, ftxui::ScreenInteractive& screen)
+                           std::mutex& model_mutex, slayerlog::LogModel& model, ftxui::ScreenInteractive& screen)
 {
     const auto merged_lines = slayerlog::merge_log_batch(watcher_batches, source_labels);
     SLAYERLOG_LOG_TRACE("Merging watcher batches watcher_count=" << watcher_batches.size() << " merged_lines=" << merged_lines.size());
@@ -188,7 +188,7 @@ void append_batch_to_model(const std::vector<slayerlog::WatcherLineBatch>& watch
 }
 
 std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>& watched_files,
-                                 const std::vector<std::string>& source_labels, std::mutex& model_mutex, slayerlog::LogViewModel& model,
+                                 const std::vector<std::string>& source_labels, std::mutex& model_mutex, slayerlog::LogModel& model,
                                  ftxui::ScreenInteractive& screen, std::atomic<bool>& keep_running)
 {
     return std::thread(
@@ -233,7 +233,7 @@ std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>&
         });
 }
 
-void register_commands(slayerlog::CommandManager& command_manager, slayerlog::LogViewModel& model, slayerlog::LogController& controller,
+void register_commands(slayerlog::CommandManager& command_manager, slayerlog::LogModel& model, slayerlog::LogController& controller,
                        std::function<int()> viewport_line_count)
 {
     command_manager.register_command({"filter-in", "Show lines containing text", "filter-in <text>"},
@@ -371,7 +371,7 @@ int main(int argc, char** argv)
     screen.TrackMouse();
 
     std::mutex model_mutex;
-    slayerlog::LogViewModel model;
+    slayerlog::LogModel model;
     model.set_show_source_labels(config.file_paths.size() > 1);
     slayerlog::CommandPaletteModel command_palette_model;
     slayerlog::CommandManager command_manager;

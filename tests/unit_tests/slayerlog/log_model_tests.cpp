@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "log_view_model.hpp"
+#include "log_model.hpp"
 
 namespace slayerlog
 {
@@ -11,7 +11,7 @@ namespace slayerlog
 namespace
 {
 
-std::vector<std::string> rendered_texts(const LogViewModel& model)
+std::vector<std::string> rendered_texts(const LogModel& model)
 {
     std::vector<std::string> lines;
     lines.reserve(static_cast<std::size_t>(model.line_count()));
@@ -39,9 +39,9 @@ std::vector<ObservedLogLine> numbered_lines(int count)
 
 } // namespace
 
-TEST(LogViewModelTest, AppendsLinesInProvidedOrder)
+TEST(LogModelTest, AppendsLinesInProvidedOrder)
 {
-    LogViewModel model;
+    LogModel model;
 
     model.append_lines({
         ObservedLogLine {"alpha.log", "plain alpha"},
@@ -56,9 +56,9 @@ TEST(LogViewModelTest, AppendsLinesInProvidedOrder)
                                      }));
 }
 
-TEST(LogViewModelTest, PausedUpdatesAppendWhenResumed)
+TEST(LogModelTest, PausedUpdatesAppendWhenResumed)
 {
-    LogViewModel model;
+    LogModel model;
     model.toggle_pause();
 
     model.append_lines({
@@ -76,9 +76,9 @@ TEST(LogViewModelTest, PausedUpdatesAppendWhenResumed)
                                      }));
 }
 
-TEST(LogViewModelTest, RendersSourceLabelsWhenEnabled)
+TEST(LogModelTest, RendersSourceLabelsWhenEnabled)
 {
-    LogViewModel model;
+    LogModel model;
     model.set_show_source_labels(true);
 
     model.append_lines({
@@ -88,9 +88,9 @@ TEST(LogViewModelTest, RendersSourceLabelsWhenEnabled)
     EXPECT_EQ(model.rendered_line(0), "1 [alpha.log] hello");
 }
 
-TEST(LogViewModelTest, RenderedLinesReturnsVisibleSlice)
+TEST(LogModelTest, RenderedLinesReturnsVisibleSlice)
 {
-    LogViewModel model;
+    LogModel model;
 
     model.append_lines({
         ObservedLogLine {"alpha.log", "first"},
@@ -105,9 +105,9 @@ TEST(LogViewModelTest, RenderedLinesReturnsVisibleSlice)
                                           }));
 }
 
-TEST(LogViewModelTest, FiltersApplyRetroactivelyAndToNewLines)
+TEST(LogModelTest, FiltersApplyRetroactivelyAndToNewLines)
 {
-    LogViewModel model;
+    LogModel model;
 
     model.append_lines({
         ObservedLogLine {"alpha.log", "error critical"},
@@ -139,9 +139,9 @@ TEST(LogViewModelTest, FiltersApplyRetroactivelyAndToNewLines)
     EXPECT_EQ(model.line_count(), 6);
 }
 
-TEST(LogViewModelTest, HideBeforeLineUsesRawLineNumbers)
+TEST(LogModelTest, HideBeforeLineUsesRawLineNumbers)
 {
-    LogViewModel model;
+    LogModel model;
     model.append_lines(numbered_lines(5));
 
     model.hide_before_line_number(3);
@@ -157,9 +157,9 @@ TEST(LogViewModelTest, HideBeforeLineUsesRawLineNumbers)
     EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
 }
 
-TEST(LogViewModelTest, FindQueryBuildsMatchIndexesAndLookupHelpers)
+TEST(LogModelTest, FindQueryBuildsMatchIndexesAndLookupHelpers)
 {
-    LogViewModel model;
+    LogModel model;
     model.append_lines({
         ObservedLogLine {"alpha.log", "error first"},
         ObservedLogLine {"alpha.log", "info second"},
@@ -189,9 +189,9 @@ TEST(LogViewModelTest, FindQueryBuildsMatchIndexesAndLookupHelpers)
     EXPECT_TRUE(model.visible_line_matches_find(2));
 }
 
-TEST(LogViewModelTest, FindCountsAllMatchesWhileVisibleCountRespectsFilters)
+TEST(LogModelTest, FindCountsAllMatchesWhileVisibleCountRespectsFilters)
 {
-    LogViewModel model;
+    LogModel model;
     model.append_lines({
         ObservedLogLine {"alpha.log", "error first"},
         ObservedLogLine {"alpha.log", "error hidden"},
@@ -205,9 +205,9 @@ TEST(LogViewModelTest, FindCountsAllMatchesWhileVisibleCountRespectsFilters)
     EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
 }
 
-TEST(LogViewModelTest, ClearingFindQueryRemovesAllFindState)
+TEST(LogModelTest, ClearingFindQueryRemovesAllFindState)
 {
-    LogViewModel model;
+    LogModel model;
     model.append_lines({
         ObservedLogLine {"alpha.log", "needle"},
     });

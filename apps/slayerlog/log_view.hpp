@@ -11,7 +11,7 @@
 
 #include "command_palette_model.hpp"
 #include "log_controller.hpp"
-#include "log_view_model.hpp"
+#include "log_model.hpp"
 
 namespace slayerlog
 {
@@ -20,9 +20,9 @@ class LogView
 {
 public:
     int visible_line_count(int screen_height) const;
-    ftxui::Element render(const LogViewModel& model, const LogController& controller, const std::string& header_text, int screen_height,
+    ftxui::Element render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height,
                           const CommandPaletteModel& command_palette);
-    std::optional<TextPosition> mouse_to_text_position(const LogViewModel& model, const LogController& controller,
+    std::optional<TextPosition> mouse_to_text_position(const LogModel& model, const LogController& controller,
                                                        const ftxui::Mouse& mouse) const;
 
 private:

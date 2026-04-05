@@ -19,7 +19,7 @@ add_executable(
   slayerlog/command_manager_tests.cpp
   slayerlog/log_batch_tests.cpp
   slayerlog/log_timestamp_tests.cpp
-  slayerlog/log_view_model_tests.cpp
+  slayerlog/log_model_tests.cpp
   slayerlog/log_controller_tests.cpp
   slayerlog/input_controller_tests.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.cpp
@@ -34,7 +34,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_view.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_timestamp.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/input_controller.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_view_model.cpp)
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_model.cpp)
 
 # Link libraries (assuming eestv_lib provides sources and Boost)
 target_link_libraries(

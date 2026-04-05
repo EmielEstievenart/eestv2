@@ -102,7 +102,7 @@ struct TextPosition
     int column = 0;
 };
 
-class LogViewModel
+class LogModel
 {
 public:
     /** @brief Appends already ordered lines to the rendered log view. */

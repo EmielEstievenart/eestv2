@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "log_controller.hpp"
-#include "log_view_model.hpp"
+#include "log_model.hpp"
 
 namespace slayerlog
 {
@@ -28,7 +28,7 @@ std::vector<ObservedLogLine> numbered_lines(int count)
 
 TEST(LogControllerTest, ScrollStateTracksViewportAndFollowBottom)
 {
-    LogViewModel model;
+    LogModel model;
     LogController controller;
     model.append_lines(numbered_lines(10));
 
@@ -46,7 +46,7 @@ TEST(LogControllerTest, ScrollStateTracksViewportAndFollowBottom)
 
 TEST(LogControllerTest, GoToLineCentersVisibleContentAndFailsForHiddenLine)
 {
-    LogViewModel model;
+    LogModel model;
     LogController controller;
     model.append_lines({
         ObservedLogLine {"alpha.log", "info one"},
@@ -65,7 +65,7 @@ TEST(LogControllerTest, GoToLineCentersVisibleContentAndFailsForHiddenLine)
 
 TEST(LogControllerTest, FindNavigationUsesVisibleMatchesAndWraps)
 {
-    LogViewModel model;
+    LogModel model;
     LogController controller;
     model.append_lines({
         ObservedLogLine {"alpha.log", "error first"},
@@ -91,7 +91,7 @@ TEST(LogControllerTest, FindNavigationUsesVisibleMatchesAndWraps)
 
 TEST(LogControllerTest, FindNavigationRecoversWhenActiveMatchBecomesHidden)
 {
-    LogViewModel model;
+    LogModel model;
     LogController controller;
     model.append_lines({
         ObservedLogLine {"alpha.log", "error one"},
@@ -115,7 +115,7 @@ TEST(LogControllerTest, FindNavigationRecoversWhenActiveMatchBecomesHidden)
 
 TEST(LogControllerTest, SelectionTracksBoundsAndExtractsText)
 {
-    LogViewModel model;
+    LogModel model;
     LogController controller;
     model.append_lines({
         ObservedLogLine {"alpha.log", "alpha"},
