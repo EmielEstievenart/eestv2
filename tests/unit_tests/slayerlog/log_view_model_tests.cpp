@@ -331,4 +331,87 @@ TEST(LogViewModelTest, HideBeforeLineOneRestoresAllLines)
     EXPECT_FALSE(model.hidden_before_line_number().has_value());
 }
 
+TEST(LogViewModelTest, FindIndexesAllLoadedLinesButVisibleNavigationSkipsHiddenMatches)
+{
+    LogViewModel model;
+    model.set_visible_line_count(1);
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error first"},
+        ObservedLogLine {"alpha.log", "error hidden"},
+        ObservedLogLine {"alpha.log", "error third"},
+    });
+    model.add_exclude_filter("hidden");
+
+    EXPECT_TRUE(model.set_find_query("error"));
+    EXPECT_EQ(model.total_find_match_count(), 3);
+    EXPECT_EQ(model.visible_find_match_count(), 2);
+    ASSERT_TRUE(model.active_find_visible_index().has_value());
+    EXPECT_EQ(*model.active_find_visible_index(), 0);
+    EXPECT_EQ(model.scroll_offset(), 0);
+
+    EXPECT_TRUE(model.go_to_next_find_match());
+    ASSERT_TRUE(model.active_find_visible_index().has_value());
+    EXPECT_EQ(*model.active_find_visible_index(), 1);
+    EXPECT_EQ(model.scroll_offset(), 1);
+
+    EXPECT_TRUE(model.go_to_next_find_match());
+    ASSERT_TRUE(model.active_find_visible_index().has_value());
+    EXPECT_EQ(*model.active_find_visible_index(), 0);
+    EXPECT_EQ(model.scroll_offset(), 0);
+
+    EXPECT_TRUE(model.go_to_previous_find_match());
+    ASSERT_TRUE(model.active_find_visible_index().has_value());
+    EXPECT_EQ(*model.active_find_visible_index(), 1);
+    EXPECT_EQ(model.scroll_offset(), 1);
+}
+
+TEST(LogViewModelTest, FindKeepsActiveHiddenMatchAndResumesFromVisibleResults)
+{
+    LogViewModel model;
+    model.set_visible_line_count(1);
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error one"},
+        ObservedLogLine {"alpha.log", "error two"},
+        ObservedLogLine {"alpha.log", "error three"},
+    });
+
+    ASSERT_TRUE(model.set_find_query("error"));
+    EXPECT_TRUE(model.go_to_next_find_match());
+    ASSERT_TRUE(model.active_find_visible_index().has_value());
+    EXPECT_EQ(*model.active_find_visible_index(), 1);
+
+    model.add_include_filter("three");
+    EXPECT_EQ(model.total_find_match_count(), 3);
+    EXPECT_EQ(model.visible_find_match_count(), 1);
+    EXPECT_FALSE(model.active_find_visible_index().has_value());
+
+    EXPECT_TRUE(model.go_to_next_find_match());
+    ASSERT_TRUE(model.active_find_visible_index().has_value());
+    EXPECT_EQ(*model.active_find_visible_index(), 0);
+    EXPECT_EQ(model.rendered_line(*model.active_find_visible_index()), "3 error three");
+}
+
+TEST(LogViewModelTest, FindRebuildsAfterAppendingNewMatchingLines)
+{
+    LogViewModel model;
+    model.set_visible_line_count(1);
+
+    EXPECT_FALSE(model.set_find_query("needle"));
+    EXPECT_EQ(model.total_find_match_count(), 0);
+    EXPECT_EQ(model.visible_find_match_count(), 0);
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "other line"},
+        ObservedLogLine {"alpha.log", "needle appears"},
+    });
+
+    EXPECT_EQ(model.total_find_match_count(), 1);
+    EXPECT_EQ(model.visible_find_match_count(), 1);
+    EXPECT_TRUE(model.go_to_next_find_match());
+    ASSERT_TRUE(model.active_find_visible_index().has_value());
+    EXPECT_EQ(model.rendered_line(*model.active_find_visible_index()), "2 needle appears");
+}
+
 } // namespace slayerlog

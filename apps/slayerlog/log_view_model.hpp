@@ -43,6 +43,27 @@ public:
     /** @brief Returns the active raw-line cutoff, if any. */
     std::optional<int> hidden_before_line_number() const;
 
+    /** @brief Sets the active find query and focuses the first visible match. */
+    bool set_find_query(std::string query);
+    /** @brief Clears the active find query and all find results. */
+    void clear_find();
+    /** @brief Returns whether find mode is currently active. */
+    bool find_active() const;
+    /** @brief Returns the currently active find query text. */
+    const std::string& find_query() const;
+    /** @brief Returns total matches across all loaded lines. */
+    int total_find_match_count() const;
+    /** @brief Returns matches that are currently visible in the viewport model. */
+    int visible_find_match_count() const;
+    /** @brief Returns the active matched visible-line index, if any. */
+    std::optional<int> active_find_visible_index() const;
+    /** @brief Jumps to the next visible find match. */
+    bool go_to_next_find_match();
+    /** @brief Jumps to the previous visible find match. */
+    bool go_to_previous_find_match();
+    /** @brief Returns whether a visible line index is a find match. */
+    bool visible_line_matches_find(int visible_index) const;
+
     /** @brief Sets the visible viewport height so scrolling and follow-bottom can be clamped correctly. */
     void set_visible_line_count(int count);
     /** @brief Returns the current viewport height in rendered lines. */
@@ -87,6 +108,11 @@ private:
     void append_lines_immediately(const std::vector<ObservedLogLine>& lines);
     void flush_paused_updates();
     void rebuild_visible_entries();
+    void rebuild_find_matches();
+    void rebuild_visible_find_matches();
+    bool focus_find_match_by_position(int position);
+    std::optional<int> visible_find_match_position_for_entry_index(int entry_index) const;
+    bool entry_matches_find_query(const ObservedLogLine& entry) const;
     void clamp_scroll_offset();
     int max_scroll_offset() const;
     void update_follow_bottom();
@@ -101,6 +127,10 @@ private:
     std::vector<ObservedLogLine> _paused_updates;
     std::vector<std::string> _include_filters;
     std::vector<std::string> _exclude_filters;
+    std::string _find_query;
+    std::vector<int> _find_match_entry_indices;
+    std::vector<int> _visible_find_match_entry_indices;
+    std::optional<int> _active_find_entry_index;
     std::optional<int> _hidden_before_line_number;
     int _scroll_offset          = 0;
     int _visible_line_count     = 1;

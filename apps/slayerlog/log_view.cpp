@@ -79,6 +79,30 @@ std::string build_filter_status_text(const LogViewModel& model)
     return output.str();
 }
 
+std::string build_find_status_text(const LogViewModel& model)
+{
+    if (!model.find_active())
+    {
+        return "Find: off";
+    }
+
+    std::ostringstream output;
+    output << "Find: \"" << model.find_query() << "\" (" << model.visible_find_match_count() << " visible / "
+           << model.total_find_match_count() << " total)";
+
+    const auto active_visible_index = model.active_find_visible_index();
+    if (active_visible_index.has_value())
+    {
+        output << " | Active line " << (*active_visible_index + 1);
+    }
+    else
+    {
+        output << " | Active line hidden";
+    }
+
+    return output.str();
+}
+
 ftxui::Element render_command_palette_query(const CommandPaletteModel& command_palette)
 {
     const std::size_t cursor_position = std::min(command_palette.cursor_position, command_palette.query.size());
@@ -177,13 +201,29 @@ ftxui::Element LogView::render(LogViewModel& model, const std::string& header_te
         const int first_visible_line = model.scroll_offset();
         const int last_visible_line  = std::min(model.line_count(), first_visible_line + model.visible_line_count());
         const auto selected_range    = model.selection_bounds();
+        const auto active_find_index = model.active_find_visible_index();
 
         for (int index = first_visible_line; index < last_visible_line; ++index)
         {
-            const auto rendered_line = model.rendered_line(index);
+            const bool is_find_match   = model.find_active() && model.visible_line_matches_find(index);
+            const bool is_active_match = active_find_index.has_value() && *active_find_index == index;
+            const auto rendered_line   = model.rendered_line(index);
             if (!selected_range.has_value() || index < selected_range->first.line || index > selected_range->second.line)
             {
-                content.push_back(ftxui::text(rendered_line));
+                auto row = ftxui::text(rendered_line);
+                if (is_find_match)
+                {
+                    if (is_active_match)
+                    {
+                        row |= ftxui::bgcolor(ftxui::Color::Yellow) | ftxui::color(ftxui::Color::Black);
+                    }
+                    else
+                    {
+                        row |= ftxui::bgcolor(ftxui::Color::Blue) | ftxui::color(ftxui::Color::White);
+                    }
+                }
+
+                content.push_back(std::move(row));
                 continue;
             }
 
@@ -208,7 +248,20 @@ ftxui::Element LogView::render(LogViewModel& model, const std::string& header_te
                 row.push_back(ftxui::text(rendered_line.substr(static_cast<std::size_t>(clamped_end))));
             }
 
-            content.push_back(ftxui::hbox(std::move(row)));
+            auto selection_row = ftxui::hbox(std::move(row));
+            if (is_find_match)
+            {
+                if (is_active_match)
+                {
+                    selection_row |= ftxui::bgcolor(ftxui::Color::Yellow) | ftxui::color(ftxui::Color::Black);
+                }
+                else
+                {
+                    selection_row |= ftxui::bgcolor(ftxui::Color::Blue) | ftxui::color(ftxui::Color::White);
+                }
+            }
+
+            content.push_back(std::move(selection_row));
         }
     }
 
@@ -239,14 +292,16 @@ ftxui::Element LogView::render(LogViewModel& model, const std::string& header_te
                     ftxui::flex;
 
     ftxui::Element base_view = ftxui::window(
-        ftxui::text("Slayerlog"), ftxui::vbox({
-                                      ftxui::text(model.updates_paused() ? header_text + " [paused]" : header_text) | ftxui::bold,
-                                      ftxui::separator(),
-                                      log_view,
-                                      ftxui::separator(),
-                                      ftxui::text(build_filter_status_text(model)) | ftxui::color(ftxui::Color::GrayDark),
-                                      ftxui::text("Ctrl+P commands | p pause | q / Esc quit") | ftxui::color(ftxui::Color::GrayDark),
-                                  }));
+        ftxui::text("Slayerlog"),
+        ftxui::vbox({
+            ftxui::text(model.updates_paused() ? header_text + " [paused]" : header_text) | ftxui::bold,
+            ftxui::separator(),
+            log_view,
+            ftxui::separator(),
+            ftxui::text(build_filter_status_text(model)) | ftxui::color(ftxui::Color::GrayDark),
+            ftxui::text(build_find_status_text(model)) | ftxui::color(ftxui::Color::GrayDark),
+            ftxui::text("Ctrl+P commands | Right next | Left previous | Esc exits find | q quits") | ftxui::color(ftxui::Color::GrayDark),
+        }));
 
     if (!command_palette.open)
     {

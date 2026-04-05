@@ -31,6 +31,7 @@ void LogViewModel::append_lines(const std::vector<ObservedLogLine>& lines)
         append_lines_immediately(lines);
     }
 
+    rebuild_find_matches();
     clamp_selection();
     clamp_scroll_offset();
     update_follow_bottom();
@@ -42,6 +43,7 @@ void LogViewModel::toggle_pause()
     if (!_updates_paused)
     {
         flush_paused_updates();
+        rebuild_find_matches();
         clamp_selection();
         clamp_scroll_offset();
         update_follow_bottom();
@@ -56,6 +58,7 @@ bool LogViewModel::updates_paused() const
 void LogViewModel::set_show_source_labels(bool show_source_labels)
 {
     _show_source_labels = show_source_labels;
+    rebuild_find_matches();
     clamp_selection();
 }
 
@@ -70,6 +73,7 @@ void LogViewModel::add_include_filter(std::string filter_text)
 
     _include_filters.push_back(std::move(filter_text));
     rebuild_visible_entries();
+    rebuild_visible_find_matches();
     clamp_selection();
     if (was_following_bottom)
     {
@@ -93,6 +97,7 @@ void LogViewModel::add_exclude_filter(std::string filter_text)
 
     _exclude_filters.push_back(std::move(filter_text));
     rebuild_visible_entries();
+    rebuild_visible_find_matches();
     clamp_selection();
     if (was_following_bottom)
     {
@@ -111,6 +116,7 @@ void LogViewModel::reset_filters()
     _include_filters.clear();
     _exclude_filters.clear();
     rebuild_visible_entries();
+    rebuild_visible_find_matches();
     clamp_selection();
     if (was_following_bottom)
     {
@@ -138,6 +144,7 @@ void LogViewModel::hide_before_line_number(int line_number)
     const bool was_following_bottom = _follow_bottom;
     _hidden_before_line_number      = line_number > 1 ? std::optional<int>(line_number) : std::nullopt;
     rebuild_visible_entries();
+    rebuild_visible_find_matches();
     clamp_selection();
     if (was_following_bottom)
     {
@@ -153,6 +160,122 @@ void LogViewModel::hide_before_line_number(int line_number)
 std::optional<int> LogViewModel::hidden_before_line_number() const
 {
     return _hidden_before_line_number;
+}
+
+bool LogViewModel::set_find_query(std::string query)
+{
+    query = trim_filter_text(query);
+    if (query.empty())
+    {
+        clear_find();
+        return false;
+    }
+
+    _find_query = std::move(query);
+    _active_find_entry_index.reset();
+    rebuild_find_matches();
+    if (_visible_find_match_entry_indices.empty())
+    {
+        return false;
+    }
+
+    return focus_find_match_by_position(0);
+}
+
+void LogViewModel::clear_find()
+{
+    _find_query.clear();
+    _find_match_entry_indices.clear();
+    _visible_find_match_entry_indices.clear();
+    _active_find_entry_index.reset();
+}
+
+bool LogViewModel::find_active() const
+{
+    return !_find_query.empty();
+}
+
+const std::string& LogViewModel::find_query() const
+{
+    return _find_query;
+}
+
+int LogViewModel::total_find_match_count() const
+{
+    return static_cast<int>(_find_match_entry_indices.size());
+}
+
+int LogViewModel::visible_find_match_count() const
+{
+    return static_cast<int>(_visible_find_match_entry_indices.size());
+}
+
+std::optional<int> LogViewModel::active_find_visible_index() const
+{
+    if (!_active_find_entry_index.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const auto visible_line = std::find(_visible_entry_indices.begin(), _visible_entry_indices.end(), *_active_find_entry_index);
+    if (visible_line == _visible_entry_indices.end())
+    {
+        return std::nullopt;
+    }
+
+    return static_cast<int>(std::distance(_visible_entry_indices.begin(), visible_line));
+}
+
+bool LogViewModel::go_to_next_find_match()
+{
+    if (_visible_find_match_entry_indices.empty())
+    {
+        return false;
+    }
+
+    int next_position = 0;
+    if (_active_find_entry_index.has_value())
+    {
+        const auto current_position = visible_find_match_position_for_entry_index(*_active_find_entry_index);
+        if (current_position.has_value())
+        {
+            next_position = (*current_position + 1) % static_cast<int>(_visible_find_match_entry_indices.size());
+        }
+    }
+
+    return focus_find_match_by_position(next_position);
+}
+
+bool LogViewModel::go_to_previous_find_match()
+{
+    if (_visible_find_match_entry_indices.empty())
+    {
+        return false;
+    }
+
+    int previous_position = static_cast<int>(_visible_find_match_entry_indices.size()) - 1;
+    if (_active_find_entry_index.has_value())
+    {
+        const auto current_position = visible_find_match_position_for_entry_index(*_active_find_entry_index);
+        if (current_position.has_value())
+        {
+            previous_position =
+                *current_position == 0 ? static_cast<int>(_visible_find_match_entry_indices.size()) - 1 : *current_position - 1;
+        }
+    }
+
+    return focus_find_match_by_position(previous_position);
+}
+
+bool LogViewModel::visible_line_matches_find(int visible_index) const
+{
+    if (visible_index < 0 || visible_index >= static_cast<int>(_visible_entry_indices.size()))
+    {
+        return false;
+    }
+
+    const int entry_index = _visible_entry_indices[static_cast<std::size_t>(visible_index)];
+    return std::binary_search(_visible_find_match_entry_indices.begin(), _visible_find_match_entry_indices.end(), entry_index);
 }
 
 void LogViewModel::set_visible_line_count(int count)
@@ -373,6 +496,79 @@ void LogViewModel::rebuild_visible_entries()
             _visible_entry_indices.push_back(static_cast<int>(index));
         }
     }
+}
+
+void LogViewModel::rebuild_find_matches()
+{
+    _find_match_entry_indices.clear();
+    if (_find_query.empty())
+    {
+        _visible_find_match_entry_indices.clear();
+        _active_find_entry_index.reset();
+        return;
+    }
+
+    _find_match_entry_indices.reserve(_all_entries.size());
+    for (std::size_t index = 0; index < _all_entries.size(); ++index)
+    {
+        if (entry_matches_find_query(_all_entries[index]))
+        {
+            _find_match_entry_indices.push_back(static_cast<int>(index));
+        }
+    }
+
+    rebuild_visible_find_matches();
+}
+
+void LogViewModel::rebuild_visible_find_matches()
+{
+    _visible_find_match_entry_indices.clear();
+    _visible_find_match_entry_indices.reserve(_visible_entry_indices.size());
+    for (const int entry_index : _visible_entry_indices)
+    {
+        if (std::binary_search(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), entry_index))
+        {
+            _visible_find_match_entry_indices.push_back(entry_index);
+        }
+    }
+
+    if (!_active_find_entry_index.has_value())
+    {
+        return;
+    }
+
+    if (!std::binary_search(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), *_active_find_entry_index))
+    {
+        _active_find_entry_index.reset();
+    }
+}
+
+bool LogViewModel::focus_find_match_by_position(int position)
+{
+    if (position < 0 || position >= static_cast<int>(_visible_find_match_entry_indices.size()))
+    {
+        return false;
+    }
+
+    const int entry_index    = _visible_find_match_entry_indices[static_cast<std::size_t>(position)];
+    _active_find_entry_index = entry_index;
+    return center_on_line_number(entry_index + 1);
+}
+
+std::optional<int> LogViewModel::visible_find_match_position_for_entry_index(int entry_index) const
+{
+    const auto position = std::find(_visible_find_match_entry_indices.begin(), _visible_find_match_entry_indices.end(), entry_index);
+    if (position == _visible_find_match_entry_indices.end())
+    {
+        return std::nullopt;
+    }
+
+    return static_cast<int>(std::distance(_visible_find_match_entry_indices.begin(), position));
+}
+
+bool LogViewModel::entry_matches_find_query(const ObservedLogLine& entry) const
+{
+    return !_find_query.empty() && entry.text.find(_find_query) != std::string::npos;
 }
 
 void LogViewModel::clamp_scroll_offset()

@@ -179,7 +179,19 @@ bool InputController::handle_event(ftxui::Event event)
         return _command_palette_controller.handle_event(event);
     }
 
-    if (event == ftxui::Event::Character('q') || event == ftxui::Event::Escape)
+    if (event == ftxui::Event::Escape)
+    {
+        if (_model.find_active())
+        {
+            _model.clear_find();
+            return true;
+        }
+
+        _screen.Exit();
+        return true;
+    }
+
+    if (event == ftxui::Event::Character('q'))
     {
         _screen.Exit();
         return true;
@@ -194,6 +206,16 @@ bool InputController::handle_event(ftxui::Event event)
     {
         _model.toggle_pause();
         return true;
+    }
+
+    if (_model.find_active() && event == ftxui::Event::ArrowRight)
+    {
+        return _model.go_to_next_find_match();
+    }
+
+    if (_model.find_active() && event == ftxui::Event::ArrowLeft)
+    {
+        return _model.go_to_previous_find_match();
     }
 
     if (event == ftxui::Event::C)

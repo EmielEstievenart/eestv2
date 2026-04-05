@@ -1,5 +1,6 @@
 #include <atomic>
 #include <chrono>
+#include <cctype>
 #include <exception>
 #include <filesystem>
 #include <iostream>
@@ -107,6 +108,23 @@ std::optional<int> parse_positive_line_number(std::string_view text)
     }
 
     return line_number;
+}
+
+std::string trim_text(std::string_view text)
+{
+    std::size_t start = 0;
+    while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start])) != 0)
+    {
+        ++start;
+    }
+
+    std::size_t end = text.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0)
+    {
+        --end;
+    }
+
+    return std::string(text.substr(start, end - start));
 }
 
 struct WatchedFile
@@ -298,6 +316,34 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                          return slayerlog::CommandResult {
                                              true,
                                              "Hidden all lines before line " + std::to_string(*line_number),
+                                         };
+                                     });
+
+    command_manager.register_command({"find", "Find lines containing text", "find <text>"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         const std::string query = trim_text(arguments);
+                                         if (query.empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: find <text>"};
+                                         }
+
+                                         const bool focused_visible_match = model.set_find_query(query);
+                                         const int visible_matches        = model.visible_find_match_count();
+                                         const int total_matches          = model.total_find_match_count();
+                                         if (focused_visible_match)
+                                         {
+                                             return slayerlog::CommandResult {
+                                                 true,
+                                                 "Find active: " + model.find_query() + " (" + std::to_string(visible_matches) +
+                                                     " visible / " + std::to_string(total_matches) + " total)",
+                                             };
+                                         }
+
+                                         return slayerlog::CommandResult {
+                                             true,
+                                             "Find active: " + model.find_query() + " (0 visible / " + std::to_string(total_matches) +
+                                                 " total)",
                                          };
                                      });
 }
