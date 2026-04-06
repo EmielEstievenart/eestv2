@@ -10,6 +10,7 @@
 #include <mutex>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -282,27 +283,45 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                        std::function<int()> viewport_line_count,
                        std::function<slayerlog::CommandResult(std::string_view)> open_file_command)
 {
-    command_manager.register_command({"filter-in", "Show lines containing text", "filter-in <text>"},
+    command_manager.register_command({"filter-in", "Show lines matching text or regex", "filter-in <text|re:regex>"},
                                      [&](std::string_view arguments)
                                      {
                                          if (arguments.empty())
                                          {
-                                             return slayerlog::CommandResult {false, "Usage: filter-in <text>"};
+                                             return slayerlog::CommandResult {false, "Usage: filter-in <text|re:regex>"};
                                          }
 
-                                         model.add_include_filter(std::string(arguments));
+                                         try
+                                         {
+                                             model.add_include_filter(std::string(arguments));
+                                         }
+                                         catch (const std::invalid_argument& error)
+                                         {
+                                             return slayerlog::CommandResult {false,
+                                                                              "Invalid filter-in pattern: " + std::string(error.what())};
+                                         }
+
                                          return slayerlog::CommandResult {true, "Added include filter: " + std::string(arguments)};
                                      });
 
-    command_manager.register_command({"filter-out", "Hide lines containing text", "filter-out <text>"},
+    command_manager.register_command({"filter-out", "Hide lines matching text or regex", "filter-out <text|re:regex>"},
                                      [&](std::string_view arguments)
                                      {
                                          if (arguments.empty())
                                          {
-                                             return slayerlog::CommandResult {false, "Usage: filter-out <text>"};
+                                             return slayerlog::CommandResult {false, "Usage: filter-out <text|re:regex>"};
                                          }
 
-                                         model.add_exclude_filter(std::string(arguments));
+                                         try
+                                         {
+                                             model.add_exclude_filter(std::string(arguments));
+                                         }
+                                         catch (const std::invalid_argument& error)
+                                         {
+                                             return slayerlog::CommandResult {false,
+                                                                              "Invalid filter-out pattern: " + std::string(error.what())};
+                                         }
+
                                          return slayerlog::CommandResult {true, "Added exclude filter: " + std::string(arguments)};
                                      });
 
@@ -380,18 +399,27 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                          };
                                      });
 
-    command_manager.register_command({"find", "Find lines containing text", "find <text>"},
+    command_manager.register_command({"find", "Find lines matching text or regex", "find <text|re:regex>"},
                                      [&, viewport_line_count](std::string_view arguments)
                                      {
                                          const std::string query = trim_text(arguments);
                                          if (query.empty())
                                          {
-                                             return slayerlog::CommandResult {false, "Usage: find <text>"};
+                                             return slayerlog::CommandResult {false, "Usage: find <text|re:regex>"};
                                          }
 
-                                         const bool focused_visible_match = controller.set_find_query(model, query, viewport_line_count());
-                                         const int visible_matches        = model.visible_find_match_count();
-                                         const int total_matches          = model.total_find_match_count();
+                                         bool focused_visible_match = false;
+                                         try
+                                         {
+                                             focused_visible_match = controller.set_find_query(model, query, viewport_line_count());
+                                         }
+                                         catch (const std::invalid_argument& error)
+                                         {
+                                             return slayerlog::CommandResult {false, "Invalid find pattern: " + std::string(error.what())};
+                                         }
+
+                                         const int visible_matches = model.visible_find_match_count();
+                                         const int total_matches   = model.total_find_match_count();
                                          if (focused_visible_match)
                                          {
                                              return slayerlog::CommandResult {

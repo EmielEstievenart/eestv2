@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -167,6 +168,13 @@ public:
     std::vector<std::string> rendered_lines(int first_index, int count) const;
 
 private:
+    struct SearchPattern
+    {
+        std::string raw_text;
+        std::string needle;
+        std::optional<std::regex> regex;
+    };
+
     std::string render_entry(AllLineIndex entry_index) const;
 
     void append_lines_immediately(const std::vector<ObservedLogLine>& lines);
@@ -179,9 +187,11 @@ private:
     void rebuild_find_matches();
     void expand_find_matches(AllLineIndex first_new_entry_index);
 
+    static SearchPattern compile_search_pattern(std::string_view text);
     bool entry_matches_find_query(const ObservedLogLine& entry) const;
     bool entry_matches_filters(const ObservedLogLine& entry) const;
-    bool matches_any_filter(std::string_view haystack, const std::vector<std::string>& filters) const;
+    bool matches_pattern(std::string_view haystack, const SearchPattern& pattern) const;
+    bool matches_any_pattern(std::string_view haystack, const std::vector<SearchPattern>& patterns) const;
     static std::string trim_filter_text(std::string_view text);
 
     IndexedVector<ObservedLogLine, AllLineIndex> _all_entries;
@@ -190,8 +200,11 @@ private:
 
     std::vector<std::string> _include_filters;
     std::vector<std::string> _exclude_filters;
+    std::vector<SearchPattern> _include_filter_patterns;
+    std::vector<SearchPattern> _exclude_filter_patterns;
 
     std::string _find_query;
+    std::optional<SearchPattern> _find_pattern;
     IndexedVector<AllLineIndex, FindResultIndex> _find_match_entry_indices;
 
     std::optional<int> _hidden_before_line_number;

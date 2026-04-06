@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -239,6 +240,85 @@ TEST(LogModelTest, FindCountsAllMatchesWhileVisibleCountRespectsFilters)
     EXPECT_EQ(model.total_find_match_count(), 3);
     EXPECT_EQ(model.visible_find_match_count(), 2);
     EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
+}
+
+TEST(LogModelTest, FiltersSupportRegexWithRePrefix)
+{
+    LogModel model;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "status=200 ok"},
+        ObservedLogLine {"alpha.log", "status=404 missing"},
+        ObservedLogLine {"alpha.log", "status=500 error"},
+    });
+
+    model.add_include_filter("re:status=(4|5)\\d\\d");
+    model.add_exclude_filter("re:status=404");
+
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "status=500 error",
+                                     }));
+}
+
+TEST(LogModelTest, FindSupportsRegexWithRePrefix)
+{
+    LogModel model;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "request id=12"},
+        ObservedLogLine {"alpha.log", "request id=AB"},
+        ObservedLogLine {"alpha.log", "request id=77"},
+    });
+
+    EXPECT_TRUE(model.set_find_query("re:id=\\d+"));
+    EXPECT_EQ(model.find_query(), "re:id=\\d+");
+    EXPECT_EQ(model.total_find_match_count(), 2);
+    EXPECT_EQ(model.visible_find_match_count(), 2);
+    EXPECT_TRUE(model.visible_line_matches_find(0));
+    EXPECT_FALSE(model.visible_line_matches_find(1));
+    EXPECT_TRUE(model.visible_line_matches_find(2));
+}
+
+TEST(LogModelTest, InvalidRegexFilterIsRejectedAndKeepsExistingFilters)
+{
+    LogModel model;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error first"},
+        ObservedLogLine {"alpha.log", "warn second"},
+    });
+
+    model.add_include_filter("error");
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "error first",
+                                     }));
+
+    EXPECT_THROW(model.add_include_filter("re:["), std::invalid_argument);
+    EXPECT_THROW(model.add_exclude_filter("re:"), std::invalid_argument);
+
+    EXPECT_EQ(model.include_filters().size(), 1U);
+    EXPECT_EQ(model.exclude_filters().size(), 0U);
+    EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
+                                         "error first",
+                                     }));
+}
+
+TEST(LogModelTest, InvalidRegexFindIsRejectedAndKeepsExistingFindState)
+{
+    LogModel model;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error first"},
+        ObservedLogLine {"alpha.log", "error second"},
+        ObservedLogLine {"alpha.log", "info third"},
+    });
+
+    ASSERT_TRUE(model.set_find_query("error"));
+    ASSERT_TRUE(model.find_active());
+    ASSERT_EQ(model.total_find_match_count(), 2);
+
+    EXPECT_THROW(model.set_find_query("re:["), std::invalid_argument);
+    EXPECT_THROW(model.set_find_query("re:"), std::invalid_argument);
+
+    EXPECT_TRUE(model.find_active());
+    EXPECT_EQ(model.find_query(), "error");
+    EXPECT_EQ(model.total_find_match_count(), 2);
 }
 
 TEST(LogModelTest, ClearingFindQueryRemovesAllFindState)

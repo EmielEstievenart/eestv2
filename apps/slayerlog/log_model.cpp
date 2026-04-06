@@ -4,7 +4,9 @@
 #include <cctype>
 #include <cstddef>
 #include <iterator>
+#include <regex>
 #include <sstream>
+#include <stdexcept>
 #include <utility>
 
 namespace slayerlog
@@ -67,7 +69,10 @@ void LogModel::add_include_filter(std::string filter_text)
         return;
     }
 
-    _include_filters.push_back(std::move(filter_text));
+    const SearchPattern pattern = compile_search_pattern(filter_text);
+
+    _include_filters.push_back(pattern.raw_text);
+    _include_filter_patterns.push_back(pattern);
     rebuild_visible_entries();
     rebuild_find_matches();
 }
@@ -80,7 +85,10 @@ void LogModel::add_exclude_filter(std::string filter_text)
         return;
     }
 
-    _exclude_filters.push_back(std::move(filter_text));
+    const SearchPattern pattern = compile_search_pattern(filter_text);
+
+    _exclude_filters.push_back(pattern.raw_text);
+    _exclude_filter_patterns.push_back(pattern);
     rebuild_visible_entries();
     rebuild_find_matches();
 }
@@ -89,6 +97,8 @@ void LogModel::reset_filters()
 {
     _include_filters.clear();
     _exclude_filters.clear();
+    _include_filter_patterns.clear();
+    _exclude_filter_patterns.clear();
     rebuild_visible_entries();
     rebuild_find_matches();
 }
@@ -124,7 +134,10 @@ bool LogModel::set_find_query(std::string query)
         return false;
     }
 
-    _find_query = std::move(query);
+    const SearchPattern pattern = compile_search_pattern(query);
+
+    _find_query   = pattern.raw_text;
+    _find_pattern = pattern;
     rebuild_find_matches();
     return !_find_match_entry_indices.empty();
 }
@@ -132,6 +145,7 @@ bool LogModel::set_find_query(std::string query)
 void LogModel::clear_find_query()
 {
     _find_query.clear();
+    _find_pattern.reset();
     _find_match_entry_indices.clear();
 }
 
@@ -365,21 +379,68 @@ void LogModel::expand_find_matches(AllLineIndex first_new_entry_index)
 
 bool LogModel::entry_matches_find_query(const ObservedLogLine& entry) const
 {
-    return !_find_query.empty() && entry.text.find(_find_query) != std::string::npos;
+    return _find_pattern.has_value() && matches_pattern(entry.text, *_find_pattern);
 }
 
 bool LogModel::entry_matches_filters(const ObservedLogLine& entry) const
 {
     const std::string searchable_text = entry.source_label + "\n" + entry.text;
-    const bool matches_include        = _include_filters.empty() || matches_any_filter(searchable_text, _include_filters);
-    const bool matches_exclude        = matches_any_filter(searchable_text, _exclude_filters);
+    const bool matches_include        = _include_filter_patterns.empty() || matches_any_pattern(searchable_text, _include_filter_patterns);
+    const bool matches_exclude        = matches_any_pattern(searchable_text, _exclude_filter_patterns);
     return matches_include && !matches_exclude;
 }
 
-bool LogModel::matches_any_filter(std::string_view haystack, const std::vector<std::string>& filters) const
+LogModel::SearchPattern LogModel::compile_search_pattern(std::string_view text)
 {
-    return std::any_of(filters.begin(), filters.end(),
-                       [&](const std::string& filter) { return haystack.find(filter) != std::string_view::npos; });
+    const std::string trimmed_text = trim_filter_text(text);
+    if (trimmed_text.empty())
+    {
+        throw std::invalid_argument("Search text must not be empty");
+    }
+
+    constexpr std::string_view regex_prefix {"re:"};
+    if (trimmed_text.rfind(regex_prefix.data(), 0) != 0)
+    {
+        return SearchPattern {
+            trimmed_text,
+            trimmed_text,
+            std::nullopt,
+        };
+    }
+
+    std::string regex_text = trimmed_text.substr(regex_prefix.size());
+    if (regex_text.empty())
+    {
+        throw std::invalid_argument("Regex pattern after re: must not be empty");
+    }
+
+    try
+    {
+        return SearchPattern {
+            trimmed_text,
+            regex_text,
+            std::regex(regex_text),
+        };
+    }
+    catch (const std::regex_error& error)
+    {
+        throw std::invalid_argument("Invalid regex: " + std::string(error.what()));
+    }
+}
+
+bool LogModel::matches_pattern(std::string_view haystack, const SearchPattern& pattern) const
+{
+    if (!pattern.regex.has_value())
+    {
+        return haystack.find(pattern.needle) != std::string_view::npos;
+    }
+
+    return std::regex_search(haystack.begin(), haystack.end(), *pattern.regex);
+}
+
+bool LogModel::matches_any_pattern(std::string_view haystack, const std::vector<SearchPattern>& patterns) const
+{
+    return std::any_of(patterns.begin(), patterns.end(), [&](const SearchPattern& pattern) { return matches_pattern(haystack, pattern); });
 }
 
 std::string LogModel::trim_filter_text(std::string_view text)

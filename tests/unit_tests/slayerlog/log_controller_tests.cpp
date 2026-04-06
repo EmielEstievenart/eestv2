@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -111,6 +112,28 @@ TEST(LogControllerTest, FindNavigationRecoversWhenActiveMatchBecomesHidden)
     ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
     EXPECT_EQ(controller.active_find_visible_index(model)->value, 0);
     EXPECT_EQ(model.rendered_line(controller.active_find_visible_index(model)->value), "3 error three");
+}
+
+TEST(LogControllerTest, InvalidRegexFindKeepsExistingFindState)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error one"},
+        ObservedLogLine {"alpha.log", "error two"},
+        ObservedLogLine {"alpha.log", "info three"},
+    });
+
+    ASSERT_TRUE(controller.set_find_query(model, "error", 1));
+    ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
+    const auto active_before = controller.active_find_visible_index(model);
+
+    EXPECT_THROW(controller.set_find_query(model, "re:[", 1), std::invalid_argument);
+
+    EXPECT_TRUE(model.find_active());
+    EXPECT_EQ(model.find_query(), "error");
+    EXPECT_EQ(model.total_find_match_count(), 2);
+    EXPECT_EQ(controller.active_find_visible_index(model), active_before);
 }
 
 TEST(LogControllerTest, SelectionTracksBoundsAndExtractsText)
