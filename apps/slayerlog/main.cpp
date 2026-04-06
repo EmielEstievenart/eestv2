@@ -19,6 +19,7 @@
 #include <ftxui/component/screen_interactive.hpp>
 
 #include "command_line_parser.hpp"
+#include "command_history.hpp"
 #include "command_palette_controller.hpp"
 #include "command_palette_model.hpp"
 #include "command_manager.hpp"
@@ -29,6 +30,7 @@
 #include "log_controller.hpp"
 #include "log_view.hpp"
 #include "log_model.hpp"
+#include "settings_store.hpp"
 
 namespace
 {
@@ -373,12 +375,21 @@ int main(int argc, char** argv)
     std::mutex model_mutex;
     slayerlog::LogModel model;
     model.set_show_source_labels(config.file_paths.size() > 1);
+
+    slayerlog::SettingsStore settings_store(slayerlog::default_settings_file_path());
+    slayerlog::CommandHistory command_history(settings_store);
+    std::string settings_error_message;
+    if (!command_history.load(settings_error_message))
+    {
+        SLAYERLOG_LOG_WARNING("Failed to load settings from " << settings_store.file_path() << ": " << settings_error_message);
+    }
+
     slayerlog::CommandPaletteModel command_palette_model;
     slayerlog::CommandManager command_manager;
     slayerlog::LogView view;
     slayerlog::LogController controller;
     register_commands(command_manager, model, controller, [&] { return view.visible_line_count(screen.dimy()); });
-    slayerlog::CommandPaletteController command_palette_controller(command_palette_model, command_manager);
+    slayerlog::CommandPaletteController command_palette_controller(command_palette_model, command_manager, command_history);
     slayerlog::InputController input_controller(model, controller, view, screen, command_palette_controller);
 
     auto watched_files = create_file_watchers(config.file_paths, source_labels);

@@ -9,12 +9,20 @@
 namespace slayerlog
 {
 
+enum class CommandPaletteMode
+{
+    Commands,
+    History,
+};
+
 struct CommandPaletteModel
 {
-    bool open = false;
+    bool open               = false;
+    CommandPaletteMode mode = CommandPaletteMode::Commands;
     std::string query;
     std::size_t cursor_position = 0;
     std::vector<CommandDescriptor> matching_commands;
+    std::vector<std::string> matching_history_entries;
     int selected_index = 0;
     std::string status_message;
     bool status_is_error = false;

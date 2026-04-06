@@ -115,7 +115,7 @@ ftxui::Element render_command_palette_query(const CommandPaletteModel& command_p
     row.push_back(ftxui::text("> ") | ftxui::bold);
     if (command_palette.query.empty())
     {
-        row.push_back(ftxui::text("Type a command") | ftxui::color(ftxui::Color::GrayDark));
+        row.push_back(ftxui::text("Enter command") | ftxui::color(ftxui::Color::GrayDark));
         row.push_back(ftxui::text(" ") | ftxui::inverted);
         return ftxui::hbox(std::move(row));
     }
@@ -138,44 +138,75 @@ ftxui::Element render_command_palette_query(const CommandPaletteModel& command_p
 ftxui::Element render_command_palette(const CommandPaletteModel& command_palette)
 {
     ftxui::Elements command_rows;
-    if (command_palette.matching_commands.empty())
+    if (command_palette.mode == CommandPaletteMode::History)
     {
-        command_rows.push_back(ftxui::text("No matching commands") | ftxui::color(ftxui::Color::GrayDark));
+        if (command_palette.matching_history_entries.empty())
+        {
+            command_rows.push_back(
+                ftxui::text(command_palette.query.empty() ? "No previously run commands" : "No matching history commands") |
+                ftxui::color(ftxui::Color::GrayDark));
+        }
+        else
+        {
+            for (std::size_t index = 0; index < command_palette.matching_history_entries.size(); ++index)
+            {
+                auto row = ftxui::text(command_palette.matching_history_entries[index]);
+                if (static_cast<int>(index) == command_palette.selected_index)
+                {
+                    row |= ftxui::inverted;
+                }
+
+                command_rows.push_back(std::move(row));
+            }
+        }
     }
     else
     {
-        for (std::size_t index = 0; index < command_palette.matching_commands.size(); ++index)
+        if (command_palette.matching_commands.empty())
         {
-            const auto& command = command_palette.matching_commands[index];
-            auto row            = ftxui::vbox({
-                ftxui::text(command.name + " - " + command.summary),
-                ftxui::text(command.usage) | ftxui::color(ftxui::Color::GrayDark),
-            });
-
-            if (static_cast<int>(index) == command_palette.selected_index)
+            command_rows.push_back(ftxui::text("No matching commands") | ftxui::color(ftxui::Color::GrayDark));
+        }
+        else
+        {
+            for (std::size_t index = 0; index < command_palette.matching_commands.size(); ++index)
             {
-                row |= ftxui::inverted;
-            }
+                const auto& command = command_palette.matching_commands[index];
+                auto row            = ftxui::vbox({
+                    ftxui::text(command.name + " - " + command.summary),
+                    ftxui::text(command.usage) | ftxui::color(ftxui::Color::GrayDark),
+                });
 
-            command_rows.push_back(row);
+                if (static_cast<int>(index) == command_palette.selected_index)
+                {
+                    row |= ftxui::inverted;
+                }
+
+                command_rows.push_back(row);
+            }
         }
     }
 
-    ftxui::Element status =
-        ftxui::text("Tab completes selected command. Enter executes. Esc closes.") | ftxui::color(ftxui::Color::GrayDark);
+    const std::string help_text =
+        command_palette.mode == CommandPaletteMode::History
+            ? "Enter executes selected history command. Tab copies to input for editing. Ctrl+R toggles commands. Esc closes."
+            : "Tab completes selected command. Enter executes input. Ctrl+R toggles history. Esc closes.";
+
+    ftxui::Element status = ftxui::text(help_text) | ftxui::color(ftxui::Color::GrayDark);
     if (!command_palette.status_message.empty())
     {
         status = ftxui::text(command_palette.status_message) |
                  ftxui::color(command_palette.status_is_error ? ftxui::Color::Red : ftxui::Color::GreenLight);
     }
 
-    return ftxui::center(ftxui::clear_under(ftxui::window(ftxui::text("Command Palette"), ftxui::vbox({
-                                                                                              render_command_palette_query(command_palette),
-                                                                                              ftxui::separator(),
-                                                                                              ftxui::vbox(std::move(command_rows)),
-                                                                                              ftxui::separator(),
-                                                                                              status,
-                                                                                          })) |
+    const std::string title = command_palette.mode == CommandPaletteMode::History ? "Command History" : "Command Palette";
+
+    return ftxui::center(ftxui::clear_under(ftxui::window(ftxui::text(title), ftxui::vbox({
+                                                                                  render_command_palette_query(command_palette),
+                                                                                  ftxui::separator(),
+                                                                                  ftxui::vbox(std::move(command_rows)),
+                                                                                  ftxui::separator(),
+                                                                                  status,
+                                                                              })) |
                                             ftxui::size(ftxui::WIDTH, ftxui::LESS_THAN, 80)));
 }
 
@@ -300,7 +331,8 @@ ftxui::Element LogView::render(const LogModel& model, const LogController& contr
             ftxui::separator(),
             ftxui::text(build_filter_status_text(model)) | ftxui::color(ftxui::Color::GrayDark),
             ftxui::text(build_find_status_text(model, controller)) | ftxui::color(ftxui::Color::GrayDark),
-            ftxui::text("Ctrl+P commands | Right next | Left previous | Esc exits find | q quits") | ftxui::color(ftxui::Color::GrayDark),
+            ftxui::text("Ctrl+P commands | Ctrl+R history in palette | Right next | Left previous | Esc exits find | q quits") |
+                ftxui::color(ftxui::Color::GrayDark),
         }));
 
     if (!command_palette.open)

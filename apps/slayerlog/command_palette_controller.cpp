@@ -93,6 +93,13 @@ CommandPaletteController::CommandPaletteController(CommandPaletteModel& model, C
     refresh_matches();
 }
 
+CommandPaletteController::CommandPaletteController(CommandPaletteModel& model, CommandManager& command_manager,
+                                                   CommandHistory& command_history)
+    : _model(model), _command_manager(command_manager), _command_history(&command_history)
+{
+    refresh_matches();
+}
+
 bool CommandPaletteController::is_open() const
 {
     return _model.open;
@@ -106,6 +113,7 @@ const CommandPaletteModel& CommandPaletteController::model() const
 void CommandPaletteController::open()
 {
     _model.open = true;
+    _model.mode = CommandPaletteMode::Commands;
     _model.query.clear();
     _model.cursor_position = 0;
     _model.selected_index  = 0;
@@ -117,6 +125,7 @@ void CommandPaletteController::open()
 void CommandPaletteController::close()
 {
     _model.open = false;
+    _model.mode = CommandPaletteMode::Commands;
     _model.query.clear();
     _model.cursor_position = 0;
     _model.selected_index  = 0;
@@ -128,6 +137,16 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
     if (event == ftxui::Event::Escape)
     {
         close();
+        return true;
+    }
+
+    if (_command_history != nullptr && event == ftxui::Event::CtrlR)
+    {
+        _model.mode           = _model.mode == CommandPaletteMode::Commands ? CommandPaletteMode::History : CommandPaletteMode::Commands;
+        _model.selected_index = 0;
+        _model.status_message.clear();
+        _model.status_is_error = false;
+        refresh_matches();
         return true;
     }
 
@@ -198,9 +217,18 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
 
     if (event == ftxui::Event::Return)
     {
-        const CommandResult result = execute_selected_command();
-        _model.status_message      = result.message;
-        _model.status_is_error     = !result.success;
+        CommandResult result;
+        if (_model.mode == CommandPaletteMode::History)
+        {
+            result = execute_command_from_history_mode();
+        }
+        else
+        {
+            result = execute_command_from_command_mode();
+        }
+
+        _model.status_message  = result.message;
+        _model.status_is_error = !result.success;
         if (result.success)
         {
             close();
@@ -211,7 +239,15 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
 
     if (event == ftxui::Event::Tab)
     {
-        autocomplete_selected_command();
+        if (_model.mode == CommandPaletteMode::History)
+        {
+            copy_selected_history_entry_to_query();
+        }
+        else
+        {
+            autocomplete_selected_command();
+        }
+
         return true;
     }
 
@@ -231,6 +267,11 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
 
 void CommandPaletteController::autocomplete_selected_command()
 {
+    if (_model.mode != CommandPaletteMode::Commands)
+    {
+        return;
+    }
+
     if (_model.selected_index < 0 || static_cast<std::size_t>(_model.selected_index) >= _model.matching_commands.size())
     {
         return;
@@ -247,38 +288,132 @@ void CommandPaletteController::autocomplete_selected_command()
 
 void CommandPaletteController::refresh_matches()
 {
-    _model.matching_commands = _command_manager.matching_commands(_model.query);
-    if (_model.matching_commands.empty())
+    if (_model.mode == CommandPaletteMode::History)
+    {
+        _model.matching_commands.clear();
+        if (_command_history != nullptr)
+        {
+            _model.matching_history_entries = _command_history->matching_entries(_model.query);
+        }
+        else
+        {
+            _model.matching_history_entries.clear();
+        }
+    }
+    else
+    {
+        _model.matching_history_entries.clear();
+        _model.matching_commands = _command_manager.matching_commands(_model.query);
+    }
+
+    if (active_match_count() == 0)
     {
         _model.selected_index = 0;
         return;
     }
 
-    _model.selected_index = std::clamp(_model.selected_index, 0, static_cast<int>(_model.matching_commands.size()) - 1);
+    _model.selected_index = std::clamp(_model.selected_index, 0, static_cast<int>(active_match_count()) - 1);
+}
+
+std::size_t CommandPaletteController::active_match_count() const
+{
+    return _model.mode == CommandPaletteMode::History ? _model.matching_history_entries.size() : _model.matching_commands.size();
 }
 
 void CommandPaletteController::move_selection(int delta)
 {
-    if (_model.matching_commands.empty())
+    const std::size_t match_count = active_match_count();
+    if (match_count == 0)
     {
         return;
     }
 
-    const int last_index  = static_cast<int>(_model.matching_commands.size()) - 1;
+    const int last_index  = static_cast<int>(match_count) - 1;
     _model.selected_index = std::clamp(_model.selected_index + delta, 0, last_index);
 }
 
-CommandResult CommandPaletteController::execute_selected_command()
+bool CommandPaletteController::copy_selected_history_entry_to_query()
 {
-    if (!_model.matching_commands.empty())
+    if (_model.mode != CommandPaletteMode::History)
     {
-        const auto& selected_command   = _model.matching_commands[static_cast<std::size_t>(_model.selected_index)];
-        const std::string arguments    = command_arguments_from_query(_model.query);
-        const std::string command_line = arguments.empty() ? selected_command.name : selected_command.name + " " + arguments;
-        return _command_manager.execute(command_line);
+        return false;
     }
 
-    return _command_manager.execute(_model.query);
+    if (_model.selected_index < 0 || static_cast<std::size_t>(_model.selected_index) >= _model.matching_history_entries.size())
+    {
+        return false;
+    }
+
+    _model.query           = _model.matching_history_entries[static_cast<std::size_t>(_model.selected_index)];
+    _model.cursor_position = _model.query.size();
+    _model.mode            = CommandPaletteMode::Commands;
+    _model.selected_index  = 0;
+    _model.status_message.clear();
+    _model.status_is_error = false;
+    refresh_matches();
+    return true;
+}
+
+CommandResult CommandPaletteController::execute_command_from_command_mode()
+{
+    std::string command_line;
+    if (!_model.matching_commands.empty())
+    {
+        const auto& selected_command = _model.matching_commands[static_cast<std::size_t>(_model.selected_index)];
+        const std::string arguments  = command_arguments_from_query(_model.query);
+        command_line                 = arguments.empty() ? selected_command.name : selected_command.name + " " + arguments;
+    }
+    else
+    {
+        command_line = _model.query;
+    }
+
+    CommandResult result = _command_manager.execute(command_line);
+    if (result.success && !record_successful_command(command_line))
+    {
+        result.message += " (failed to save history)";
+    }
+
+    return result;
+}
+
+CommandResult CommandPaletteController::execute_command_from_history_mode()
+{
+    if (_command_history == nullptr)
+    {
+        return {false, "Command history is not available."};
+    }
+
+    if (_model.matching_history_entries.empty())
+    {
+        CommandResult result = _command_manager.execute(_model.query);
+        if (result.success && !record_successful_command(_model.query))
+        {
+            result.message += " (failed to save history)";
+        }
+
+        return result;
+    }
+
+    const std::string& command_line = _model.matching_history_entries[static_cast<std::size_t>(_model.selected_index)];
+    CommandResult result            = _command_manager.execute(command_line);
+    if (result.success && !record_successful_command(command_line))
+    {
+        result.message += " (failed to save history)";
+    }
+
+    return result;
+}
+
+bool CommandPaletteController::record_successful_command(std::string_view command_line)
+{
+    if (_command_history == nullptr)
+    {
+        return true;
+    }
+
+    std::string error_message;
+    return _command_history->record_command(command_line, error_message);
 }
 
 } // namespace slayerlog

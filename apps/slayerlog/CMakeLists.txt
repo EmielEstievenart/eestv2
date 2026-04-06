@@ -6,6 +6,8 @@ add_executable(
   command_palette_controller.cpp
   command_palette_controller.hpp
   command_palette_model.hpp
+  command_history.cpp
+  command_history.hpp
   command_manager.cpp
   command_manager.hpp
   command_line_parser.cpp
@@ -23,6 +25,10 @@ add_executable(
   log_view.hpp
   log_timestamp.cpp
   log_timestamp.hpp
+  settings_ini.cpp
+  settings_ini.hpp
+  settings_store.cpp
+  settings_store.hpp
   log_model.cpp
   log_model.hpp)
 
