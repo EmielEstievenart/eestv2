@@ -43,7 +43,8 @@ add_executable(
   stream_line_buffer.cpp
   stream_line_buffer.hpp
   log_model.cpp
-  log_model.hpp)
+  log_model.hpp
+  view_theme.hpp)
 
 target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
 

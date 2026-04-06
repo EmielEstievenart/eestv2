@@ -1,8 +1,8 @@
 #include "log_view.hpp"
+#include "view_theme.hpp"
 
 #include <algorithm>
 #include <cstddef>
-#include <sstream>
 #include <string>
 #include <utility>
 
@@ -12,6 +12,9 @@ namespace slayerlog
 namespace
 {
 
+// Approximate viewport size for the first render before FTXUI's reflect() has measured
+// the actual box. Breakdown: window border (2) + header (1) + separators (2) + status lines (3).
+// The value 7 slightly underestimates, which is acceptable as a fallback for a single frame.
 constexpr int window_chrome_height = 7;
 
 int estimate_visible_line_count(const ftxui::Box& viewport_box, int screen_height)
@@ -24,83 +27,96 @@ int estimate_visible_line_count(const ftxui::Box& viewport_box, int screen_heigh
     return std::max(1, screen_height - window_chrome_height);
 }
 
-std::string build_filter_status_text(const LogModel& model)
+std::string join(const std::vector<std::string>& items, const std::string& separator = ", ")
 {
-    std::ostringstream output;
-    const auto hidden_before_line_number = model.hidden_before_line_number();
+    std::string result;
+    for (std::size_t i = 0; i < items.size(); ++i)
+    {
+        if (i > 0)
+        {
+            result += separator;
+        }
+        result += items[i];
+    }
+    return result;
+}
+
+ftxui::Element build_filter_status(const LogModel& model)
+{
+    ftxui::Elements parts;
+    parts.push_back(theme::badge("FILTER", theme::label_filter_fg));
+
+    const auto hidden_before = model.hidden_before_line_number();
+
     if (model.include_filters().empty() && model.exclude_filters().empty())
     {
-        output << "Filters: none";
-        if (hidden_before_line_number.has_value())
+        parts.push_back(ftxui::text(" none") | ftxui::color(theme::muted));
+        if (hidden_before.has_value())
         {
-            output << " | Hidden before line " << *hidden_before_line_number;
+            parts.push_back(ftxui::text(" | before line " + std::to_string(*hidden_before)) | ftxui::color(theme::muted));
         }
-        return output.str();
+        return ftxui::hbox(std::move(parts));
     }
 
-    output << "Filters:";
     if (!model.include_filters().empty())
     {
-        output << " in(";
-        for (std::size_t index = 0; index < model.include_filters().size(); ++index)
-        {
-            if (index > 0)
-            {
-                output << ", ";
-            }
-
-            output << model.include_filters()[index];
-        }
-
-        output << ")";
+        parts.push_back(ftxui::text(" in(" + join(model.include_filters()) + ")"));
     }
 
     if (!model.exclude_filters().empty())
     {
-        output << " out(";
-        for (std::size_t index = 0; index < model.exclude_filters().size(); ++index)
-        {
-            if (index > 0)
-            {
-                output << ", ";
-            }
-
-            output << model.exclude_filters()[index];
-        }
-
-        output << ")";
+        parts.push_back(ftxui::text(" out(" + join(model.exclude_filters()) + ")"));
     }
 
-    if (hidden_before_line_number.has_value())
+    if (hidden_before.has_value())
     {
-        output << " | Hidden before line " << *hidden_before_line_number;
+        parts.push_back(ftxui::text(" | before line " + std::to_string(*hidden_before)) | ftxui::color(theme::muted));
     }
 
-    return output.str();
+    return ftxui::hbox(std::move(parts));
 }
 
-std::string build_find_status_text(const LogModel& model, const LogController& controller)
+ftxui::Element build_find_status(const LogModel& model, const LogController& controller)
 {
+    ftxui::Elements parts;
+    parts.push_back(theme::badge("FIND", theme::label_find_fg));
+
     if (!model.find_active())
     {
-        return "Find: off";
+        parts.push_back(ftxui::text(" off") | ftxui::color(theme::muted));
+        return ftxui::hbox(std::move(parts));
     }
 
-    std::ostringstream output;
-    output << "Find: \"" << model.find_query() << "\" (" << model.visible_find_match_count() << " visible / "
-           << model.total_find_match_count() << " total)";
+    parts.push_back(ftxui::text(" \"" + model.find_query() + "\""));
+    parts.push_back(ftxui::text(" " + std::to_string(model.visible_find_match_count()) + "/" +
+                                std::to_string(model.total_find_match_count()) + " matches") |
+                    ftxui::color(theme::muted));
 
     const auto active_visible_index = controller.active_find_visible_index(model);
     if (active_visible_index.has_value())
     {
-        output << " | Active line " << (active_visible_index->value + 1);
-    }
-    else
-    {
-        output << " | No active line";
+        parts.push_back(ftxui::text(" | line " + std::to_string(active_visible_index->value + 1)) | ftxui::color(theme::muted));
     }
 
-    return output.str();
+    return ftxui::hbox(std::move(parts));
+}
+
+ftxui::Element build_key_hints()
+{
+    auto sep = []() { return ftxui::text("  "); };
+    return ftxui::hbox({
+        theme::key_hint("Ctrl+P", "commands"),
+        sep(),
+        theme::key_hint("Ctrl+R", "history"),
+        sep(),
+        theme::key_hint("\xe2\x86\x92", "next"),
+        sep(),
+        theme::key_hint("\xe2\x86\x90", "prev"),
+        sep(),
+        theme::key_hint("Esc", "close find"),
+        sep(),
+        theme::key_hint("q", "quit"),
+    });
 }
 
 } // namespace
@@ -116,8 +132,8 @@ ftxui::Element LogView::render(const LogModel& model, const LogController& contr
     if (model.line_count() == 0)
     {
         content.push_back(ftxui::hbox({
-            ftxui::text("1 ") | ftxui::color(ftxui::Color::GrayDark),
-            ftxui::text(model.total_line_count() == 0 ? "<empty file>" : "<no matching lines>"),
+            ftxui::text("1 ") | ftxui::color(theme::muted),
+            ftxui::text(model.total_line_count() == 0 ? "<empty file>" : "<no matching lines>") | ftxui::color(theme::muted),
         }));
     }
     else
@@ -132,21 +148,14 @@ ftxui::Element LogView::render(const LogModel& model, const LogController& contr
             const bool is_find_match   = model.find_active() && model.visible_line_matches_find(index);
             const bool is_active_match = active_find_index.has_value() && active_find_index->value == index;
             const auto& rendered_line  = rendered_lines[offset];
+
             if (!selected_range.has_value() || index < selected_range->first.line || index > selected_range->second.line)
             {
                 auto row = ftxui::text(rendered_line);
                 if (is_find_match)
                 {
-                    if (is_active_match)
-                    {
-                        row |= ftxui::bgcolor(ftxui::Color::Yellow) | ftxui::color(ftxui::Color::Black);
-                    }
-                    else
-                    {
-                        row |= ftxui::bgcolor(ftxui::Color::Blue) | ftxui::color(ftxui::Color::White);
-                    }
+                    row = theme::apply_find_highlight(std::move(row), is_active_match);
                 }
-
                 content.push_back(std::move(row));
                 continue;
             }
@@ -175,20 +184,14 @@ ftxui::Element LogView::render(const LogModel& model, const LogController& contr
             auto selection_row = ftxui::hbox(std::move(row));
             if (is_find_match)
             {
-                if (is_active_match)
-                {
-                    selection_row |= ftxui::bgcolor(ftxui::Color::Yellow) | ftxui::color(ftxui::Color::Black);
-                }
-                else
-                {
-                    selection_row |= ftxui::bgcolor(ftxui::Color::Blue) | ftxui::color(ftxui::Color::White);
-                }
+                selection_row = theme::apply_find_highlight(std::move(selection_row), is_active_match);
             }
 
             content.push_back(std::move(selection_row));
         }
     }
 
+    // Scrollbar with visible track
     ftxui::Element scrollbar = ftxui::text("");
     if (model.line_count() > visible_line_count)
     {
@@ -198,14 +201,16 @@ ftxui::Element LogView::render(const LogModel& model, const LogController& contr
         const int max_offset  = std::max(1, total_lines - visible_line_count);
         const int thumb_top   = (first_visible_line * track_size) / max_offset;
 
-        ftxui::Elements thumb;
-        thumb.reserve(static_cast<std::size_t>(visible_line_count));
+        ftxui::Elements track;
+        track.reserve(static_cast<std::size_t>(visible_line_count));
         for (int row = 0; row < visible_line_count; ++row)
         {
-            thumb.push_back(ftxui::text(row >= thumb_top && row < (thumb_top + thumb_size) ? "┃" : " "));
+            const bool is_thumb = row >= thumb_top && row < (thumb_top + thumb_size);
+            track.push_back(ftxui::text(is_thumb ? "\xe2\x94\x83" : "\xe2\x94\x82") |
+                            ftxui::color(is_thumb ? theme::scrollbar_thumb_fg : theme::scrollbar_track_fg));
         }
 
-        scrollbar = ftxui::vbox(std::move(thumb)) | ftxui::color(ftxui::Color::GrayDark);
+        scrollbar = ftxui::vbox(std::move(track));
     }
 
     auto log_view = ftxui::hbox({
@@ -214,18 +219,30 @@ ftxui::Element LogView::render(const LogModel& model, const LogController& contr
                     }) |
                     ftxui::flex;
 
-    return ftxui::window(
-        ftxui::text("Slayerlog"),
-        ftxui::vbox({
-            ftxui::text(model.updates_paused() ? header_text + " [paused]" : header_text) | ftxui::bold,
-            ftxui::separator(),
-            log_view,
-            ftxui::separator(),
-            ftxui::text(build_filter_status_text(model)) | ftxui::color(ftxui::Color::GrayDark),
-            ftxui::text(build_find_status_text(model, controller)) | ftxui::color(ftxui::Color::GrayDark),
-            ftxui::text("Ctrl+P commands | Ctrl+R history in palette | Right next | Left previous | Esc exits find | q quits") |
-                ftxui::color(ftxui::Color::GrayDark),
-        }));
+    // Header with optional paused indicator
+    ftxui::Element header;
+    if (model.updates_paused())
+    {
+        header = ftxui::hbox({
+            ftxui::text(header_text) | ftxui::bold,
+            ftxui::text(" "),
+            theme::badge("PAUSED", theme::paused_fg),
+        });
+    }
+    else
+    {
+        header = ftxui::text(header_text) | ftxui::bold;
+    }
+
+    return ftxui::window(ftxui::text("Slayerlog"), ftxui::vbox({
+                                                       header,
+                                                       ftxui::separator(),
+                                                       log_view,
+                                                       ftxui::separator(),
+                                                       build_filter_status(model),
+                                                       build_find_status(model, controller),
+                                                       build_key_hints(),
+                                                   }));
 }
 
 int LogView::visible_line_count(int screen_height) const

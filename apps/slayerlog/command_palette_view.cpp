@@ -1,4 +1,5 @@
 #include "command_palette_view.hpp"
+#include "view_theme.hpp"
 
 #include <algorithm>
 #include <string>
@@ -21,7 +22,7 @@ ftxui::Element render_command_palette_query(const CommandPaletteModel& command_p
     row.push_back(ftxui::text("> ") | ftxui::bold);
     if (command_palette.query.empty())
     {
-        row.push_back(ftxui::text("Enter command") | ftxui::color(ftxui::Color::GrayDark));
+        row.push_back(ftxui::text("Enter command") | ftxui::color(theme::muted));
         row.push_back(ftxui::text(" ") | ftxui::inverted);
         return ftxui::hbox(std::move(row));
     }
@@ -41,6 +42,95 @@ ftxui::Element render_command_palette_query(const CommandPaletteModel& command_p
     return ftxui::hbox(std::move(row)) | ftxui::focusPosition(static_cast<int>(cursor_position) + 2, 0) | ftxui::xframe;
 }
 
+ftxui::Elements render_selectable_list(const std::vector<std::string>& items, int selected_index, const std::string& empty_message)
+{
+    ftxui::Elements rows;
+    if (items.empty())
+    {
+        rows.push_back(ftxui::text(empty_message) | ftxui::color(theme::muted));
+        return rows;
+    }
+
+    for (std::size_t index = 0; index < items.size(); ++index)
+    {
+        auto row = ftxui::text(items[index]);
+        if (static_cast<int>(index) == selected_index)
+        {
+            row |= ftxui::inverted;
+        }
+        rows.push_back(std::move(row));
+    }
+
+    return rows;
+}
+
+ftxui::Elements render_command_list(const std::vector<CommandDescriptor>& commands, int selected_index)
+{
+    ftxui::Elements rows;
+    if (commands.empty())
+    {
+        rows.push_back(ftxui::text("No matching commands") | ftxui::color(theme::muted));
+        return rows;
+    }
+
+    for (std::size_t index = 0; index < commands.size(); ++index)
+    {
+        const auto& command = commands[index];
+        auto row            = ftxui::vbox({
+            ftxui::text(command.name + " - " + command.summary),
+            ftxui::text(command.usage) | ftxui::color(theme::muted),
+        });
+
+        if (static_cast<int>(index) == selected_index)
+        {
+            row |= ftxui::inverted;
+        }
+
+        rows.push_back(std::move(row));
+    }
+
+    return rows;
+}
+
+ftxui::Element build_palette_help(CommandPaletteMode mode)
+{
+    auto sep = []() { return ftxui::text("  "); };
+
+    if (mode == CommandPaletteMode::History)
+    {
+        return ftxui::hbox({
+            theme::key_hint("Enter", "execute"),
+            sep(),
+            theme::key_hint("Tab", "copy to input"),
+            sep(),
+            theme::key_hint("Ctrl+R", "commands"),
+            sep(),
+            theme::key_hint("Esc", "close"),
+        });
+    }
+
+    if (mode == CommandPaletteMode::CloseOpenFile)
+    {
+        return ftxui::hbox({
+            theme::key_hint("\xe2\x86\x91\xe2\x86\x93", "select"),
+            sep(),
+            theme::key_hint("Enter", "close file"),
+            sep(),
+            theme::key_hint("Esc", "cancel"),
+        });
+    }
+
+    return ftxui::hbox({
+        theme::key_hint("Tab", "complete"),
+        sep(),
+        theme::key_hint("Enter", "execute"),
+        sep(),
+        theme::key_hint("Ctrl+R", "history"),
+        sep(),
+        theme::key_hint("Esc", "close"),
+    });
+}
+
 } // namespace
 
 ftxui::Element CommandPaletteView::render(const CommandPaletteModel& command_palette) const
@@ -48,84 +138,23 @@ ftxui::Element CommandPaletteView::render(const CommandPaletteModel& command_pal
     ftxui::Elements command_rows;
     if (command_palette.mode == CommandPaletteMode::History)
     {
-        if (command_palette.matching_history_entries.empty())
-        {
-            command_rows.push_back(
-                ftxui::text(command_palette.query.empty() ? "No previously run commands" : "No matching history commands") |
-                ftxui::color(ftxui::Color::GrayDark));
-        }
-        else
-        {
-            for (std::size_t index = 0; index < command_palette.matching_history_entries.size(); ++index)
-            {
-                auto row = ftxui::text(command_palette.matching_history_entries[index]);
-                if (static_cast<int>(index) == command_palette.selected_index)
-                {
-                    row |= ftxui::inverted;
-                }
-
-                command_rows.push_back(std::move(row));
-            }
-        }
+        const std::string empty_msg = command_palette.query.empty() ? "No previously run commands" : "No matching history commands";
+        command_rows = render_selectable_list(command_palette.matching_history_entries, command_palette.selected_index, empty_msg);
     }
     else if (command_palette.mode == CommandPaletteMode::CloseOpenFile)
     {
-        if (command_palette.open_files.empty())
-        {
-            command_rows.push_back(ftxui::text("No open files") | ftxui::color(ftxui::Color::GrayDark));
-        }
-        else
-        {
-            for (std::size_t index = 0; index < command_palette.open_files.size(); ++index)
-            {
-                auto row = ftxui::text(command_palette.open_files[index]);
-                if (static_cast<int>(index) == command_palette.selected_index)
-                {
-                    row |= ftxui::inverted;
-                }
-
-                command_rows.push_back(std::move(row));
-            }
-        }
+        command_rows = render_selectable_list(command_palette.open_files, command_palette.selected_index, "No open files");
     }
     else
     {
-        if (command_palette.matching_commands.empty())
-        {
-            command_rows.push_back(ftxui::text("No matching commands") | ftxui::color(ftxui::Color::GrayDark));
-        }
-        else
-        {
-            for (std::size_t index = 0; index < command_palette.matching_commands.size(); ++index)
-            {
-                const auto& command = command_palette.matching_commands[index];
-                auto row            = ftxui::vbox({
-                    ftxui::text(command.name + " - " + command.summary),
-                    ftxui::text(command.usage) | ftxui::color(ftxui::Color::GrayDark),
-                });
-
-                if (static_cast<int>(index) == command_palette.selected_index)
-                {
-                    row |= ftxui::inverted;
-                }
-
-                command_rows.push_back(row);
-            }
-        }
+        command_rows = render_command_list(command_palette.matching_commands, command_palette.selected_index);
     }
 
-    const std::string help_text =
-        command_palette.mode == CommandPaletteMode::History
-            ? "Enter executes selected history command. Tab copies to input for editing. Ctrl+R toggles commands. Esc closes."
-        : command_palette.mode == CommandPaletteMode::CloseOpenFile
-            ? "Arrow keys select an open file. Enter closes selected file. Esc cancels."
-            : "Tab completes selected command. Enter executes input. Ctrl+R toggles history. Esc closes.";
-
-    ftxui::Element status = ftxui::text(help_text) | ftxui::color(ftxui::Color::GrayDark);
+    ftxui::Element status = build_palette_help(command_palette.mode);
     if (!command_palette.status_message.empty())
     {
         status = ftxui::text(command_palette.status_message) |
-                 ftxui::color(command_palette.status_is_error ? ftxui::Color::Red : ftxui::Color::GreenLight);
+                 ftxui::color(command_palette.status_is_error ? theme::error_fg : theme::success_fg);
     }
 
     const std::string title = command_palette.mode == CommandPaletteMode::History         ? "Command History"
@@ -135,7 +164,7 @@ ftxui::Element CommandPaletteView::render(const CommandPaletteModel& command_pal
     ftxui::Elements body;
     if (command_palette.mode == CommandPaletteMode::CloseOpenFile)
     {
-        body.push_back(ftxui::text("Select file to close") | ftxui::color(ftxui::Color::GrayDark));
+        body.push_back(ftxui::text("Select file to close") | ftxui::color(theme::muted));
     }
     else
     {
