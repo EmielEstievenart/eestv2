@@ -115,8 +115,25 @@ void CommandPaletteController::open()
     _model.open = true;
     _model.mode = CommandPaletteMode::Commands;
     _model.query.clear();
-    _model.cursor_position = 0;
-    _model.selected_index  = 0;
+    _model.open_files.clear();
+    _close_open_file_selection_handler = {};
+    _model.cursor_position             = 0;
+    _model.selected_index              = 0;
+    _model.status_message.clear();
+    _model.status_is_error = false;
+    refresh_matches();
+}
+
+void CommandPaletteController::open_close_open_file_picker(std::vector<std::string> open_files,
+                                                           std::function<CommandResult(std::size_t selected_index)> on_confirm)
+{
+    _model.open = true;
+    _model.mode = CommandPaletteMode::CloseOpenFile;
+    _model.query.clear();
+    _model.open_files                  = std::move(open_files);
+    _close_open_file_selection_handler = std::move(on_confirm);
+    _model.cursor_position             = 0;
+    _model.selected_index              = 0;
     _model.status_message.clear();
     _model.status_is_error = false;
     refresh_matches();
@@ -127,8 +144,10 @@ void CommandPaletteController::close()
     _model.open = false;
     _model.mode = CommandPaletteMode::Commands;
     _model.query.clear();
-    _model.cursor_position = 0;
-    _model.selected_index  = 0;
+    _model.open_files.clear();
+    _close_open_file_selection_handler = {};
+    _model.cursor_position             = 0;
+    _model.selected_index              = 0;
     refresh_matches();
 }
 
@@ -140,7 +159,9 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
         return true;
     }
 
-    if (_command_history != nullptr && event == ftxui::Event::CtrlR)
+    const bool close_open_file_mode = _model.mode == CommandPaletteMode::CloseOpenFile;
+
+    if (_command_history != nullptr && event == ftxui::Event::CtrlR && !close_open_file_mode)
     {
         _model.mode           = _model.mode == CommandPaletteMode::Commands ? CommandPaletteMode::History : CommandPaletteMode::Commands;
         _model.selected_index = 0;
@@ -159,6 +180,11 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
     if (event == ftxui::Event::ArrowDown || event == ftxui::Event::Character('j'))
     {
         move_selection(1);
+        return true;
+    }
+
+    if (close_open_file_mode && event != ftxui::Event::Return)
+    {
         return true;
     }
 
@@ -222,6 +248,10 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
         {
             result = execute_command_from_history_mode();
         }
+        else if (_model.mode == CommandPaletteMode::CloseOpenFile)
+        {
+            result = execute_close_open_file_selection();
+        }
         else
         {
             result = execute_command_from_command_mode();
@@ -229,7 +259,7 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
 
         _model.status_message  = result.message;
         _model.status_is_error = !result.success;
-        if (result.success)
+        if (result.success && result.close_palette_on_success)
         {
             close();
         }
@@ -243,7 +273,7 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
         {
             copy_selected_history_entry_to_query();
         }
-        else
+        else if (_model.mode == CommandPaletteMode::Commands)
         {
             autocomplete_selected_command();
         }
@@ -291,6 +321,7 @@ void CommandPaletteController::refresh_matches()
     if (_model.mode == CommandPaletteMode::History)
     {
         _model.matching_commands.clear();
+        _model.open_files.clear();
         if (_command_history != nullptr)
         {
             _model.matching_history_entries = _command_history->matching_entries(_model.query);
@@ -300,10 +331,16 @@ void CommandPaletteController::refresh_matches()
             _model.matching_history_entries.clear();
         }
     }
+    else if (_model.mode == CommandPaletteMode::Commands)
+    {
+        _model.matching_history_entries.clear();
+        _model.open_files.clear();
+        _model.matching_commands = _command_manager.matching_commands(_model.query);
+    }
     else
     {
         _model.matching_history_entries.clear();
-        _model.matching_commands = _command_manager.matching_commands(_model.query);
+        _model.matching_commands.clear();
     }
 
     if (active_match_count() == 0)
@@ -317,7 +354,17 @@ void CommandPaletteController::refresh_matches()
 
 std::size_t CommandPaletteController::active_match_count() const
 {
-    return _model.mode == CommandPaletteMode::History ? _model.matching_history_entries.size() : _model.matching_commands.size();
+    if (_model.mode == CommandPaletteMode::History)
+    {
+        return _model.matching_history_entries.size();
+    }
+
+    if (_model.mode == CommandPaletteMode::CloseOpenFile)
+    {
+        return _model.open_files.size();
+    }
+
+    return _model.matching_commands.size();
 }
 
 void CommandPaletteController::move_selection(int delta)
@@ -403,6 +450,21 @@ CommandResult CommandPaletteController::execute_command_from_history_mode()
     }
 
     return result;
+}
+
+CommandResult CommandPaletteController::execute_close_open_file_selection()
+{
+    if (_close_open_file_selection_handler == nullptr)
+    {
+        return {false, "No close-file handler is configured."};
+    }
+
+    if (_model.selected_index < 0 || static_cast<std::size_t>(_model.selected_index) >= _model.open_files.size())
+    {
+        return {false, "No open file is selected."};
+    }
+
+    return _close_open_file_selection_handler(static_cast<std::size_t>(_model.selected_index));
 }
 
 bool CommandPaletteController::record_successful_command(std::string_view command_line)

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cctype>
@@ -242,9 +243,44 @@ std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>&
         });
 }
 
+std::optional<std::string> reload_tracked_sources(std::vector<slayerlog::LogSource> candidate_sources,
+                                                  std::vector<slayerlog::LogSource>& tracked_sources,
+                                                  std::vector<std::string>& source_labels, std::string& header_text,
+                                                  std::vector<WatchedFile>& watched_files, slayerlog::LogModel& model,
+                                                  slayerlog::LogController& controller, ftxui::ScreenInteractive& screen)
+{
+    auto candidate_source_labels = slayerlog::build_source_labels(candidate_sources);
+    std::string candidate_header = build_header_text(candidate_source_labels);
+    std::vector<WatchedFile> candidate_watchers;
+    std::vector<slayerlog::WatcherLineBatch> candidate_batches;
+
+    try
+    {
+        candidate_watchers = create_file_watchers(candidate_sources, candidate_source_labels);
+        candidate_batches  = collect_watcher_batches(candidate_watchers);
+    }
+    catch (const std::exception& ex)
+    {
+        return ex.what();
+    }
+
+    tracked_sources = std::move(candidate_sources);
+    source_labels   = std::move(candidate_source_labels);
+    header_text     = std::move(candidate_header);
+    watched_files   = std::move(candidate_watchers);
+
+    model.reset();
+    controller.reset();
+    model.set_show_source_labels(tracked_sources.size() > 1);
+    append_batch_to_model(candidate_batches, source_labels, model, screen);
+
+    return std::nullopt;
+}
+
 void register_commands(slayerlog::CommandManager& command_manager, slayerlog::LogModel& model, slayerlog::LogController& controller,
                        std::function<int()> viewport_line_count,
-                       std::function<slayerlog::CommandResult(std::string_view)> open_file_command)
+                       std::function<slayerlog::CommandResult(std::string_view)> open_file_command,
+                       std::function<slayerlog::CommandResult()> close_open_file_command)
 {
     command_manager.register_command({"filter-in", "Show lines matching text or regex", "filter-in <text|re:regex>"},
                                      [&](std::string_view arguments)
@@ -310,6 +346,17 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                          }
 
                                          return open_file_command(file_path);
+                                     });
+
+    command_manager.register_command({"close-open-file", "Close one currently open file", "close-open-file"},
+                                     [close_open_file_command](std::string_view arguments)
+                                     {
+                                         if (!trim_text(arguments).empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: close-open-file"};
+                                         }
+
+                                         return close_open_file_command();
                                      });
 
     command_manager.register_command({"go-to-line", "Center the view on a line number", "go-to-line <line-number>"},
@@ -439,6 +486,8 @@ int main(int argc, char** argv)
     slayerlog::LogController controller;
     auto watched_files = create_file_watchers(tracked_sources, source_labels);
 
+    slayerlog::CommandPaletteController command_palette_controller(command_palette_model, command_manager, command_history);
+
     register_commands(
         command_manager, model, controller, [&] { return view.visible_line_count(screen.dimy()); },
         [&](std::string_view file_path)
@@ -461,36 +510,50 @@ int main(int argc, char** argv)
             std::vector<slayerlog::LogSource> candidate_sources = tracked_sources;
             candidate_sources.push_back(candidate_source);
 
-            auto candidate_source_labels = slayerlog::build_source_labels(candidate_sources);
-            std::string candidate_header = build_header_text(candidate_source_labels);
-            std::vector<WatchedFile> candidate_watchers;
-            std::vector<slayerlog::WatcherLineBatch> candidate_batches;
-
-            try
+            const auto error = reload_tracked_sources(candidate_sources, tracked_sources, source_labels, header_text, watched_files, model,
+                                                      controller, screen);
+            if (error.has_value())
             {
-                candidate_watchers = create_file_watchers(candidate_sources, candidate_source_labels);
-                candidate_batches  = collect_watcher_batches(candidate_watchers);
+                SLAYERLOG_LOG_ERROR("open-file failed file=" << file_path << " error=" << *error);
+                return slayerlog::CommandResult {false, *error};
             }
-            catch (const std::exception& ex)
-            {
-                SLAYERLOG_LOG_ERROR("open-file failed file=" << file_path << " error=" << ex.what());
-                return slayerlog::CommandResult {false, ex.what()};
-            }
-
-            tracked_sources = std::move(candidate_sources);
-            source_labels   = std::move(candidate_source_labels);
-            header_text     = std::move(candidate_header);
-            watched_files   = std::move(candidate_watchers);
-
-            model.reset();
-            controller.reset();
-            model.set_show_source_labels(tracked_sources.size() > 1);
-            append_batch_to_model(candidate_batches, source_labels, model, screen);
 
             return slayerlog::CommandResult {true, "Opened file: " + std::string(file_path)};
+        },
+        [&]()
+        {
+            if (tracked_sources.empty())
+            {
+                return slayerlog::CommandResult {false, "No open files to close"};
+            }
+
+            command_palette_controller.open_close_open_file_picker(
+                source_labels,
+                [&](std::size_t selected_index)
+                {
+                    if (selected_index >= tracked_sources.size())
+                    {
+                        return slayerlog::CommandResult {false, "Invalid open file selection"};
+                    }
+
+                    const std::string closed_label                      = source_labels[selected_index];
+                    std::vector<slayerlog::LogSource> candidate_sources = tracked_sources;
+                    candidate_sources.erase(candidate_sources.begin() + static_cast<std::ptrdiff_t>(selected_index));
+
+                    const auto error = reload_tracked_sources(candidate_sources, tracked_sources, source_labels, header_text, watched_files,
+                                                              model, controller, screen);
+                    if (error.has_value())
+                    {
+                        SLAYERLOG_LOG_ERROR("close-open-file failed selected_index=" << selected_index << " error=" << *error);
+                        return slayerlog::CommandResult {false, *error};
+                    }
+
+                    return slayerlog::CommandResult {true, "Closed file: " + closed_label};
+                });
+
+            return slayerlog::CommandResult {true, "Select a file to close", false};
         });
 
-    slayerlog::CommandPaletteController command_palette_controller(command_palette_model, command_manager, command_history);
     slayerlog::InputController input_controller(model, controller, view, screen, command_palette_controller);
 
     try

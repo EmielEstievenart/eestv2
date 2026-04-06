@@ -3,6 +3,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace slayerlog
@@ -19,6 +20,14 @@ struct CommandResult
 {
     bool success = false;
     std::string message;
+    bool close_palette_on_success = true;
+
+    CommandResult() = default;
+
+    CommandResult(bool success_value, std::string message_value, bool close_palette_on_success_value = true)
+        : success(success_value), message(std::move(message_value)), close_palette_on_success(close_palette_on_success_value)
+    {
+    }
 };
 
 using CommandHandler = std::function<CommandResult(std::string_view arguments)>;

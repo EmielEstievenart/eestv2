@@ -1,5 +1,9 @@
 #pragma once
 
+#include <functional>
+#include <string>
+#include <vector>
+
 #include <ftxui/component/event.hpp>
 
 #include "command_history.hpp"
@@ -19,6 +23,8 @@ public:
     const CommandPaletteModel& model() const;
 
     void open();
+    void open_close_open_file_picker(std::vector<std::string> open_files,
+                                     std::function<CommandResult(std::size_t selected_index)> on_confirm);
     void close();
     bool handle_event(const ftxui::Event& event);
 
@@ -30,11 +36,13 @@ private:
     bool copy_selected_history_entry_to_query();
     CommandResult execute_command_from_command_mode();
     CommandResult execute_command_from_history_mode();
+    CommandResult execute_close_open_file_selection();
     bool record_successful_command(std::string_view command_line);
 
     CommandPaletteModel& _model;
     CommandManager& _command_manager;
     CommandHistory* _command_history = nullptr;
+    std::function<CommandResult(std::size_t selected_index)> _close_open_file_selection_handler;
 };
 
 } // namespace slayerlog

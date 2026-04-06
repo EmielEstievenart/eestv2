@@ -160,6 +160,26 @@ ftxui::Element render_command_palette(const CommandPaletteModel& command_palette
             }
         }
     }
+    else if (command_palette.mode == CommandPaletteMode::CloseOpenFile)
+    {
+        if (command_palette.open_files.empty())
+        {
+            command_rows.push_back(ftxui::text("No open files") | ftxui::color(ftxui::Color::GrayDark));
+        }
+        else
+        {
+            for (std::size_t index = 0; index < command_palette.open_files.size(); ++index)
+            {
+                auto row = ftxui::text(command_palette.open_files[index]);
+                if (static_cast<int>(index) == command_palette.selected_index)
+                {
+                    row |= ftxui::inverted;
+                }
+
+                command_rows.push_back(std::move(row));
+            }
+        }
+    }
     else
     {
         if (command_palette.matching_commands.empty())
@@ -189,6 +209,8 @@ ftxui::Element render_command_palette(const CommandPaletteModel& command_palette
     const std::string help_text =
         command_palette.mode == CommandPaletteMode::History
             ? "Enter executes selected history command. Tab copies to input for editing. Ctrl+R toggles commands. Esc closes."
+        : command_palette.mode == CommandPaletteMode::CloseOpenFile
+            ? "Arrow keys select an open file. Enter closes selected file. Esc cancels."
             : "Tab completes selected command. Enter executes input. Ctrl+R toggles history. Esc closes.";
 
     ftxui::Element status = ftxui::text(help_text) | ftxui::color(ftxui::Color::GrayDark);
@@ -198,15 +220,25 @@ ftxui::Element render_command_palette(const CommandPaletteModel& command_palette
                  ftxui::color(command_palette.status_is_error ? ftxui::Color::Red : ftxui::Color::GreenLight);
     }
 
-    const std::string title = command_palette.mode == CommandPaletteMode::History ? "Command History" : "Command Palette";
+    const std::string title = command_palette.mode == CommandPaletteMode::History         ? "Command History"
+                              : command_palette.mode == CommandPaletteMode::CloseOpenFile ? "Close Open File"
+                                                                                          : "Command Palette";
 
-    return ftxui::center(ftxui::clear_under(ftxui::window(ftxui::text(title), ftxui::vbox({
-                                                                                  render_command_palette_query(command_palette),
-                                                                                  ftxui::separator(),
-                                                                                  ftxui::vbox(std::move(command_rows)),
-                                                                                  ftxui::separator(),
-                                                                                  status,
-                                                                              })) |
+    ftxui::Elements body;
+    if (command_palette.mode == CommandPaletteMode::CloseOpenFile)
+    {
+        body.push_back(ftxui::text("Select file to close") | ftxui::color(ftxui::Color::GrayDark));
+    }
+    else
+    {
+        body.push_back(render_command_palette_query(command_palette));
+    }
+    body.push_back(ftxui::separator());
+    body.push_back(ftxui::vbox(std::move(command_rows)));
+    body.push_back(ftxui::separator());
+    body.push_back(status);
+
+    return ftxui::center(ftxui::clear_under(ftxui::window(ftxui::text(title), ftxui::vbox(std::move(body))) |
                                             ftxui::size(ftxui::WIDTH, ftxui::LESS_THAN, 80)));
 }
 

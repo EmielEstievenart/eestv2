@@ -118,6 +118,24 @@ TEST(CommandPaletteControllerTest, ReturnKeepsPaletteOpenWhenCommandFails)
     EXPECT_TRUE(controller.model().status_is_error);
 }
 
+TEST(CommandPaletteControllerTest, ReturnCanKeepPaletteOpenWhenCommandRequestsIt)
+{
+    CommandManager manager;
+    manager.register_command({"stay-open", "Stay open", "stay-open"},
+                             [](std::string_view) { return CommandResult {true, "pick one", false}; });
+
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+    controller.open();
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Character("stay-open")));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Return));
+
+    EXPECT_TRUE(controller.is_open());
+    EXPECT_EQ(controller.model().status_message, "pick one");
+    EXPECT_FALSE(controller.model().status_is_error);
+}
+
 TEST(CommandPaletteControllerTest, TabCompletesSelectedCommand)
 {
     CommandManager manager;
@@ -383,6 +401,53 @@ TEST(CommandPaletteControllerTest, HistoryModeReturnExecutesTypedQueryWhenNoHist
     EXPECT_EQ(history.entries()[0], "beta fresh");
 
     remove_temp_settings_file(settings_path);
+}
+
+TEST(CommandPaletteControllerTest, CloseOpenFilePickerSelectsAndExecutesHandler)
+{
+    CommandManager manager;
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+
+    int selected_index = -1;
+    controller.open_close_open_file_picker({"alpha.log", "beta.log", "gamma.log"},
+                                           [&](std::size_t index)
+                                           {
+                                               selected_index = static_cast<int>(index);
+                                               return CommandResult {true, "Closed"};
+                                           });
+
+    ASSERT_TRUE(controller.is_open());
+    EXPECT_EQ(controller.model().mode, CommandPaletteMode::CloseOpenFile);
+    ASSERT_EQ(controller.model().open_files.size(), 3U);
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::ArrowDown));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::ArrowDown));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Return));
+
+    EXPECT_EQ(selected_index, 2);
+    EXPECT_FALSE(controller.is_open());
+}
+
+TEST(CommandPaletteControllerTest, CloseOpenFilePickerEscapeCancels)
+{
+    CommandManager manager;
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+
+    bool handler_called = false;
+    controller.open_close_open_file_picker({"alpha.log"},
+                                           [&](std::size_t)
+                                           {
+                                               handler_called = true;
+                                               return CommandResult {true, "Closed"};
+                                           });
+
+    ASSERT_TRUE(controller.is_open());
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Escape));
+
+    EXPECT_FALSE(controller.is_open());
+    EXPECT_FALSE(handler_called);
 }
 
 } // namespace slayerlog
