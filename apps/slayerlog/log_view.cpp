@@ -132,7 +132,7 @@ ftxui::Element render_command_palette_query(const CommandPaletteModel& command_p
         row.push_back(ftxui::text(suffix));
     }
 
-    return ftxui::hbox(std::move(row));
+    return ftxui::hbox(std::move(row)) | ftxui::focusPosition(static_cast<int>(cursor_position) + 2, 0) | ftxui::xframe;
 }
 
 ftxui::Element render_command_palette(const CommandPaletteModel& command_palette)

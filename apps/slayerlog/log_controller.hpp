@@ -12,6 +12,8 @@ namespace slayerlog
 class LogController
 {
 public:
+    void reset();
+
     VisibleLineIndex first_visible_line_index(const LogModel& model, int viewport_line_count) const;
 
     void scroll_up(const LogModel& model, int viewport_line_count, int amount = 1);

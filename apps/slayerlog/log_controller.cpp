@@ -16,6 +16,18 @@ bool is_before(const TextPosition& lhs, const TextPosition& rhs)
 
 } // namespace
 
+void LogController::reset()
+{
+    _first_visible_line_index = VisibleLineIndex {0};
+    _follow_bottom            = true;
+
+    _active_find_entry_index.reset();
+
+    _selection_in_progress = false;
+    _selection_anchor.reset();
+    _selection_focus.reset();
+}
+
 VisibleLineIndex LogController::first_visible_line_index(const LogModel& model, int viewport_line_count) const
 {
     if (_follow_bottom)

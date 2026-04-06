@@ -17,7 +17,7 @@ Config parse_command_line(int argc, char* argv[])
     // clang-format off
     desc.add_options()
         ("help,h", "Show help message")
-        ("file,f", po::value<std::vector<std::string>>()->composing(), "Path to a log file. Repeat for multiple files.")
+        ("file,f", po::value<std::vector<std::string>>()->composing(), "Path to a log file to open on startup. Repeat for multiple files.")
         ("poll-interval-ms", po::value<int>()->default_value(250), "Polling interval in milliseconds");
     // clang-format on
 
@@ -46,13 +46,11 @@ Config parse_command_line(int argc, char* argv[])
             std::exit(0);
         }
 
-        if (variables.count("file") == 0U)
-        {
-            throw po::error("Missing required argument: --file");
-        }
-
         Config config;
-        config.file_paths       = variables["file"].as<std::vector<std::string>>();
+        if (variables.count("file") != 0U)
+        {
+            config.file_paths = variables["file"].as<std::vector<std::string>>();
+        }
         config.poll_interval_ms = variables["poll-interval-ms"].as<int>();
 
         if (config.poll_interval_ms <= 0)

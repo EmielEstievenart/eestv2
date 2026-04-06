@@ -145,4 +145,29 @@ TEST(LogControllerTest, SelectionTracksBoundsAndExtractsText)
     EXPECT_TRUE(controller.selection_text(model).empty());
 }
 
+TEST(LogControllerTest, ResetClearsControllerState)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines(numbered_lines(6));
+
+    controller.scroll_to_top(model, 2);
+    EXPECT_EQ(controller.first_visible_line_index(model, 2).value, 0);
+
+    ASSERT_TRUE(controller.set_find_query(model, "line", 2));
+    ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
+
+    controller.begin_selection(model, TextPosition {0, 1});
+    controller.update_selection(model, TextPosition {1, 2});
+    EXPECT_TRUE(controller.selection_in_progress());
+
+    controller.reset();
+
+    EXPECT_EQ(controller.first_visible_line_index(model, 2).value, 4);
+    EXPECT_FALSE(controller.active_find_visible_index(model).has_value());
+    EXPECT_FALSE(controller.selection_in_progress());
+    EXPECT_FALSE(controller.selection_bounds(model).has_value());
+    EXPECT_TRUE(controller.selection_text(model).empty());
+}
+
 } // namespace slayerlog

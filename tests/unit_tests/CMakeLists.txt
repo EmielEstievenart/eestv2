@@ -16,6 +16,7 @@ add_executable(
   flags/flags_tests.cpp
   slayerlog/file_watcher_tests.cpp
   slayerlog/command_palette_controller_tests.cpp
+  slayerlog/command_line_parser_tests.cpp
   slayerlog/command_history_tests.cpp
   slayerlog/command_manager_tests.cpp
   slayerlog/log_batch_tests.cpp
@@ -27,6 +28,8 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_model.hpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_history.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_history.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_manager.cpp
@@ -53,7 +56,8 @@ target_link_libraries(
           Boost::log
           Boost::log_setup
           Boost::filesystem
-          Boost::thread)
+          Boost::thread
+          Boost::program_options)
 
 target_compile_definitions(unit_tests PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
 target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog)

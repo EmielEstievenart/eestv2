@@ -76,6 +76,42 @@ TEST(LogModelTest, PausedUpdatesAppendWhenResumed)
                                      }));
 }
 
+TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
+{
+    LogModel model;
+    model.set_show_source_labels(true);
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error one"},
+        ObservedLogLine {"alpha.log", "info two"},
+    });
+    model.add_include_filter("error");
+    model.add_exclude_filter("ignore");
+    model.hide_before_line_number(2);
+    ASSERT_TRUE(model.set_find_query("error"));
+    model.toggle_pause();
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "queued while paused"},
+    });
+
+    model.reset();
+
+    EXPECT_EQ(model.line_count(), 0);
+    EXPECT_EQ(model.total_line_count(), 0);
+    EXPECT_TRUE(model.include_filters().empty());
+    EXPECT_TRUE(model.exclude_filters().empty());
+    EXPECT_FALSE(model.hidden_before_line_number().has_value());
+    EXPECT_FALSE(model.find_active());
+    EXPECT_EQ(model.total_find_match_count(), 0);
+    EXPECT_EQ(model.visible_find_match_count(), 0);
+    EXPECT_FALSE(model.updates_paused());
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "post-reset"},
+    });
+    EXPECT_EQ(model.rendered_line(0), "1 post-reset");
+}
+
 TEST(LogModelTest, RendersSourceLabelsWhenEnabled)
 {
     LogModel model;

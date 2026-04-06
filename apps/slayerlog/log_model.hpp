@@ -105,6 +105,9 @@ struct TextPosition
 class LogModel
 {
 public:
+    /** @brief Resets the model to its initial empty state. */
+    void reset();
+
     /** @brief Appends already ordered lines to the rendered log view. */
     void append_lines(const std::vector<ObservedLogLine>& lines);
     /** @brief Toggles update buffering so users can inspect the view without live movement. */

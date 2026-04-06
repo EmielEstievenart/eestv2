@@ -10,6 +10,24 @@
 namespace slayerlog
 {
 
+void LogModel::reset()
+{
+    _all_entries.clear();
+    _visible_entry_indices.clear();
+    _paused_updates.clear();
+
+    _include_filters.clear();
+    _exclude_filters.clear();
+
+    _find_query.clear();
+    _find_match_entry_indices.clear();
+
+    _hidden_before_line_number.reset();
+
+    _updates_paused     = false;
+    _show_source_labels = false;
+}
+
 void LogModel::append_lines(const std::vector<ObservedLogLine>& lines)
 {
     if (_updates_paused)
