@@ -23,6 +23,7 @@ public:
     const CommandPaletteModel& model() const;
 
     void open();
+    void open_history();
     void open_close_open_file_picker(std::vector<std::string> open_files,
                                      std::function<CommandResult(std::size_t selected_index)> on_confirm);
     void close();

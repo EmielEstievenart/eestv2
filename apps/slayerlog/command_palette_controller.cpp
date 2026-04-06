@@ -124,6 +124,20 @@ void CommandPaletteController::open()
     refresh_matches();
 }
 
+void CommandPaletteController::open_history()
+{
+    _model.open = true;
+    _model.mode = CommandPaletteMode::History;
+    _model.query.clear();
+    _model.open_files.clear();
+    _close_open_file_selection_handler = {};
+    _model.cursor_position             = 0;
+    _model.selected_index              = 0;
+    _model.status_message.clear();
+    _model.status_is_error = false;
+    refresh_matches();
+}
+
 void CommandPaletteController::open_close_open_file_picker(std::vector<std::string> open_files,
                                                            std::function<CommandResult(std::size_t selected_index)> on_confirm)
 {
