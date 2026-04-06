@@ -25,11 +25,13 @@ add_executable(
   slayerlog/log_timestamp_tests.cpp
   slayerlog/log_model_tests.cpp
   slayerlog/log_controller_tests.cpp
-  slayerlog/input_controller_tests.cpp
+  slayerlog/master_controller_tests.cpp
   slayerlog/settings_ini_tests.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_model.hpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_view.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_view.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_history.cpp
@@ -43,7 +45,10 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_batch.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_view.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_timestamp.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/input_controller.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_controller.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_controller.hpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/process_pipe.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.hpp

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include <ftxui/component/event.hpp>
+
 #include "log_controller.hpp"
 #include "log_model.hpp"
 
@@ -134,6 +136,52 @@ TEST(LogControllerTest, InvalidRegexFindKeepsExistingFindState)
     EXPECT_EQ(model.find_query(), "error");
     EXPECT_EQ(model.total_find_match_count(), 2);
     EXPECT_EQ(controller.active_find_visible_index(model), active_before);
+}
+
+TEST(LogControllerTest, HandleEventEscapeClearsFindBeforeRequestingExit)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error one"},
+        ObservedLogLine {"alpha.log", "error two"},
+    });
+    ASSERT_TRUE(controller.set_find_query(model, "error", 1));
+    ASSERT_TRUE(model.find_active());
+
+    const auto result = controller.handle_event(model, ftxui::Event::Escape, 1, {});
+
+    EXPECT_TRUE(result.handled);
+    EXPECT_FALSE(result.request_exit);
+    EXPECT_FALSE(model.find_active());
+    EXPECT_EQ(model.total_find_match_count(), 0);
+}
+
+TEST(LogControllerTest, HandleEventLeftAndRightArrowNavigateFindResults)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error one"},
+        ObservedLogLine {"alpha.log", "error two"},
+        ObservedLogLine {"alpha.log", "error three"},
+    });
+    ASSERT_TRUE(controller.set_find_query(model, "error", 1));
+    ASSERT_TRUE(controller.go_to_next_find_match(model, 1));
+    ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
+    EXPECT_EQ(controller.active_find_visible_index(model)->value, 1);
+
+    const auto previous_result = controller.handle_event(model, ftxui::Event::ArrowLeft, 1, {});
+    EXPECT_TRUE(previous_result.handled);
+    EXPECT_FALSE(previous_result.request_exit);
+    ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
+    EXPECT_EQ(controller.active_find_visible_index(model)->value, 0);
+
+    const auto next_result = controller.handle_event(model, ftxui::Event::ArrowRight, 1, {});
+    EXPECT_TRUE(next_result.handled);
+    EXPECT_FALSE(next_result.request_exit);
+    ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
+    EXPECT_EQ(controller.active_find_visible_index(model)->value, 1);
 }
 
 TEST(LogControllerTest, SelectionTracksBoundsAndExtractsText)

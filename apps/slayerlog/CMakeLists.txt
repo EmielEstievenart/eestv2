@@ -6,6 +6,8 @@ add_executable(
   command_palette_controller.cpp
   command_palette_controller.hpp
   command_palette_model.hpp
+  command_palette_view.cpp
+  command_palette_view.hpp
   command_history.cpp
   command_history.hpp
   command_manager.cpp
@@ -15,8 +17,6 @@ add_executable(
   debug_log.hpp
   file_watcher.cpp
   file_watcher.hpp
-  input_controller.cpp
-  input_controller.hpp
   log_source.cpp
   log_source.hpp
   log_watcher.hpp
@@ -26,6 +26,10 @@ add_executable(
   log_batch.hpp
   log_view.cpp
   log_view.hpp
+  master_controller.cpp
+  master_controller.hpp
+  master_view.cpp
+  master_view.hpp
   log_timestamp.cpp
   log_timestamp.hpp
   process_pipe.cpp

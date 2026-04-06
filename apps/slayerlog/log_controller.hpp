@@ -1,13 +1,29 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
+
+#ifdef _WIN32
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
+#endif
+
+#include <ftxui/component/event.hpp>
+#include <ftxui/component/mouse.hpp>
 
 #include "log_model.hpp"
 
 namespace slayerlog
 {
+
+struct LogEventResult
+{
+    bool handled      = false;
+    bool request_exit = false;
+};
 
 class LogController
 {
@@ -36,7 +52,12 @@ public:
     std::optional<std::pair<TextPosition, TextPosition>> selection_bounds(const LogModel& model) const;
     std::string selection_text(const LogModel& model) const;
 
+    LogEventResult handle_event(LogModel& model, ftxui::Event event, int viewport_line_count,
+                                const std::function<std::optional<TextPosition>(const ftxui::Mouse& mouse)>& mouse_to_text_position);
+
 private:
+    bool copy_selection_to_clipboard(const LogModel& model) const;
+
     int max_first_visible_line_index(const LogModel& model, int viewport_line_count) const;
     void center_on_visible_line(const LogModel& model, VisibleLineIndex target_visible_index, int viewport_line_count);
     TextPosition clamp_selection_position(const LogModel& model, TextPosition position) const;

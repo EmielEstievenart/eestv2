@@ -23,14 +23,16 @@
 #include "command_palette_controller.hpp"
 #include "command_palette_model.hpp"
 #include "command_manager.hpp"
+#include "command_palette_view.hpp"
 #include "debug_log.hpp"
 #include "file_watcher.hpp"
-#include "input_controller.hpp"
 #include "log_batch.hpp"
 #include "log_controller.hpp"
 #include "log_source.hpp"
 #include "log_view.hpp"
 #include "log_watcher.hpp"
+#include "master_controller.hpp"
+#include "master_view.hpp"
 #include "ssh_tail_watcher.hpp"
 #include "log_model.hpp"
 #include "settings_store.hpp"
@@ -483,6 +485,8 @@ int main(int argc, char** argv)
     slayerlog::CommandPaletteModel command_palette_model;
     slayerlog::CommandManager command_manager;
     slayerlog::LogView view;
+    slayerlog::CommandPaletteView command_palette_view;
+    slayerlog::MasterView master_view(view, command_palette_view);
     slayerlog::LogController controller;
     auto watched_files = create_file_watchers(tracked_sources, source_labels);
 
@@ -554,7 +558,7 @@ int main(int argc, char** argv)
             return slayerlog::CommandResult {true, "Select a file to close", false};
         });
 
-    slayerlog::InputController input_controller(model, controller, view, screen, command_palette_controller);
+    slayerlog::MasterController master_controller(model, controller, view, screen, command_palette_controller);
 
     try
     {
@@ -576,14 +580,14 @@ int main(int argc, char** argv)
         [&]
         {
             std::lock_guard lock(model_mutex);
-            return view.render(model, controller, header_text, screen.dimy(), input_controller.command_palette());
+            return master_view.render(model, controller, header_text, screen.dimy(), command_palette_controller.model());
         });
 
     viewer |= ftxui::CatchEvent(
         [&](ftxui::Event event)
         {
             std::lock_guard lock(model_mutex);
-            return input_controller.handle_event(event);
+            return master_controller.handle_event(event);
         });
 
     screen.Loop(viewer);
