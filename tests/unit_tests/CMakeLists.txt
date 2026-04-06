@@ -15,6 +15,8 @@ add_executable(
   data_bridge/data_bridge_cli_tests.cpp
   flags/flags_tests.cpp
   slayerlog/file_watcher_tests.cpp
+  slayerlog/log_source_tests.cpp
+  slayerlog/stream_line_buffer_tests.cpp
   slayerlog/command_palette_controller_tests.cpp
   slayerlog/command_line_parser_tests.cpp
   slayerlog/command_history_tests.cpp
@@ -36,15 +38,19 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_manager.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/debug_log.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/file_watcher.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_source.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_batch.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_view.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_timestamp.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/input_controller.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/process_pipe.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.hpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/ssh_tail_watcher.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/stream_line_buffer.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_model.cpp)
 
 # Link libraries (assuming eestv_lib provides sources and Boost)

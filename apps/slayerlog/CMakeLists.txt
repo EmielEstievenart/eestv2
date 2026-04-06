@@ -17,6 +17,9 @@ add_executable(
   file_watcher.hpp
   input_controller.cpp
   input_controller.hpp
+  log_source.cpp
+  log_source.hpp
+  log_watcher.hpp
   log_controller.cpp
   log_controller.hpp
   log_batch.cpp
@@ -25,10 +28,16 @@ add_executable(
   log_view.hpp
   log_timestamp.cpp
   log_timestamp.hpp
+  process_pipe.cpp
+  process_pipe.hpp
   settings_ini.cpp
   settings_ini.hpp
   settings_store.cpp
   settings_store.hpp
+  ssh_tail_watcher.cpp
+  ssh_tail_watcher.hpp
+  stream_line_buffer.cpp
+  stream_line_buffer.hpp
   log_model.cpp
   log_model.hpp)
 

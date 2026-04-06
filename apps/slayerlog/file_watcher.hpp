@@ -6,18 +6,20 @@
 #include <string_view>
 #include <vector>
 
+#include "log_watcher.hpp"
+
 namespace slayerlog
 {
 
-class FileWatcher
+class FileWatcher : public LogWatcher
 {
 public:
     explicit FileWatcher(std::string file_path);
 
-    FileWatcher(const FileWatcher&) = delete;
+    FileWatcher(const FileWatcher&)            = delete;
     FileWatcher& operator=(const FileWatcher&) = delete;
 
-    bool poll(std::vector<std::string>& lines);
+    bool poll(std::vector<std::string>& lines) override;
 
 private:
     struct State
@@ -25,7 +27,7 @@ private:
         std::uintmax_t offset = 0;
         std::string pending_fragment;
         std::string offset_tail_bytes;
-        bool awaiting_regrowth_after_shrink = false;
+        bool awaiting_regrowth_after_shrink  = false;
         std::uintmax_t shrink_candidate_size = 0;
     };
 

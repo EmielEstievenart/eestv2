@@ -1,9 +1,7 @@
-#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cctype>
 #include <exception>
-#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -12,9 +10,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <thread>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -31,45 +27,15 @@
 #include "input_controller.hpp"
 #include "log_batch.hpp"
 #include "log_controller.hpp"
+#include "log_source.hpp"
 #include "log_view.hpp"
+#include "log_watcher.hpp"
+#include "ssh_tail_watcher.hpp"
 #include "log_model.hpp"
 #include "settings_store.hpp"
 
 namespace
 {
-
-/**
- * @brief Builds the display label for each opened source file.
- *
- * Uses the basename when it is unique across all opened files, otherwise falls
- * back to the full path so duplicate filenames remain distinguishable.
- */
-std::vector<std::string> build_source_labels(const std::vector<std::string>& file_paths)
-{
-    std::unordered_map<std::string, int> basename_counts;
-    for (const auto& file_path : file_paths)
-    {
-        const auto basename = std::filesystem::path(file_path).filename().string();
-        ++basename_counts[basename];
-    }
-
-    std::vector<std::string> labels;
-    labels.reserve(file_paths.size());
-    for (const auto& file_path : file_paths)
-    {
-        const auto basename = std::filesystem::path(file_path).filename().string();
-        if (!basename.empty() && basename_counts[basename] == 1)
-        {
-            labels.push_back(basename);
-        }
-        else
-        {
-            labels.push_back(file_path);
-        }
-    }
-
-    return labels;
-}
 
 /**
  * @brief Joins the source labels into the header text shown in the UI.
@@ -139,60 +105,53 @@ std::string trim_text(std::string_view text)
     return std::string(text.substr(start, end - start));
 }
 
-std::string normalize_file_path_for_comparison(std::string_view file_path)
+std::vector<slayerlog::LogSource> parse_log_sources(const std::vector<std::string>& specs)
 {
-    const std::filesystem::path input_path(file_path);
-    std::error_code error_code;
-    std::filesystem::path normalized_path = std::filesystem::weakly_canonical(input_path, error_code);
-    if (error_code)
+    std::vector<slayerlog::LogSource> sources;
+    sources.reserve(specs.size());
+    for (const std::string& spec : specs)
     {
-        error_code.clear();
-        normalized_path = std::filesystem::absolute(input_path, error_code);
-        if (error_code)
-        {
-            normalized_path = input_path.lexically_normal();
-        }
-        else
-        {
-            normalized_path = normalized_path.lexically_normal();
-        }
+        sources.push_back(slayerlog::parse_log_source(spec));
     }
 
-    std::string normalized_text = normalized_path.make_preferred().string();
-#ifdef _WIN32
-    std::transform(normalized_text.begin(), normalized_text.end(), normalized_text.begin(),
-                   [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
-#endif
-
-    return normalized_text;
+    return sources;
 }
 
-bool contains_tracked_file_path(const std::vector<std::string>& tracked_file_paths, std::string_view candidate_file_path)
+bool contains_tracked_source(const std::vector<slayerlog::LogSource>& tracked_sources, const slayerlog::LogSource& candidate_source)
 {
-    const std::string normalized_candidate_path = normalize_file_path_for_comparison(candidate_file_path);
-
-    return std::any_of(tracked_file_paths.begin(), tracked_file_paths.end(), [&](const std::string& tracked_file_path)
-                       { return normalize_file_path_for_comparison(tracked_file_path) == normalized_candidate_path; });
+    return std::any_of(tracked_sources.begin(), tracked_sources.end(), [&](const slayerlog::LogSource& tracked_source)
+                       { return slayerlog::same_source(tracked_source, candidate_source); });
 }
 
 struct WatchedFile
 {
-    std::string file_path;
+    slayerlog::LogSource source;
     std::string source_label;
-    std::unique_ptr<slayerlog::FileWatcher> watcher;
+    std::unique_ptr<slayerlog::LogWatcher> watcher;
 };
 
-std::vector<WatchedFile> create_file_watchers(const std::vector<std::string>& file_paths, const std::vector<std::string>& source_labels)
+std::unique_ptr<slayerlog::LogWatcher> create_watcher_for_source(const slayerlog::LogSource& source)
+{
+    if (source.kind == slayerlog::LogSourceKind::SshRemoteFile)
+    {
+        return std::make_unique<slayerlog::SshTailWatcher>(source);
+    }
+
+    return std::make_unique<slayerlog::FileWatcher>(source.local_path);
+}
+
+std::vector<WatchedFile> create_file_watchers(const std::vector<slayerlog::LogSource>& sources,
+                                              const std::vector<std::string>& source_labels)
 {
     std::vector<WatchedFile> watched_files;
-    watched_files.reserve(file_paths.size());
+    watched_files.reserve(sources.size());
 
-    for (std::size_t index = 0; index < file_paths.size(); ++index)
+    for (std::size_t index = 0; index < sources.size(); ++index)
     {
         watched_files.push_back(WatchedFile {
-            file_paths[index],
+            sources[index],
             source_labels[index],
-            std::make_unique<slayerlog::FileWatcher>(file_paths[index]),
+            create_watcher_for_source(sources[index]),
         });
     }
 
@@ -208,7 +167,8 @@ std::vector<slayerlog::WatcherLineBatch> collect_watcher_batches(std::vector<Wat
     {
         slayerlog::WatcherLineBatch watcher_batch;
         watched_file.watcher->poll(watcher_batch);
-        SLAYERLOG_LOG_TRACE("Initial poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
+        SLAYERLOG_LOG_TRACE("Initial poll source=" << slayerlog::source_display_path(watched_file.source)
+                                                   << " returned_lines=" << watcher_batch.size());
         watcher_batches.push_back(std::move(watcher_batch));
     }
 
@@ -261,15 +221,18 @@ std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>&
                         catch (const std::exception& ex)
                         {
                             // Ignore transient read errors while another process is writing.
-                            SLAYERLOG_LOG_WARNING("Watcher poll threw for file=" << watched_file.file_path << " error=" << ex.what());
+                            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << slayerlog::source_display_path(watched_file.source)
+                                                                                   << " error=" << ex.what());
                         }
                         catch (...)
                         {
                             // Ignore transient read errors while another process is writing.
-                            SLAYERLOG_LOG_WARNING("Watcher poll threw for file=" << watched_file.file_path << " error=<unknown>");
+                            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << slayerlog::source_display_path(watched_file.source)
+                                                                                   << " error=<unknown>");
                         }
 
-                        SLAYERLOG_LOG_TRACE("Live poll file=" << watched_file.file_path << " returned_lines=" << watcher_batch.size());
+                        SLAYERLOG_LOG_TRACE("Live poll source=" << slayerlog::source_display_path(watched_file.source)
+                                                                << " returned_lines=" << watcher_batch.size());
                         watcher_batches.push_back(std::move(watcher_batch));
                     }
 
@@ -444,14 +407,15 @@ int main(int argc, char** argv)
     slayerlog::debug_log::initialize();
     SLAYERLOG_LOG_INFO("Debug log initialized at " << slayerlog::debug_log::log_file_path().string());
 
-    const auto config                           = slayerlog::parse_command_line(argc, argv);
-    std::vector<std::string> tracked_file_paths = config.file_paths;
-    auto source_labels                          = build_source_labels(tracked_file_paths);
-    std::string header_text                     = build_header_text(source_labels);
+    const auto config                                 = slayerlog::parse_command_line(argc, argv);
+    std::vector<slayerlog::LogSource> tracked_sources = parse_log_sources(config.file_paths);
+    auto source_labels                                = slayerlog::build_source_labels(tracked_sources);
+    std::string header_text                           = build_header_text(source_labels);
     SLAYERLOG_LOG_INFO("Starting slayerlog poll_interval_ms=" << config.poll_interval_ms << " watched_files=" << config.file_paths.size());
-    for (std::size_t index = 0; index < tracked_file_paths.size(); ++index)
+    for (std::size_t index = 0; index < tracked_sources.size(); ++index)
     {
-        SLAYERLOG_LOG_INFO("Configured watcher[" << index << "] file=" << tracked_file_paths[index] << " label=" << source_labels[index]);
+        SLAYERLOG_LOG_INFO("Configured watcher[" << index << "] source=" << slayerlog::source_display_path(tracked_sources[index])
+                                                 << " label=" << source_labels[index]);
     }
 
     auto screen = ftxui::ScreenInteractive::Fullscreen();
@@ -459,7 +423,7 @@ int main(int argc, char** argv)
 
     std::mutex model_mutex;
     slayerlog::LogModel model;
-    model.set_show_source_labels(tracked_file_paths.size() > 1);
+    model.set_show_source_labels(tracked_sources.size() > 1);
 
     slayerlog::SettingsStore settings_store(slayerlog::default_settings_file_path());
     slayerlog::CommandHistory command_history(settings_store);
@@ -473,28 +437,38 @@ int main(int argc, char** argv)
     slayerlog::CommandManager command_manager;
     slayerlog::LogView view;
     slayerlog::LogController controller;
-    auto watched_files = create_file_watchers(tracked_file_paths, source_labels);
+    auto watched_files = create_file_watchers(tracked_sources, source_labels);
 
     register_commands(
         command_manager, model, controller, [&] { return view.visible_line_count(screen.dimy()); },
         [&](std::string_view file_path)
         {
-            if (contains_tracked_file_path(tracked_file_paths, file_path))
+            slayerlog::LogSource candidate_source;
+            try
+            {
+                candidate_source = slayerlog::parse_log_source(file_path);
+            }
+            catch (const std::exception& ex)
+            {
+                return slayerlog::CommandResult {false, ex.what()};
+            }
+
+            if (contains_tracked_source(tracked_sources, candidate_source))
             {
                 return slayerlog::CommandResult {false, "File already open: " + std::string(file_path)};
             }
 
-            std::vector<std::string> candidate_file_paths = tracked_file_paths;
-            candidate_file_paths.push_back(std::string(file_path));
+            std::vector<slayerlog::LogSource> candidate_sources = tracked_sources;
+            candidate_sources.push_back(candidate_source);
 
-            auto candidate_source_labels = build_source_labels(candidate_file_paths);
+            auto candidate_source_labels = slayerlog::build_source_labels(candidate_sources);
             std::string candidate_header = build_header_text(candidate_source_labels);
             std::vector<WatchedFile> candidate_watchers;
             std::vector<slayerlog::WatcherLineBatch> candidate_batches;
 
             try
             {
-                candidate_watchers = create_file_watchers(candidate_file_paths, candidate_source_labels);
+                candidate_watchers = create_file_watchers(candidate_sources, candidate_source_labels);
                 candidate_batches  = collect_watcher_batches(candidate_watchers);
             }
             catch (const std::exception& ex)
@@ -503,14 +477,14 @@ int main(int argc, char** argv)
                 return slayerlog::CommandResult {false, ex.what()};
             }
 
-            tracked_file_paths = std::move(candidate_file_paths);
-            source_labels      = std::move(candidate_source_labels);
-            header_text        = std::move(candidate_header);
-            watched_files      = std::move(candidate_watchers);
+            tracked_sources = std::move(candidate_sources);
+            source_labels   = std::move(candidate_source_labels);
+            header_text     = std::move(candidate_header);
+            watched_files   = std::move(candidate_watchers);
 
             model.reset();
             controller.reset();
-            model.set_show_source_labels(tracked_file_paths.size() > 1);
+            model.set_show_source_labels(tracked_sources.size() > 1);
             append_batch_to_model(candidate_batches, source_labels, model, screen);
 
             return slayerlog::CommandResult {true, "Opened file: " + std::string(file_path)};

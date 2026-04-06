@@ -20,9 +20,12 @@ void LogModel::reset()
 
     _include_filters.clear();
     _exclude_filters.clear();
+    _include_filter_patterns.clear();
+    _exclude_filter_patterns.clear();
 
     _find_query.clear();
     _find_match_entry_indices.clear();
+    _find_pattern.reset();
 
     _hidden_before_line_number.reset();
 
