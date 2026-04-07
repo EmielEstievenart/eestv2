@@ -1,263 +1,224 @@
 #pragma once
 
-#include <boost/log/trivial.hpp>
+#include <log4cplus/configurator.h>
+#include <log4cplus/initializer.h>
+#include <log4cplus/logger.h>
+#include <log4cplus/loglevel.h>
+#include <log4cplus/tstring.h>
 
-#include <chrono>
-#include <ctime>
+#include <array>
 #include <filesystem>
-#include <fstream>
-#include <iomanip>
-#include <ios>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <thread>
+
+#ifdef _WIN32
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
+#    include <windows.h>
+#endif
+
+#if defined(__linux__)
+#    include <unistd.h>
+#endif
 
 namespace slayerlog
 {
 namespace debug_log
 {
 
-inline constexpr std::size_t max_log_file_size_bytes = 4u * 1024u * 1024u;
-
-inline const char* get_filename(const char* path)
+enum class Severity
 {
-    const char* filename = path;
-    for (const char* current = path; *current != '\0'; ++current)
+    Trace,
+    Debug,
+    Info,
+    Warning,
+    Error,
+};
+
+inline std::filesystem::path executable_directory(const char* argv0)
+{
+#ifdef _WIN32
+    std::array<char, MAX_PATH> module_path {};
+    const auto module_path_length = GetModuleFileNameA(nullptr, module_path.data(), static_cast<DWORD>(module_path.size()));
+    if (module_path_length > 0 && module_path_length < module_path.size())
     {
-        if (*current == '/' || *current == '\\')
-        {
-            filename = current + 1;
-        }
+        return std::filesystem::path(std::string(module_path.data(), module_path_length)).parent_path();
     }
+#endif
 
-    return filename;
-}
+#if defined(__linux__)
+    std::array<char, 4096> module_path {};
+    const auto module_path_length = readlink("/proc/self/exe", module_path.data(), module_path.size());
+    if (module_path_length > 0)
+    {
+        return std::filesystem::path(std::string(module_path.data(), static_cast<std::size_t>(module_path_length))).parent_path();
+    }
+#endif
 
-inline std::filesystem::path compute_log_file_path()
-{
     try
     {
-        return std::filesystem::current_path() / "slayerlog_debug.log";
+        if (argv0 != nullptr)
+        {
+            const std::filesystem::path executable_path(argv0);
+            if (executable_path.has_parent_path())
+            {
+                std::error_code error;
+                const auto absolute_path = std::filesystem::absolute(executable_path, error);
+                if (!error)
+                {
+                    return absolute_path.parent_path();
+                }
+
+                return executable_path.parent_path();
+            }
+        }
+
+        return std::filesystem::current_path();
     }
     catch (...)
     {
-        return "slayerlog_debug.log";
+        return ".";
     }
+}
+
+struct RuntimePaths
+{
+    std::filesystem::path executable_dir;
+    std::filesystem::path config_file;
+    std::filesystem::path log_file;
+};
+
+inline RuntimePaths& runtime_paths()
+{
+    static RuntimePaths paths;
+    return paths;
+}
+
+inline std::unique_ptr<log4cplus::Initializer>& log4cplus_initializer()
+{
+    static std::unique_ptr<log4cplus::Initializer> initializer;
+    return initializer;
+}
+
+inline log4cplus::Logger& logger()
+{
+    static log4cplus::Logger instance = log4cplus::Logger::getInstance(LOG4CPLUS_TEXT("slayerlog"));
+    return instance;
+}
+
+inline log4cplus::LogLevel to_log_level(Severity severity)
+{
+    switch (severity)
+    {
+    case Severity::Trace:
+        return log4cplus::TRACE_LOG_LEVEL;
+    case Severity::Debug:
+        return log4cplus::DEBUG_LOG_LEVEL;
+    case Severity::Info:
+        return log4cplus::INFO_LOG_LEVEL;
+    case Severity::Warning:
+        return log4cplus::WARN_LOG_LEVEL;
+    case Severity::Error:
+        return log4cplus::ERROR_LOG_LEVEL;
+    default:
+        return log4cplus::INFO_LOG_LEVEL;
+    }
+}
+
+inline void configure_logging()
+{
+    try
+    {
+        auto properties = log4cplus::helpers::Properties(LOG4CPLUS_C_STR_TO_TSTRING(runtime_paths().config_file.string().c_str()),
+                                                         log4cplus::helpers::Properties::fThrow);
+        properties.setProperty(LOG4CPLUS_TEXT("log4cplus.appender.ROLLING.File"),
+                               LOG4CPLUS_C_STR_TO_TSTRING(runtime_paths().log_file.string().c_str()));
+        log4cplus::PropertyConfigurator(properties).configure();
+    }
+    catch (...)
+    {
+        log4cplus::BasicConfigurator config;
+        config.configure();
+    }
+}
+
+inline void initialize(const char* argv0 = nullptr)
+{
+    static std::once_flag initialized;
+    std::call_once(initialized,
+                   [argv0]
+                   {
+                       runtime_paths().executable_dir = executable_directory(argv0);
+                       runtime_paths().config_file    = runtime_paths().executable_dir / "log4cplus.ini";
+                       runtime_paths().log_file       = runtime_paths().executable_dir / "slayerlog_debug.log";
+
+                       std::error_code error;
+                       std::filesystem::create_directories(runtime_paths().executable_dir, error);
+
+                       log4cplus_initializer() = std::make_unique<log4cplus::Initializer>();
+                       configure_logging();
+                   });
 }
 
 inline const std::filesystem::path& log_file_path()
 {
-    static const std::filesystem::path path = compute_log_file_path();
-    return path;
+    initialize();
+    return runtime_paths().log_file;
 }
 
-inline std::filesystem::path log_directory_path()
-{
-    const auto& path = log_file_path();
-    return path.has_parent_path() ? path.parent_path() : std::filesystem::path(".");
-}
-
-inline std::filesystem::path rollover_log_file_path()
-{
-    return log_directory_path() / "slayerlog_debug_1.log";
-}
-
-inline std::mutex& log_mutex()
-{
-    static std::mutex instance;
-    return instance;
-}
-
-inline const char* severity_name(boost::log::trivial::severity_level severity)
-{
-    switch (severity)
-    {
-    case boost::log::trivial::trace:
-        return "trace";
-    case boost::log::trivial::debug:
-        return "debug";
-    case boost::log::trivial::info:
-        return "info";
-    case boost::log::trivial::warning:
-        return "warning";
-    case boost::log::trivial::error:
-        return "error";
-    case boost::log::trivial::fatal:
-        return "fatal";
-    default:
-        return "unknown";
-    }
-}
-
-inline void prune_old_rollover_files()
-{
-    std::error_code error;
-    const auto directory = log_directory_path();
-    std::filesystem::create_directories(directory, error);
-    error.clear();
-
-    const auto keep_path = rollover_log_file_path().filename().string();
-    for (const auto& entry : std::filesystem::directory_iterator(directory, error))
-    {
-        if (error)
-        {
-            return;
-        }
-
-        if (!entry.is_regular_file(error) || error)
-        {
-            error.clear();
-            continue;
-        }
-
-        const auto filename = entry.path().filename().string();
-        if (filename == keep_path)
-        {
-            continue;
-        }
-
-        if (filename.rfind("slayerlog_debug_", 0) == 0 && entry.path().extension() == ".log")
-        {
-            std::filesystem::remove(entry.path(), error);
-            error.clear();
-        }
-    }
-}
-
-inline void rotate_log_file_if_needed(std::size_t bytes_to_write)
-{
-    std::error_code error;
-    const auto active_path   = log_file_path();
-    const auto rollover_path = rollover_log_file_path();
-
-    const auto current_size = std::filesystem::exists(active_path, error) ? std::filesystem::file_size(active_path, error) : 0;
-    if (error || current_size + bytes_to_write <= max_log_file_size_bytes)
-    {
-        return;
-    }
-
-    std::filesystem::remove(rollover_path, error);
-    error.clear();
-
-    std::filesystem::rename(active_path, rollover_path, error);
-    if (!error)
-    {
-        return;
-    }
-
-    error.clear();
-    std::filesystem::copy_file(active_path, rollover_path, std::filesystem::copy_options::overwrite_existing, error);
-    if (error)
-    {
-        return;
-    }
-
-    error.clear();
-    std::ofstream truncate_output(active_path, std::ios::trunc);
-}
-
-inline std::string format_timestamp()
-{
-    const auto now    = std::chrono::system_clock::now();
-    const auto time   = std::chrono::system_clock::to_time_t(now);
-    const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()) % std::chrono::seconds(1);
-
-    std::tm local_time {};
-#ifdef _WIN32
-    localtime_s(&local_time, &time);
-#else
-    localtime_r(&time, &local_time);
-#endif
-
-    std::ostringstream output;
-    output << std::put_time(&local_time, "%Y-%m-%d %H:%M:%S") << "." << std::setw(6) << std::setfill('0') << micros.count();
-    return output.str();
-}
-
-inline std::string format_thread_id()
-{
-    std::ostringstream output;
-    output << std::this_thread::get_id();
-    return output.str();
-}
-
-inline void initialize()
-{
-    static std::once_flag initialized;
-    std::call_once(initialized,
-                   []
-                   {
-                       std::error_code error;
-                       std::filesystem::create_directories(log_directory_path(), error);
-                       prune_old_rollover_files();
-                   });
-}
-
-inline void write(boost::log::trivial::severity_level severity, const char* file, int line, const char* function_name,
-                  const std::string& message)
+inline void write(Severity severity, const char* file, int line, const char* function_name, const std::string& message)
 {
     initialize();
-
-    std::lock_guard<std::mutex> lock(log_mutex());
-
-    std::ostringstream record;
-    record << "[" << format_timestamp() << "] "
-           << "[" << severity_name(severity) << "] "
-           << "[" << format_thread_id() << "] " << get_filename(file) << ":" << line << " [" << function_name << "] " << message << "\n";
-
-    const auto text = record.str();
-    rotate_log_file_if_needed(text.size());
-
-    std::ofstream output(log_file_path(), std::ios::app);
-    if (!output.is_open())
-    {
-        return;
-    }
-
-    output << text;
-    output.flush();
+    logger().log(to_log_level(severity), LOG4CPLUS_C_STR_TO_TSTRING(message.c_str()), file, line, function_name);
 }
 
 } // namespace debug_log
 } // namespace slayerlog
 
-#define SLAYERLOG_LOG_ERROR(message)                                                                                               \
-    do                                                                                                                             \
-    {                                                                                                                              \
-        std::ostringstream slayerlog_debug_stream__;                                                                               \
-        slayerlog_debug_stream__ << message;                                                                                       \
-        ::slayerlog::debug_log::write(::boost::log::trivial::error, __FILE__, __LINE__, __func__, slayerlog_debug_stream__.str()); \
+#define SLAYERLOG_LOG_ERROR(message)                                                                         \
+    do                                                                                                       \
+    {                                                                                                        \
+        std::ostringstream slayerlog_debug_stream__;                                                         \
+        slayerlog_debug_stream__ << message;                                                                 \
+        ::slayerlog::debug_log::write(::slayerlog::debug_log::Severity::Error, __FILE__, __LINE__, __func__, \
+                                      slayerlog_debug_stream__.str());                                       \
     } while (0)
 
-#define SLAYERLOG_LOG_WARNING(message)                                                                                               \
-    do                                                                                                                               \
-    {                                                                                                                                \
-        std::ostringstream slayerlog_debug_stream__;                                                                                 \
-        slayerlog_debug_stream__ << message;                                                                                         \
-        ::slayerlog::debug_log::write(::boost::log::trivial::warning, __FILE__, __LINE__, __func__, slayerlog_debug_stream__.str()); \
+#define SLAYERLOG_LOG_WARNING(message)                                                                         \
+    do                                                                                                         \
+    {                                                                                                          \
+        std::ostringstream slayerlog_debug_stream__;                                                           \
+        slayerlog_debug_stream__ << message;                                                                   \
+        ::slayerlog::debug_log::write(::slayerlog::debug_log::Severity::Warning, __FILE__, __LINE__, __func__, \
+                                      slayerlog_debug_stream__.str());                                         \
     } while (0)
 
-#define SLAYERLOG_LOG_INFO(message)                                                                                               \
-    do                                                                                                                            \
-    {                                                                                                                             \
-        std::ostringstream slayerlog_debug_stream__;                                                                              \
-        slayerlog_debug_stream__ << message;                                                                                      \
-        ::slayerlog::debug_log::write(::boost::log::trivial::info, __FILE__, __LINE__, __func__, slayerlog_debug_stream__.str()); \
+#define SLAYERLOG_LOG_INFO(message)                                                                         \
+    do                                                                                                      \
+    {                                                                                                       \
+        std::ostringstream slayerlog_debug_stream__;                                                        \
+        slayerlog_debug_stream__ << message;                                                                \
+        ::slayerlog::debug_log::write(::slayerlog::debug_log::Severity::Info, __FILE__, __LINE__, __func__, \
+                                      slayerlog_debug_stream__.str());                                      \
     } while (0)
 
-#define SLAYERLOG_LOG_DEBUG(message)                                                                                               \
-    do                                                                                                                             \
-    {                                                                                                                              \
-        std::ostringstream slayerlog_debug_stream__;                                                                               \
-        slayerlog_debug_stream__ << message;                                                                                       \
-        ::slayerlog::debug_log::write(::boost::log::trivial::debug, __FILE__, __LINE__, __func__, slayerlog_debug_stream__.str()); \
+#define SLAYERLOG_LOG_DEBUG(message)                                                                         \
+    do                                                                                                       \
+    {                                                                                                        \
+        std::ostringstream slayerlog_debug_stream__;                                                         \
+        slayerlog_debug_stream__ << message;                                                                 \
+        ::slayerlog::debug_log::write(::slayerlog::debug_log::Severity::Debug, __FILE__, __LINE__, __func__, \
+                                      slayerlog_debug_stream__.str());                                       \
     } while (0)
 
-#define SLAYERLOG_LOG_TRACE(message)                                                                                               \
-    do                                                                                                                             \
-    {                                                                                                                              \
-        std::ostringstream slayerlog_debug_stream__;                                                                               \
-        slayerlog_debug_stream__ << message;                                                                                       \
-        ::slayerlog::debug_log::write(::boost::log::trivial::trace, __FILE__, __LINE__, __func__, slayerlog_debug_stream__.str()); \
+#define SLAYERLOG_LOG_TRACE(message)                                                                         \
+    do                                                                                                       \
+    {                                                                                                        \
+        std::ostringstream slayerlog_debug_stream__;                                                         \
+        slayerlog_debug_stream__ << message;                                                                 \
+        ::slayerlog::debug_log::write(::slayerlog::debug_log::Severity::Trace, __FILE__, __LINE__, __func__, \
+                                      slayerlog_debug_stream__.str());                                       \
     } while (0)

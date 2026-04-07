@@ -44,6 +44,7 @@ add_executable(
   stream_line_buffer.hpp
   log_model.cpp
   log_model.hpp
+  log4cplus.ini
   view_theme.hpp)
 
 target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
@@ -52,7 +53,11 @@ target_link_libraries(
   slayerlog
   PRIVATE component
           Boost::program_options
-          Boost::log
-          Boost::log_setup
-          Boost::filesystem
-          Boost::thread)
+          log4cplus::log4cplus)
+
+add_custom_command(
+  TARGET slayerlog
+  POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/log4cplus.ini"
+          "$<TARGET_FILE_DIR:slayerlog>/log4cplus.ini"
+  COMMENT "Copy log4cplus.ini next to slayerlog executable")

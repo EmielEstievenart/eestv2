@@ -61,7 +61,7 @@ set(FTXUI_BUILD_DOCS
     CACHE BOOL "Disable FTXUI docs in the superproject" FORCE)
 set(FTXUI_BUILD_EXAMPLES
     OFF
-    CACHE BOOL "Disable FTXUI examples in the superproject" FORCE)
+    CACHE BOOL "Disable FTXUI examples in the superproject")
 set(FTXUI_BUILD_TESTS
     OFF
     CACHE BOOL "Disable FTXUI tests in the superproject" FORCE)
@@ -84,6 +84,27 @@ if(WIN32)
       CACHE BOOL "Disable pthreads for GoogleTest on Windows" FORCE)
 endif()
 add_subdirectory(libs/googletest)
+
+# Keep log4cplus lean in the superproject build.
+set(LOG4CPLUS_BUILD_TESTING
+    OFF
+    CACHE BOOL "Disable log4cplus tests in the superproject" FORCE)
+set(LOG4CPLUS_BUILD_LOGGINGSERVER
+    OFF
+    CACHE BOOL "Disable log4cplus logging server in the superproject" FORCE)
+set(WITH_UNIT_TESTS
+    OFF
+    CACHE BOOL "Disable log4cplus unit tests in the superproject" FORCE)
+set(_WIN32_WINNT
+    0x0601
+    CACHE STRING "Windows API version for log4cplus" FORCE)
+if(NOT DEFINED BUILD_SHARED_LIBS)
+  set(BUILD_SHARED_LIBS
+      OFF
+      CACHE BOOL "Build static libraries by default")
+endif()
+add_subdirectory(libs/log4cplus)
+
 add_subdirectory(code)
 add_subdirectory(apps)
 add_subdirectory(examples)

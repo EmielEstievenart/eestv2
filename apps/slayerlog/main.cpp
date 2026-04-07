@@ -453,7 +453,7 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
 
 int main(int argc, char** argv)
 {
-    slayerlog::debug_log::initialize();
+    slayerlog::debug_log::initialize(argc > 0 ? argv[0] : nullptr);
     SLAYERLOG_LOG_INFO("Debug log initialized at " << slayerlog::debug_log::log_file_path().string());
 
     const auto config                                 = slayerlog::parse_command_line(argc, argv);
