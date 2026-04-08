@@ -1,6 +1,7 @@
 #include "text_view_controller.hpp"
 
 #include <ftxui/component/event.hpp>
+#include <ftxui/screen/color.hpp>
 
 #include <algorithm>
 #include <utility>
@@ -66,6 +67,19 @@ void TextViewController::scroll_right(int amount)
 {
     const int step     = std::max(1, amount);
     _first_visible_col = std::min(max_first_visible_col(), _first_visible_col + step);
+}
+
+void TextViewController::set_background_column_range(int col_start, int col_end, ftxui::Color color)
+{
+    _col_highlight.col_start = col_start;
+    _col_highlight.col_end   = col_end;
+    _col_highlight.color     = color;
+    _col_highlight.active    = true;
+}
+
+void TextViewController::clear_background_column_range()
+{
+    _col_highlight.active = false;
 }
 
 void TextViewController::scroll_up(int amount, int viewport_line_count)
@@ -205,6 +219,7 @@ TextViewRenderData TextViewController::render_data(int viewport_line_count) cons
     data.first_visible_col   = first_col;
     data.max_line_width      = _model.max_line_width();
     data.viewport_col_count  = safe_col_viewport;
+    data.col_highlight       = _col_highlight;
 
     const int end = std::min(total, first + safe_viewport);
     data.visible_lines.reserve(static_cast<std::size_t>(std::max(0, end - first)));

@@ -11,6 +11,43 @@ int effective_viewport_line_count(const TextViewRenderData& data)
     return std::max(1, data.viewport_line_count);
 }
 
+// Renders one visible line, applying a background-color highlight over the
+// columns that fall within data.col_highlight (model-space).  The string
+// `visible_text` already starts at `first_visible_col`, so the highlight range
+// must be translated into that viewport-relative coordinate space before
+// splitting the string into before / highlighted / after segments.
+ftxui::Element render_highlighted_line(const std::string& visible_text, const TextViewRenderData& data)
+{
+    const TextViewColumnHighlight& hl = data.col_highlight;
+
+    if (!hl.active || hl.col_start >= hl.col_end)
+    {
+        return ftxui::text(visible_text);
+    }
+
+    const int len      = static_cast<int>(visible_text.size());
+    const int vp_start = std::max(0, hl.col_start - data.first_visible_col);
+    const int vp_end   = std::min(len, std::max(0, hl.col_end - data.first_visible_col));
+
+    if (vp_start >= vp_end)
+    {
+        return ftxui::text(visible_text);
+    }
+
+    ftxui::Elements parts;
+    if (vp_start > 0)
+    {
+        parts.push_back(ftxui::text(visible_text.substr(0, static_cast<std::size_t>(vp_start))));
+    }
+    parts.push_back(ftxui::text(visible_text.substr(static_cast<std::size_t>(vp_start), static_cast<std::size_t>(vp_end - vp_start))) | ftxui::bgcolor(hl.color));
+    if (vp_end < len)
+    {
+        parts.push_back(ftxui::text(visible_text.substr(static_cast<std::size_t>(vp_end))));
+    }
+
+    return ftxui::hbox(std::move(parts));
+}
+
 } // namespace
 
 TextViewView::TextViewView(TextViewController& controller) : _controller(controller)
@@ -86,7 +123,7 @@ ftxui::Element TextViewView::component()
     {
         for (const auto& line : data.visible_lines)
         {
-            rows.push_back(ftxui::text(line));
+            rows.push_back(render_highlighted_line(line, data));
         }
     }
     rows.push_back(ftxui::filler());

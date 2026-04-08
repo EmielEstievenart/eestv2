@@ -24,9 +24,16 @@ int main()
     {
         initial_lines.push_back("Line " + std::to_string(i) + " - this is sample content for scrolling.");
     }
-    initial_lines.push_back("Line - this is sample content for scrolling. BUT ITS REEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALLLLLLLLLLLYYYY LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOONNNNGGGG");
+    initial_lines.push_back("Line - this is sample content for scrolling. BUT ITS "
+                            "REEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                            "AAAAAAAAAAALLLLLLLLLLLYYYY LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOONNNNGGGG");
 
     controller.append_lines(initial_lines, 20);
+
+    // Highlight columns 5-9 ("1 - t" on line 1, the digit+separator region) in red.
+    // Press 'h' at runtime to toggle the highlight on and off.
+    bool highlight_on = true;
+    controller.set_background_column_range(5, 9, Color::Red);
 
     TextViewView view(controller);
 
@@ -40,7 +47,20 @@ int main()
                    flex;
         });
 
-    auto component = CatchEvent(renderer, [&](Event event) { return controller.parse_event(event, screen.ExitLoopClosure()); });
+    auto component = CatchEvent(renderer,
+                                [&](Event event)
+                                {
+                                    if (event == Event::Character('h'))
+                                    {
+                                        highlight_on = !highlight_on;
+                                        if (highlight_on)
+                                            controller.set_background_column_range(5, 9, Color::Red);
+                                        else
+                                            controller.clear_background_column_range();
+                                        return true;
+                                    }
+                                    return controller.parse_event(event, screen.ExitLoopClosure());
+                                });
 
     screen.Loop(component);
     return 0;
