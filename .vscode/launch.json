@@ -3,98 +3,118 @@
     "configurations": [
         {
             "name": "Tests: all",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [],
-            "cwd": "${command:cmake.buildDirectory}"
+            "cwd": "${command:cmake.buildDirectory}",
+            "internalConsoleOptions": "neverOpen"
         },
         {
             "name": "variadic_templates",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/variadic_templates.exe",
             "args": [],
-            "cwd": "${command:cmake.buildDirectory}"
+            "cwd": "${command:cmake.buildDirectory}",
+            "internalConsoleOptions": "neverOpen"
         },
         {
             "name": "Tests: allLDAB",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [],
-            "cwd": "${command:cmake.buildDirectory}"
+            "cwd": "${command:cmake.buildDirectory}",
+            "internalConsoleOptions": "neverOpen"
         },
         {
             "name": "Test: TCP Server Lifecycle ",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [
                 "--gtest_filter=TcpServerLifeCycleTest.*"
             ],
-            "cwd": "${command:cmake.buildDirectory}"
+            "cwd": "${command:cmake.buildDirectory}",
+            "internalConsoleOptions": "neverOpen"
         },
         {
             "name": "Test: Single TCP Server ",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [
                 "--gtest_filter=TcpConnectionTest.ClientToServerDataTransfer"
             ],
-            "stopOnEntry": true,
-            "cwd": "${command:cmake.buildDirectory}"
+            "stopAtEntry": true,
+            "cwd": "${command:cmake.buildDirectory}",
+            "internalConsoleOptions": "neverOpen"
         },
         {
             "name": "Test: StartSendingAndDestruct",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/unit_tests.exe",
             "args": [
                 "--gtest_filter=TcpConnectionLifeCycleTests.StartSendingAndDestruct"
             ],
-            "cwd": "${command:cmake.buildDirectory}"
+            "cwd": "${command:cmake.buildDirectory}",
+            "internalConsoleOptions": "neverOpen"
         },
         {
             "name": "Attach to Process",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "attach",
-            "pid": 4136
+            "processId": "${command:pickProcess}"
         },
         {
             "name": "Example: Templates",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/templates_example.exe",
             "args": [],
-            "cwd": "${command:cmake.buildDirectory}"
+            "cwd": "${command:cmake.buildDirectory}",
+            "internalConsoleOptions": "neverOpen"
         },
         {
             "name": "Example: SFINAE ",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.buildDirectory}/bin/sfinae.exe",
             "args": [],
-            "cwd": "${command:cmake.buildDirectory}"
+            "cwd": "${command:cmake.buildDirectory}",
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "Example: FTXUI Text View",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${command:cmake.buildDirectory}/bin/ftxui_text_view_example.exe",
+            "args": [],
+            "cwd": "${command:cmake.buildDirectory}",
+            "externalConsole": true,
+            "internalConsoleOptions": "neverOpen"
         },
         {
             "name": "Debug CMake Target",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "args": [],
-            "cwd": "${command:cmake.launchTargetDirectory}"
+            "cwd": "${command:cmake.launchTargetDirectory}",
+            "internalConsoleOptions": "neverOpen"
         },
         {
             "name": "Test selected",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${cmake.testProgram}",
             "args": [
                 "${cmake.testArgs}"
             ],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "internalConsoleOptions": "neverOpen"
         }
     ]
 }

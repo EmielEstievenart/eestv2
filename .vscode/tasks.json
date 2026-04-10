@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build: FTXUI Text View",
+            "type": "shell",
+            "command": "cmake --build \"${command:cmake.buildDirectory}\" --target ftxui_text_view_example",
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "Run: FTXUI Text View",
+            "type": "shell",
+            "command": "& \"${command:cmake.buildDirectory}/bin/ftxui_text_view_example.exe\"",
+            "dependsOn": "Build: FTXUI Text View",
+            "dependsOrder": "sequence",
+            "options": {
+                "cwd": "${command:cmake.buildDirectory}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "clear": false
+            }
+        }
+    ]
+}
