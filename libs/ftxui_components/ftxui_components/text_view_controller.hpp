@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "text_view_model.hpp"
+#include <ftxui_components/text_view_model.hpp>
 
 // Describes an optional background-color highlight over a contiguous column range.
 // col_start is inclusive; col_end is exclusive (model-space column indices).

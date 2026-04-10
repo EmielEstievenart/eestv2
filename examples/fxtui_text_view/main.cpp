@@ -1,13 +1,12 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+#include <ftxui_components/text_view_controller.hpp>
+#include <ftxui_components/text_view_model.hpp>
+#include <ftxui_components/text_view_view.hpp>
 #include <ftxui/dom/elements.hpp>
 
 #include <string>
 #include <vector>
-
-#include "text_view_controller.hpp"
-#include "text_view_model.hpp"
-#include "text_view_view.hpp"
 
 using namespace ftxui;
 

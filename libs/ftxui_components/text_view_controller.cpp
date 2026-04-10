@@ -1,4 +1,4 @@
-#include "text_view_controller.hpp"
+#include <ftxui_components/text_view_controller.hpp>
 
 #include <ftxui/component/event.hpp>
 #include <ftxui/screen/color.hpp>
@@ -121,6 +121,8 @@ void TextViewController::scroll_to_bottom(int viewport_line_count)
 
 bool TextViewController::parse_event(ftxui::Event event, const std::function<void()>& on_exit)
 {
+    const int fast_horizontal_step = std::max(1, (_viewport_col_count - 1) / 2);
+
     if (event == ftxui::Event::Character('q') || event == ftxui::Event::Escape)
     {
         if (on_exit)
@@ -148,9 +150,21 @@ bool TextViewController::parse_event(ftxui::Event event, const std::function<voi
         return true;
     }
 
+    if (event == ftxui::Event::ArrowLeftCtrl)
+    {
+        scroll_left(fast_horizontal_step);
+        return true;
+    }
+
     if (event == ftxui::Event::ArrowRight)
     {
         scroll_right(1);
+        return true;
+    }
+
+    if (event == ftxui::Event::ArrowRightCtrl)
+    {
+        scroll_right(fast_horizontal_step);
         return true;
     }
 

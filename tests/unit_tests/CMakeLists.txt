@@ -1,6 +1,7 @@
 # Add executable for unit tests
 add_executable(
   unit_tests
+  ftxui_components/text_view_controller_tests.cpp
   net/discovery/discovery_client_lifecycle_tests.cpp
   net/discovery/discovery_server_lifecycle_tests.cpp
   net/discovery/discovery_integration_tests.cpp
@@ -62,6 +63,7 @@ add_executable(
 target_link_libraries(
   unit_tests
   PRIVATE eestv_lib
+          ftxui_components
           component
           GTest::gtest_main
           Boost::log

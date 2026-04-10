@@ -3,7 +3,7 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/box.hpp>
 
-#include "text_view_controller.hpp"
+#include <ftxui_components/text_view_controller.hpp>
 
 class TextViewView
 {

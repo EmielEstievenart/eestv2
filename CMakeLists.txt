@@ -73,6 +73,7 @@ set(FTXUI_BUILD_MODULES
     CACHE BOOL "Disable FTXUI C++20 modules in the superproject" FORCE)
 
 add_subdirectory(libs/fxtui)
+add_subdirectory(libs/ftxui_components)
 set(gtest_force_shared_crt
     ON
     CACHE BOOL "Use the shared CRT for GoogleTest on MSVC" FORCE)

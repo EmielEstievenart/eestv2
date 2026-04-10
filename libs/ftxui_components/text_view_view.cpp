@@ -1,4 +1,5 @@
-#include "text_view_view.hpp"
+#include <ftxui_components/text_view_view.hpp>
+
 #include <ftxui/dom/elements.hpp>
 
 #include <algorithm>

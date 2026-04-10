@@ -1,4 +1,4 @@
-#include "text_view_model.hpp"
+#include <ftxui_components/text_view_model.hpp>
 
 #include <algorithm>
 #include <stdexcept>
