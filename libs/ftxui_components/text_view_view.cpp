@@ -12,41 +12,51 @@ int effective_viewport_line_count(const TextViewRenderData& data)
     return std::max(1, data.viewport_line_count);
 }
 
-// Renders one visible line, applying a background-color highlight over the
-// columns that fall within data.col_highlight (model-space).  The string
-// `visible_text` already starts at `first_visible_col`, so the highlight range
-// must be translated into that viewport-relative coordinate space before
-// splitting the string into before / highlighted / after segments.
-ftxui::Element render_highlighted_line(const std::string& visible_text, const TextViewRenderData& data)
+void style_highlighted_columns(ftxui::Canvas& canvas, int row, const TextViewRenderData& data)
 {
     const TextViewColumnHighlight& hl = data.col_highlight;
 
     if (!hl.active || hl.col_start >= hl.col_end)
     {
-        return ftxui::text(visible_text);
+        return;
     }
 
-    const int len      = static_cast<int>(visible_text.size());
     const int vp_start = std::max(0, hl.col_start - data.first_visible_col);
-    const int vp_end   = std::min(len, std::max(0, hl.col_end - data.first_visible_col));
+    const int vp_end   = std::min(std::max(1, data.viewport_col_count), std::max(0, hl.col_end - data.first_visible_col));
 
     if (vp_start >= vp_end)
     {
-        return ftxui::text(visible_text);
+        return;
     }
 
-    ftxui::Elements parts;
-    if (vp_start > 0)
+    for (int col = vp_start; col < vp_end; ++col)
     {
-        parts.push_back(ftxui::text(visible_text.substr(0, static_cast<std::size_t>(vp_start))));
+        canvas.Style(col * 2, row * 4, [&](ftxui::Cell& cell) { cell.background_color = hl.color; });
     }
-    parts.push_back(ftxui::text(visible_text.substr(static_cast<std::size_t>(vp_start), static_cast<std::size_t>(vp_end - vp_start))) | ftxui::bgcolor(hl.color));
-    if (vp_end < len)
-    {
-        parts.push_back(ftxui::text(visible_text.substr(static_cast<std::size_t>(vp_end))));
-    }
+}
 
-    return ftxui::hbox(std::move(parts));
+ftxui::Element render_content(const TextViewRenderData& data)
+{
+    const int viewport_lines = effective_viewport_line_count(data);
+    const int viewport_cols  = std::max(1, data.viewport_col_count);
+
+    return ftxui::canvas(viewport_cols * 2, viewport_lines * 4,
+                         [data](ftxui::Canvas& canvas)
+                         {
+                             if (data.total_lines == 0)
+                             {
+                                 canvas.DrawText(0, 0, "<empty>", [](ftxui::Cell& cell) { cell.dim = true; });
+                                 return;
+                             }
+
+                             for (int row = 0; row < static_cast<int>(data.visible_lines.size()); ++row)
+                             {
+                                 // Style the cell backgrounds first so the highlight also covers
+                                 // blank space when the selected range extends past the line text.
+                                 style_highlighted_columns(canvas, row, data);
+                                 canvas.DrawText(0, row * 4, data.visible_lines[static_cast<std::size_t>(row)]);
+                             }
+                         });
 }
 
 } // namespace
@@ -114,23 +124,9 @@ ftxui::Element TextViewView::component()
     _controller.update_viewport_line_count(box_height);
     _controller.update_viewport_col_count(box_width);
     const TextViewRenderData data = _controller.render_data(box_height);
-    ftxui::Elements rows;
-    rows.reserve(static_cast<std::size_t>(box_height));
-    if (data.total_lines == 0)
-    {
-        rows.push_back(ftxui::text("<empty>") | ftxui::dim);
-    }
-    else
-    {
-        for (const auto& line : data.visible_lines)
-        {
-            rows.push_back(render_highlighted_line(line, data));
-        }
-    }
-    rows.push_back(ftxui::filler());
     return ftxui::vbox({
                ftxui::hbox({
-                   ftxui::vbox(std::move(rows)) | ftxui::flex | ftxui::reflect(_content_box),
+                   render_content(data) | ftxui::flex | ftxui::reflect(_content_box),
                    render_scrollbar(data),
                }) | ftxui::flex,
                render_hscrollbar(data),
