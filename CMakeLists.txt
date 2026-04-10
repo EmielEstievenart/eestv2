@@ -72,7 +72,7 @@ set(FTXUI_BUILD_MODULES
     OFF
     CACHE BOOL "Disable FTXUI C++20 modules in the superproject" FORCE)
 
-add_subdirectory(libs/fxtui)
+add_subdirectory(libs/ftxui)
 add_subdirectory(libs/ftxui_components)
 set(gtest_force_shared_crt
     ON

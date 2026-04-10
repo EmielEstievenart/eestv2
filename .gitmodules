@@ -1,8 +1,8 @@
 [submodule "code"]
 	path = code
 	url = https://github.com/EmielEstievenart/eestv_lib.git
-[submodule "libs/fxtui"]
-	path = libs/fxtui
+[submodule "libs/ftxui"]
+	path = libs/ftxui
 	url = https://github.com/ArthurSonzogni/FTXUI
 [submodule "libs/googletest"]
 	path = libs/googletest
