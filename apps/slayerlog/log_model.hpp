@@ -103,6 +103,19 @@ struct TextPosition
     int column = 0;
 };
 
+struct HiddenColumnRange
+{
+    int start = 0;
+    int end   = 0;
+};
+
+inline bool operator==(const HiddenColumnRange& lhs, const HiddenColumnRange& rhs)
+{
+    return lhs.start == rhs.start && lhs.end == rhs.end;
+}
+
+std::optional<HiddenColumnRange> parse_hidden_column_range(std::string_view text);
+
 class LogModel
 {
 public:
@@ -131,6 +144,12 @@ public:
     void hide_before_line_number(int line_number);
     /** @brief Returns the active raw-line cutoff, if any. */
     std::optional<int> hidden_before_line_number() const;
+    /** @brief Hides displayed columns in the half-open range [start_column, end_column). */
+    void hide_columns(int start_column, int end_column);
+    /** @brief Clears the active displayed-column hide range. */
+    void reset_hidden_columns();
+    /** @brief Returns the active displayed-column hide range, if any. */
+    std::optional<HiddenColumnRange> hidden_columns() const;
 
     /** @brief Sets the active find query and rebuilds find results. */
     bool set_find_query(std::string query);
@@ -195,6 +214,7 @@ private:
     bool matches_pattern(std::string_view haystack, const SearchPattern& pattern) const;
     bool matches_any_pattern(std::string_view haystack, const std::vector<SearchPattern>& patterns) const;
     static std::string trim_filter_text(std::string_view text);
+    std::string apply_hidden_columns(std::string text) const;
 
     IndexedVector<ObservedLogLine, AllLineIndex> _all_entries;
     IndexedVector<AllLineIndex, VisibleLineIndex> _visible_entry_indices;
@@ -210,6 +230,7 @@ private:
     IndexedVector<AllLineIndex, FindResultIndex> _find_match_entry_indices;
 
     std::optional<int> _hidden_before_line_number;
+    std::optional<HiddenColumnRange> _hidden_columns;
 
     bool _updates_paused     = false;
     bool _show_source_labels = false;

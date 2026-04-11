@@ -89,6 +89,7 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     model.add_include_filter("error");
     model.add_exclude_filter("ignore");
     model.hide_before_line_number(2);
+    model.hide_columns(2, 5);
     ASSERT_TRUE(model.set_find_query("error"));
     model.toggle_pause();
     model.append_lines({
@@ -102,6 +103,7 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     EXPECT_TRUE(model.include_filters().empty());
     EXPECT_TRUE(model.exclude_filters().empty());
     EXPECT_FALSE(model.hidden_before_line_number().has_value());
+    EXPECT_FALSE(model.hidden_columns().has_value());
     EXPECT_FALSE(model.find_active());
     EXPECT_EQ(model.total_find_match_count(), 0);
     EXPECT_EQ(model.visible_find_match_count(), 0);
@@ -192,6 +194,44 @@ TEST(LogModelTest, HideBeforeLineUsesRawLineNumbers)
     ASSERT_TRUE(model.visible_line_index_for_line_number(3).has_value());
     EXPECT_EQ(model.visible_line_index_for_line_number(3)->value, 0);
     EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
+}
+
+TEST(LogModelTest, HideColumnsRemovesDisplayedRange)
+{
+    LogModel model;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "abcdef"},
+    });
+
+    model.hide_columns(2, 4);
+
+    ASSERT_TRUE(model.hidden_columns().has_value());
+    EXPECT_EQ(*model.hidden_columns(), (HiddenColumnRange {2, 4}));
+    EXPECT_EQ(model.rendered_line(0), "1 cdef");
+}
+
+TEST(LogModelTest, ResetHiddenColumnsRestoresRenderedText)
+{
+    LogModel model;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "abcdef"},
+    });
+    model.hide_columns(2, 4);
+
+    model.reset_hidden_columns();
+
+    EXPECT_FALSE(model.hidden_columns().has_value());
+    EXPECT_EQ(model.rendered_line(0), "1 abcdef");
+}
+
+TEST(LogModelTest, ParseHiddenColumnRangeUsesHalfOpenZeroBasedSyntax)
+{
+    const auto trimmed_range = parse_hidden_column_range(" 4 - 10 ");
+    ASSERT_TRUE(trimmed_range.has_value());
+    EXPECT_EQ(*trimmed_range, (HiddenColumnRange {4, 10}));
+    EXPECT_FALSE(parse_hidden_column_range("4-4").has_value());
+    EXPECT_FALSE(parse_hidden_column_range("-1-4").has_value());
+    EXPECT_FALSE(parse_hidden_column_range("4-ten").has_value());
 }
 
 TEST(LogModelTest, FindQueryBuildsMatchIndexesAndLookupHelpers)

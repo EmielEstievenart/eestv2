@@ -73,15 +73,12 @@ ftxui::Element build_filter_status(const LogModel& model)
     ftxui::Elements parts;
     parts.push_back(theme::badge("FILTER", theme::label_filter_fg));
 
-    const auto hidden_before = model.hidden_before_line_number();
+    const auto hidden_before  = model.hidden_before_line_number();
+    const auto hidden_columns = model.hidden_columns();
 
-    if (model.include_filters().empty() && model.exclude_filters().empty())
+    if (model.include_filters().empty() && model.exclude_filters().empty() && !hidden_before.has_value() && !hidden_columns.has_value())
     {
         parts.push_back(ftxui::text(" none") | ftxui::color(theme::muted));
-        if (hidden_before.has_value())
-        {
-            parts.push_back(ftxui::text(" | before line " + std::to_string(*hidden_before)) | ftxui::color(theme::muted));
-        }
         return ftxui::hbox(std::move(parts));
     }
 
@@ -98,6 +95,11 @@ ftxui::Element build_filter_status(const LogModel& model)
     if (hidden_before.has_value())
     {
         parts.push_back(ftxui::text(" | before line " + std::to_string(*hidden_before)) | ftxui::color(theme::muted));
+    }
+
+    if (hidden_columns.has_value())
+    {
+        parts.push_back(ftxui::text(" | columns " + std::to_string(hidden_columns->start) + "-" + std::to_string(hidden_columns->end)) | ftxui::color(theme::muted));
     }
 
     return ftxui::hbox(std::move(parts));
@@ -152,7 +154,7 @@ TextViewStyle make_find_style(bool is_active_match)
     return style;
 }
 
-TextViewRenderData build_text_view_data(const LogModel& model, const LogController& controller, int viewport_line_count, int viewport_col_count)
+TextViewRenderData build_text_view_data(const LogModel& model, const LogController& controller, int viewport_line_count, int viewport_col_count, std::optional<HiddenColumnRange> hidden_column_preview)
 {
     TextViewRenderData data;
     data.first_visible_line  = controller.first_visible_line_index(model, viewport_line_count).value;
@@ -175,6 +177,14 @@ TextViewRenderData build_text_view_data(const LogModel& model, const LogControll
     data.total_lines    = model.line_count();
     data.visible_lines  = clip_lines_horizontally(model.rendered_lines(data.first_visible_line, viewport_line_count), data.first_visible_col, data.viewport_col_count);
     data.max_line_width = model.max_rendered_line_width();
+
+    if (hidden_column_preview.has_value())
+    {
+        data.col_highlight.col_start = hidden_column_preview->start;
+        data.col_highlight.col_end   = hidden_column_preview->end;
+        data.col_highlight.color     = theme::hidden_columns_preview_bg;
+        data.col_highlight.active    = true;
+    }
 
     const auto active_find_index = controller.active_find_visible_index(model);
     for (std::size_t offset = 0; offset < data.visible_lines.size(); ++offset)
@@ -230,11 +240,11 @@ TextViewRenderData build_text_view_data(const LogModel& model, const LogControll
 
 } // namespace
 
-ftxui::Element LogView::render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height)
+ftxui::Element LogView::render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height, std::optional<HiddenColumnRange> hidden_column_preview)
 {
     const int visible_line_count = estimate_visible_line_count(_text_view.viewport_line_count(), screen_height);
     const int visible_col_count  = std::max(1, _text_view.viewport_col_count());
-    auto log_view                = _text_view.render(build_text_view_data(model, controller, visible_line_count, visible_col_count)) | ftxui::flex;
+    auto log_view                = _text_view.render(build_text_view_data(model, controller, visible_line_count, visible_col_count, hidden_column_preview)) | ftxui::flex;
 
     // Header with optional paused indicator
     ftxui::Element header;
@@ -281,7 +291,7 @@ std::optional<TextPosition> LogView::mouse_to_text_position(const LogModel& mode
 
     const int viewport_line_count = visible_line_count(1);
     const int viewport_col_count  = std::max(1, _text_view.viewport_col_count());
-    const auto position           = _text_view.mouse_to_text_position(build_text_view_data(model, controller, viewport_line_count, viewport_col_count), mouse);
+    const auto position           = _text_view.mouse_to_text_position(build_text_view_data(model, controller, viewport_line_count, viewport_col_count, std::nullopt), mouse);
     if (!position.has_value() || position->line_index < 0 || position->line_index >= model.line_count())
     {
         return std::nullopt;

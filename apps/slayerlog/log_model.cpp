@@ -1,16 +1,77 @@
 #include "log_model.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <cstddef>
 #include <iterator>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 
 namespace slayerlog
 {
+
+namespace
+{
+
+std::string trim_text(std::string_view text)
+{
+    std::size_t start = 0;
+    while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start])) != 0)
+    {
+        ++start;
+    }
+
+    std::size_t end = text.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0)
+    {
+        --end;
+    }
+
+    return std::string(text.substr(start, end - start));
+}
+
+std::optional<int> parse_non_negative_integer(std::string_view text)
+{
+    const std::string trimmed = trim_text(text);
+    if (trimmed.empty())
+    {
+        return std::nullopt;
+    }
+
+    int value               = 0;
+    const auto [end, error] = std::from_chars(trimmed.data(), trimmed.data() + trimmed.size(), value);
+    if (error != std::errc() || end != trimmed.data() + trimmed.size() || value < 0)
+    {
+        return std::nullopt;
+    }
+
+    return value;
+}
+
+} // namespace
+
+std::optional<HiddenColumnRange> parse_hidden_column_range(std::string_view text)
+{
+    const std::string trimmed         = trim_text(text);
+    const std::size_t separator_index = trimmed.find('-');
+    if (separator_index == std::string::npos || trimmed.find('-', separator_index + 1) != std::string::npos)
+    {
+        return std::nullopt;
+    }
+
+    const auto start = parse_non_negative_integer(std::string_view(trimmed).substr(0, separator_index));
+    const auto end   = parse_non_negative_integer(std::string_view(trimmed).substr(separator_index + 1));
+    if (!start.has_value() || !end.has_value() || *end <= *start)
+    {
+        return std::nullopt;
+    }
+
+    return HiddenColumnRange {*start, *end};
+}
 
 void LogModel::reset()
 {
@@ -28,6 +89,7 @@ void LogModel::reset()
     _find_pattern.reset();
 
     _hidden_before_line_number.reset();
+    _hidden_columns.reset();
 
     _updates_paused     = false;
     _show_source_labels = false;
@@ -126,6 +188,27 @@ void LogModel::hide_before_line_number(int line_number)
 std::optional<int> LogModel::hidden_before_line_number() const
 {
     return _hidden_before_line_number;
+}
+
+void LogModel::hide_columns(int start_column, int end_column)
+{
+    if (start_column < 0 || end_column <= start_column)
+    {
+        _hidden_columns.reset();
+        return;
+    }
+
+    _hidden_columns = HiddenColumnRange {start_column, end_column};
+}
+
+void LogModel::reset_hidden_columns()
+{
+    _hidden_columns.reset();
+}
+
+std::optional<HiddenColumnRange> LogModel::hidden_columns() const
+{
+    return _hidden_columns;
 }
 
 bool LogModel::set_find_query(std::string query)
@@ -295,7 +378,7 @@ std::string LogModel::render_entry(AllLineIndex entry_index) const
     }
 
     output << entry.text;
-    return output.str();
+    return apply_hidden_columns(output.str());
 }
 
 void LogModel::append_lines_immediately(const std::vector<ObservedLogLine>& lines)
@@ -458,19 +541,25 @@ bool LogModel::matches_any_pattern(std::string_view haystack, const std::vector<
 
 std::string LogModel::trim_filter_text(std::string_view text)
 {
-    std::size_t start = 0;
-    while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start])) != 0)
+    return trim_text(text);
+}
+
+std::string LogModel::apply_hidden_columns(std::string text) const
+{
+    if (!_hidden_columns.has_value())
     {
-        ++start;
+        return text;
     }
 
-    std::size_t end = text.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0)
+    const int clamped_start = std::clamp(_hidden_columns->start, 0, static_cast<int>(text.size()));
+    const int clamped_end   = std::clamp(_hidden_columns->end, clamped_start, static_cast<int>(text.size()));
+    if (clamped_start == clamped_end)
     {
-        --end;
+        return text;
     }
 
-    return std::string(text.substr(start, end - start));
+    text.erase(static_cast<std::size_t>(clamped_start), static_cast<std::size_t>(clamped_end - clamped_start));
+    return text;
 }
 
 } // namespace slayerlog

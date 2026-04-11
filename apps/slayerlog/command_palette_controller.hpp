@@ -24,14 +24,14 @@ public:
 
     void open();
     void open_history();
-    void open_close_open_file_picker(std::vector<std::string> open_files,
-                                     std::function<CommandResult(std::size_t selected_index)> on_confirm);
+    void open_close_open_file_picker(std::vector<std::string> open_files, std::function<CommandResult(std::size_t selected_index)> on_confirm);
     void close();
     bool handle_event(const ftxui::Event& event);
 
 private:
     void autocomplete_selected_command();
     void refresh_matches();
+    void refresh_hidden_column_preview();
     std::size_t active_match_count() const;
     void move_selection(int delta);
     bool copy_selected_history_entry_to_query();

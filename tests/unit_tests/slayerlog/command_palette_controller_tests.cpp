@@ -121,8 +121,7 @@ TEST(CommandPaletteControllerTest, ReturnKeepsPaletteOpenWhenCommandFails)
 TEST(CommandPaletteControllerTest, ReturnCanKeepPaletteOpenWhenCommandRequestsIt)
 {
     CommandManager manager;
-    manager.register_command({"stay-open", "Stay open", "stay-open"},
-                             [](std::string_view) { return CommandResult {true, "pick one", false}; });
+    manager.register_command({"stay-open", "Stay open", "stay-open"}, [](std::string_view) { return CommandResult {true, "pick one", false}; });
 
     CommandPaletteModel model;
     CommandPaletteController controller(model, manager);
@@ -139,10 +138,8 @@ TEST(CommandPaletteControllerTest, ReturnCanKeepPaletteOpenWhenCommandRequestsIt
 TEST(CommandPaletteControllerTest, TabCompletesSelectedCommand)
 {
     CommandManager manager;
-    manager.register_command({"filter-in", "Include matching lines", "filter-in <text>"},
-                             [](std::string_view) { return CommandResult {true, "ok"}; });
-    manager.register_command({"filter-out", "Exclude matching lines", "filter-out <text>"},
-                             [](std::string_view) { return CommandResult {true, "ok"}; });
+    manager.register_command({"filter-in", "Include matching lines", "filter-in <text>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
+    manager.register_command({"filter-out", "Exclude matching lines", "filter-out <text>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
 
     CommandPaletteModel model;
     CommandPaletteController controller(model, manager);
@@ -158,10 +155,8 @@ TEST(CommandPaletteControllerTest, TabCompletesSelectedCommand)
 TEST(CommandPaletteControllerTest, TabPreservesExistingArguments)
 {
     CommandManager manager;
-    manager.register_command({"filter-in", "Include matching lines", "filter-in <text>"},
-                             [](std::string_view) { return CommandResult {true, "ok"}; });
-    manager.register_command({"filter-out", "Exclude matching lines", "filter-out <text>"},
-                             [](std::string_view) { return CommandResult {true, "ok"}; });
+    manager.register_command({"filter-in", "Include matching lines", "filter-in <text>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
+    manager.register_command({"filter-out", "Exclude matching lines", "filter-out <text>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
 
     CommandPaletteModel model;
     CommandPaletteController controller(model, manager);
@@ -193,8 +188,7 @@ TEST(CommandPaletteControllerTest, TabLeavesQueryUnchangedWhenNoCommandsMatch)
 TEST(CommandPaletteControllerTest, TabClearsStatusMessage)
 {
     CommandManager manager;
-    manager.register_command({"filter-in", "Include matching lines", "filter-in <text>"},
-                             [](std::string_view) { return CommandResult {true, "ok"}; });
+    manager.register_command({"filter-in", "Include matching lines", "filter-in <text>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
 
     CommandPaletteModel model;
     CommandPaletteController controller(model, manager);
@@ -207,6 +201,41 @@ TEST(CommandPaletteControllerTest, TabClearsStatusMessage)
 
     EXPECT_TRUE(controller.model().status_message.empty());
     EXPECT_FALSE(controller.model().status_is_error);
+}
+
+TEST(CommandPaletteControllerTest, HideColumnsPreviewActivatesForValidRange)
+{
+    CommandManager manager;
+    manager.register_command({"hide-columns", "Hide columns", "hide-columns <xx-yy>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
+
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+    controller.open();
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Character("hide-columns 4-10")));
+
+    ASSERT_TRUE(controller.model().hidden_column_preview.has_value());
+    EXPECT_EQ(*controller.model().hidden_column_preview, (HiddenColumnRange {4, 10}));
+}
+
+TEST(CommandPaletteControllerTest, HideColumnsPreviewClearsForInvalidRangeAndOnClose)
+{
+    CommandManager manager;
+    manager.register_command({"hide-columns", "Hide columns", "hide-columns <xx-yy>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
+
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+    controller.open();
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Character("hide-columns 4-4")));
+    EXPECT_FALSE(controller.model().hidden_column_preview.has_value());
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Backspace));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Character('6')));
+    ASSERT_TRUE(controller.model().hidden_column_preview.has_value());
+
+    controller.close();
+    EXPECT_FALSE(controller.model().hidden_column_preview.has_value());
 }
 
 TEST(CommandPaletteControllerTest, BackspaceAndDeleteRespectUtf8CodepointBoundaries)

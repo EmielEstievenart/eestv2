@@ -2,6 +2,7 @@
 #include <ftxui/component/event.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -84,6 +85,18 @@ std::pair<std::size_t, std::size_t> command_name_range(std::string_view query)
     }
 
     return {command_start, command_end};
+}
+
+std::string normalize_command_name(std::string_view name)
+{
+    std::string normalized;
+    normalized.reserve(name.size());
+    for (const char ch : name)
+    {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+
+    return normalized;
 }
 
 } // namespace
@@ -361,10 +374,35 @@ void CommandPaletteController::refresh_matches()
     if (active_match_count() == 0)
     {
         _model.selected_index = 0;
+        refresh_hidden_column_preview();
         return;
     }
 
     _model.selected_index = std::clamp(_model.selected_index, 0, static_cast<int>(active_match_count()) - 1);
+    refresh_hidden_column_preview();
+}
+
+void CommandPaletteController::refresh_hidden_column_preview()
+{
+    _model.hidden_column_preview.reset();
+    if (_model.mode != CommandPaletteMode::Commands)
+    {
+        return;
+    }
+
+    const auto [command_start, command_end] = command_name_range(_model.query);
+    if (command_start >= _model.query.size())
+    {
+        return;
+    }
+
+    const std::string command_name = normalize_command_name(std::string_view(_model.query).substr(command_start, command_end - command_start));
+    if (command_name != "hide-columns")
+    {
+        return;
+    }
+
+    _model.hidden_column_preview = parse_hidden_column_range(command_arguments_from_query(_model.query));
 }
 
 std::size_t CommandPaletteController::active_match_count() const

@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "command_manager.hpp"
+#include "log_model.hpp"
 
 namespace slayerlog
 {
@@ -28,6 +30,7 @@ struct CommandPaletteModel
     int selected_index = 0;
     std::string status_message;
     bool status_is_error = false;
+    std::optional<HiddenColumnRange> hidden_column_preview;
 };
 
 } // namespace slayerlog

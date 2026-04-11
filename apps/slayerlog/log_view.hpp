@@ -21,7 +21,7 @@ class LogView
 public:
     int visible_line_count(int screen_height) const;
     int visible_col_count() const;
-    ftxui::Element render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height);
+    ftxui::Element render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height, std::optional<HiddenColumnRange> hidden_column_preview = std::nullopt);
     std::optional<TextPosition> mouse_to_text_position(const LogModel& model, const LogController& controller, const ftxui::Mouse& mouse) const;
 
 private:

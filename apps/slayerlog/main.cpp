@@ -322,6 +322,58 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                          return slayerlog::CommandResult {true, "Cleared all filters"};
                                      });
 
+    command_manager.register_command({"clear-filters", "Alias for reset-filters", "clear-filters"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!arguments.empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: clear-filters"};
+                                         }
+
+                                         model.reset_filters();
+                                         return slayerlog::CommandResult {true, "Cleared all filters"};
+                                     });
+
+    command_manager.register_command({"hide-columns", "Hide displayed columns in a range", "hide-columns <xx-yy>"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         const auto hidden_columns = slayerlog::parse_hidden_column_range(arguments);
+                                         if (!hidden_columns.has_value())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: hide-columns <xx-yy>"};
+                                         }
+
+                                         model.hide_columns(hidden_columns->start, hidden_columns->end);
+                                         return slayerlog::CommandResult {
+                                             true,
+                                             "Hidden columns " + std::to_string(hidden_columns->start) + "-" + std::to_string(hidden_columns->end),
+                                         };
+                                     });
+
+    command_manager.register_command({"reset-column-filter", "Clear the hidden column range", "reset-column-filter"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!arguments.empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: reset-column-filter"};
+                                         }
+
+                                         model.reset_hidden_columns();
+                                         return slayerlog::CommandResult {true, "Cleared hidden column filter"};
+                                     });
+
+    command_manager.register_command({"clear-column-filters", "Alias for reset-column-filter", "clear-column-filters"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!arguments.empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: clear-column-filters"};
+                                         }
+
+                                         model.reset_hidden_columns();
+                                         return slayerlog::CommandResult {true, "Cleared hidden column filter"};
+                                     });
+
     command_manager.register_command({"open-file", "Open file and reload all tracked logs", "open-file <path>"},
                                      [&, open_file_command](std::string_view arguments)
                                      {

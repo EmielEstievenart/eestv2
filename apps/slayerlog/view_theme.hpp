@@ -11,10 +11,11 @@ namespace slayerlog::theme
 inline const auto muted = ftxui::Color::GrayDark;
 
 // Find match highlighting
-inline const auto find_match_bg  = ftxui::Color::Blue;
-inline const auto find_match_fg  = ftxui::Color::White;
-inline const auto find_active_bg = ftxui::Color::Yellow;
-inline const auto find_active_fg = ftxui::Color::Black;
+inline const auto find_match_bg             = ftxui::Color::Blue;
+inline const auto find_match_fg             = ftxui::Color::White;
+inline const auto find_active_bg            = ftxui::Color::Yellow;
+inline const auto find_active_fg            = ftxui::Color::Black;
+inline const auto hidden_columns_preview_bg = ftxui::Color::Cyan;
 
 // Status messages
 inline const auto success_fg = ftxui::Color::GreenLight;
