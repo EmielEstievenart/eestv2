@@ -97,6 +97,16 @@
             "internalConsoleOptions": "neverOpen"
         },
         {
+            "name": "Slayerlog",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${command:cmake.buildDirectory}/bin/slayerlog.exe",
+            "args": [],
+            "cwd": "${command:cmake.buildDirectory}",
+            "externalConsole": true,
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
             "name": "Debug CMake Target",
             "type": "cppvsdbg",
             "request": "launch",
