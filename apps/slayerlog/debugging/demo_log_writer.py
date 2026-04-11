@@ -19,7 +19,8 @@ def build_output_paths(primary_output_path: Path) -> list[Path]:
 
 
 def write_demo_line(handle, output_path: Path, count: int) -> None:
-    line = f"[{datetime.now().isoformat(timespec='seconds')}] {output_path.name} demo line {count}"
+    base = f"[{datetime.now().isoformat(timespec='seconds')}] {output_path.name} demo line {count}"
+    line = (base + " ") * 3
     handle.write(line + "\n")
 
 
