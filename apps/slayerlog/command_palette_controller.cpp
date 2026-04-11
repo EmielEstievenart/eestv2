@@ -1,4 +1,5 @@
 #include "command_palette_controller.hpp"
+#include <ftxui/component/event.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -87,15 +88,12 @@ std::pair<std::size_t, std::size_t> command_name_range(std::string_view query)
 
 } // namespace
 
-CommandPaletteController::CommandPaletteController(CommandPaletteModel& model, CommandManager& command_manager)
-    : _model(model), _command_manager(command_manager)
+CommandPaletteController::CommandPaletteController(CommandPaletteModel& model, CommandManager& command_manager) : _model(model), _command_manager(command_manager)
 {
     refresh_matches();
 }
 
-CommandPaletteController::CommandPaletteController(CommandPaletteModel& model, CommandManager& command_manager,
-                                                   CommandHistory& command_history)
-    : _model(model), _command_manager(command_manager), _command_history(&command_history)
+CommandPaletteController::CommandPaletteController(CommandPaletteModel& model, CommandManager& command_manager, CommandHistory& command_history) : _model(model), _command_manager(command_manager), _command_history(&command_history)
 {
     refresh_matches();
 }
@@ -138,8 +136,7 @@ void CommandPaletteController::open_history()
     refresh_matches();
 }
 
-void CommandPaletteController::open_close_open_file_picker(std::vector<std::string> open_files,
-                                                           std::function<CommandResult(std::size_t selected_index)> on_confirm)
+void CommandPaletteController::open_close_open_file_picker(std::vector<std::string> open_files, std::function<CommandResult(std::size_t selected_index)> on_confirm)
 {
     _model.open = true;
     _model.mode = CommandPaletteMode::CloseOpenFile;
@@ -167,6 +164,10 @@ void CommandPaletteController::close()
 
 bool CommandPaletteController::handle_event(const ftxui::Event& event)
 {
+    // if (event == ftxui::Event::k)
+    // {
+    //     int i = 0;
+    // }
     if (event == ftxui::Event::Escape)
     {
         close();
@@ -185,13 +186,13 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
         return true;
     }
 
-    if (event == ftxui::Event::ArrowUp || event == ftxui::Event::Character('k'))
+    if (event == ftxui::Event::ArrowUp)
     {
         move_selection(-1);
         return true;
     }
 
-    if (event == ftxui::Event::ArrowDown || event == ftxui::Event::Character('j'))
+    if (event == ftxui::Event::ArrowDown)
     {
         move_selection(1);
         return true;
