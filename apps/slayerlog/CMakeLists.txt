@@ -15,8 +15,8 @@ add_executable(
   command_line_parser.cpp
   command_line_parser.hpp
   debug_log.hpp
-  file_watcher.cpp
-  file_watcher.hpp
+  watchers/file_watcher.cpp
+  watchers/file_watcher.hpp
   log_source.cpp
   log_source.hpp
   log_watcher.hpp
@@ -38,8 +38,8 @@ add_executable(
   settings_ini.hpp
   settings_store.cpp
   settings_store.hpp
-  ssh_tail_watcher.cpp
-  ssh_tail_watcher.hpp
+  watchers/ssh_tail_watcher.cpp
+  watchers/ssh_tail_watcher.hpp
   stream_line_buffer.cpp
   stream_line_buffer.hpp
   log_model.cpp
@@ -49,9 +49,12 @@ add_executable(
 
 target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
 
+target_include_directories(slayerlog PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 target_link_libraries(
   slayerlog
   PRIVATE component
+          ftxui_components
           Boost::program_options
           log4cplus::log4cplus)
 
