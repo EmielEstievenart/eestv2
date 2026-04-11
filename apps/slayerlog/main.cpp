@@ -108,6 +108,19 @@ std::string trim_text(std::string_view text)
     return std::string(text.substr(start, end - start));
 }
 
+std::optional<int> highest_shown_line_number(const slayerlog::LogModel& model, const slayerlog::LogController& controller, int viewport_line_count)
+{
+    if (model.line_count() == 0)
+    {
+        return std::nullopt;
+    }
+
+    const int clamped_viewport_line_count = std::max(1, viewport_line_count);
+    const int first_visible_line_index    = controller.first_visible_line_index(model, clamped_viewport_line_count).value;
+    const int last_visible_line_index     = std::min(model.line_count() - 1, first_visible_line_index + clamped_viewport_line_count - 1);
+    return model.line_number_for_visible_line(slayerlog::VisibleLineIndex {last_visible_line_index});
+}
+
 std::vector<slayerlog::LogSource> parse_log_sources(const std::vector<std::string>& specs)
 {
     std::vector<slayerlog::LogSource> sources;
@@ -444,6 +457,24 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                              true,
                                              "Hidden all lines before line " + std::to_string(*line_number),
                                          };
+                                     });
+
+    command_manager.register_command({"hide-shown-lines", "Hide all currently shown lines", "hide-shown-lines"},
+                                     [&, viewport_line_count](std::string_view arguments)
+                                     {
+                                         if (!trim_text(arguments).empty())
+                                         {
+                                             return slayerlog::CommandResult {false, "Usage: hide-shown-lines"};
+                                         }
+
+                                         const auto line_number = highest_shown_line_number(model, controller, viewport_line_count());
+                                         if (!line_number.has_value())
+                                         {
+                                             return slayerlog::CommandResult {false, "No lines are currently shown"};
+                                         }
+
+                                         model.hide_before_line_number(*line_number + 1);
+                                         return slayerlog::CommandResult {true, "Hidden all currently shown lines"};
                                      });
 
     command_manager.register_command({"find", "Find lines matching text or regex", "find <text|re:regex>"},

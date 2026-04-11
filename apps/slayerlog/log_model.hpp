@@ -169,6 +169,8 @@ public:
     std::optional<FindResultIndex> find_match_position_for_entry_index(AllLineIndex entry_index) const;
     /** @brief Returns the visible index for an entry index, if currently visible. */
     std::optional<VisibleLineIndex> visible_line_index_for_entry(AllLineIndex entry_index) const;
+    /** @brief Returns the 1-based raw line number for a visible line index. */
+    std::optional<int> line_number_for_visible_line(VisibleLineIndex visible_line_index) const;
     /** @brief Returns the visible index for a 1-based raw line number, if currently visible. */
     std::optional<VisibleLineIndex> visible_line_index_for_line_number(int line_number) const;
     /** @brief Returns whether a visible line index is a find match. */

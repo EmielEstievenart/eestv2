@@ -287,6 +287,16 @@ std::optional<VisibleLineIndex> LogModel::visible_line_index_for_entry(AllLineIn
     return VisibleLineIndex {static_cast<int>(std::distance(_visible_entry_indices.begin(), visible_line))};
 }
 
+std::optional<int> LogModel::line_number_for_visible_line(VisibleLineIndex visible_line_index) const
+{
+    if (visible_line_index.value < 0 || visible_line_index.value >= static_cast<int>(_visible_entry_indices.size()))
+    {
+        return std::nullopt;
+    }
+
+    return _visible_entry_indices[visible_line_index].value + 1;
+}
+
 std::optional<VisibleLineIndex> LogModel::visible_line_index_for_line_number(int line_number) const
 {
     if (line_number <= 0)

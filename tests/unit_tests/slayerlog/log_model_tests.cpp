@@ -191,6 +191,9 @@ TEST(LogModelTest, HideBeforeLineUsesRawLineNumbers)
                                          "line 5",
                                      }));
     EXPECT_EQ(model.hidden_before_line_number(), 3);
+    EXPECT_EQ(model.line_number_for_visible_line(VisibleLineIndex {0}), 3);
+    EXPECT_EQ(model.line_number_for_visible_line(VisibleLineIndex {2}), 5);
+    EXPECT_FALSE(model.line_number_for_visible_line(VisibleLineIndex {3}).has_value());
     ASSERT_TRUE(model.visible_line_index_for_line_number(3).has_value());
     EXPECT_EQ(model.visible_line_index_for_line_number(3)->value, 0);
     EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
