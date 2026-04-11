@@ -166,6 +166,8 @@ public:
     std::string rendered_line(int index) const;
     /** @brief Returns a contiguous slice of fully rendered visible lines. */
     std::vector<std::string> rendered_lines(int first_index, int count) const;
+    /** @brief Returns the maximum width of the fully rendered visible lines. */
+    int max_rendered_line_width() const;
 
 private:
     struct SearchPattern

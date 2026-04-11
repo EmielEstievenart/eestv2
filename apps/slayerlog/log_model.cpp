@@ -169,8 +169,7 @@ int LogModel::total_find_match_count() const
 
 int LogModel::visible_find_match_count() const
 {
-    return static_cast<int>(std::count_if(_find_match_entry_indices.begin(), _find_match_entry_indices.end(),
-                                          [this](AllLineIndex entry_index) { return entry_index_is_visible(entry_index); }));
+    return static_cast<int>(std::count_if(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), [this](AllLineIndex entry_index) { return entry_index_is_visible(entry_index); }));
 }
 
 std::optional<AllLineIndex> LogModel::find_match_entry_index(FindResultIndex find_result_index) const
@@ -272,6 +271,17 @@ std::vector<std::string> LogModel::rendered_lines(int first_index, int count) co
     }
 
     return lines;
+}
+
+int LogModel::max_rendered_line_width() const
+{
+    int width = 0;
+    for (const auto entry_index : _visible_entry_indices)
+    {
+        width = std::max(width, static_cast<int>(render_entry(entry_index).size()));
+    }
+
+    return width;
 }
 
 std::string LogModel::render_entry(AllLineIndex entry_index) const

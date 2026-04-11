@@ -40,7 +40,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_manager.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_manager.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/debug_log.hpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/file_watcher.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/file_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_source.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_batch.cpp
@@ -55,7 +55,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.hpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/ssh_tail_watcher.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/ssh_tail_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/stream_line_buffer.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_model.cpp)
 
@@ -70,7 +70,8 @@ target_link_libraries(
           Boost::log_setup
           Boost::filesystem
           Boost::thread
-          Boost::program_options)
+          Boost::program_options
+          log4cplus::log4cplus)
 
 target_compile_definitions(unit_tests PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
 target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog)

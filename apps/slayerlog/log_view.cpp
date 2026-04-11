@@ -12,16 +12,43 @@ namespace slayerlog
 namespace
 {
 
+int max_line_width(const std::vector<std::string>& lines)
+{
+    int width = 0;
+    for (const auto& line : lines)
+    {
+        width = std::max(width, static_cast<int>(line.size()));
+    }
+
+    return width;
+}
+
+std::vector<std::string> clip_lines_horizontally(std::vector<std::string> lines, int first_visible_col, int viewport_col_count)
+{
+    for (auto& line : lines)
+    {
+        if (first_visible_col >= static_cast<int>(line.size()))
+        {
+            line.clear();
+            continue;
+        }
+
+        line = line.substr(static_cast<std::size_t>(first_visible_col), static_cast<std::size_t>(viewport_col_count));
+    }
+
+    return lines;
+}
+
 // Approximate viewport size for the first render before FTXUI's reflect() has measured
 // the actual box. Breakdown: window border (2) + header (1) + separators (2) + status lines (3).
 // The value 7 slightly underestimates, which is acceptable as a fallback for a single frame.
 constexpr int window_chrome_height = 7;
 
-int estimate_visible_line_count(const ftxui::Box& viewport_box, int screen_height)
+int estimate_visible_line_count(int viewport_line_count, int screen_height)
 {
-    if (viewport_box.y_max > viewport_box.y_min)
+    if (viewport_line_count > 0)
     {
-        return viewport_box.y_max - viewport_box.y_min + 1;
+        return viewport_line_count;
     }
 
     return std::max(1, screen_height - window_chrome_height);
@@ -88,9 +115,7 @@ ftxui::Element build_find_status(const LogModel& model, const LogController& con
     }
 
     parts.push_back(ftxui::text(" \"" + model.find_query() + "\""));
-    parts.push_back(ftxui::text(" " + std::to_string(model.visible_find_match_count()) + "/" +
-                                std::to_string(model.total_find_match_count()) + " matches") |
-                    ftxui::color(theme::muted));
+    parts.push_back(ftxui::text(" " + std::to_string(model.visible_find_match_count()) + "/" + std::to_string(model.total_find_match_count()) + " matches") | ftxui::color(theme::muted));
 
     const auto active_visible_index = controller.active_find_visible_index(model);
     if (active_visible_index.has_value())
@@ -119,105 +144,97 @@ ftxui::Element build_key_hints()
     });
 }
 
+TextViewStyle make_find_style(bool is_active_match)
+{
+    TextViewStyle style;
+    style.background = is_active_match ? theme::find_active_bg : theme::find_match_bg;
+    style.foreground = is_active_match ? theme::find_active_fg : theme::find_match_fg;
+    return style;
+}
+
+TextViewRenderData build_text_view_data(const LogModel& model, const LogController& controller, int viewport_line_count, int viewport_col_count)
+{
+    TextViewRenderData data;
+    data.first_visible_line  = controller.first_visible_line_index(model, viewport_line_count).value;
+    data.viewport_line_count = viewport_line_count;
+    data.first_visible_col   = controller.first_visible_col(model, viewport_col_count);
+    data.viewport_col_count  = viewport_col_count;
+
+    if (model.line_count() == 0)
+    {
+        data.total_lines = 1;
+        data.visible_lines.push_back("1 " + std::string(model.total_line_count() == 0 ? "<empty file>" : "<no matching lines>"));
+        data.max_line_width = max_line_width(data.visible_lines);
+        TextViewLineDecoration decoration;
+        decoration.line_index = 0;
+        decoration.style.dim  = true;
+        data.line_decorations.push_back(decoration);
+        return data;
+    }
+
+    data.total_lines    = model.line_count();
+    data.visible_lines  = clip_lines_horizontally(model.rendered_lines(data.first_visible_line, viewport_line_count), data.first_visible_col, data.viewport_col_count);
+    data.max_line_width = model.max_rendered_line_width();
+
+    const auto active_find_index = controller.active_find_visible_index(model);
+    for (std::size_t offset = 0; offset < data.visible_lines.size(); ++offset)
+    {
+        const int line_index      = data.first_visible_line + static_cast<int>(offset);
+        const bool is_find_match  = model.find_active() && model.visible_line_matches_find(line_index);
+        const bool is_active_find = active_find_index.has_value() && active_find_index->value == line_index;
+
+        if (is_find_match)
+        {
+            TextViewLineDecoration decoration;
+            decoration.line_index = line_index;
+            decoration.style      = make_find_style(is_active_find);
+            data.line_decorations.push_back(decoration);
+        }
+    }
+
+    const auto selected_range = controller.selection_bounds(model);
+    if (!selected_range.has_value())
+    {
+        return data;
+    }
+
+    for (int line_index = selected_range->first.line; line_index <= selected_range->second.line; ++line_index)
+    {
+        if (line_index < data.first_visible_line || line_index >= (data.first_visible_line + static_cast<int>(data.visible_lines.size())))
+        {
+            continue;
+        }
+
+        const auto rendered_line  = model.rendered_line(line_index);
+        const int selection_start = (line_index == selected_range->first.line) ? selected_range->first.column : 0;
+        const int selection_end   = (line_index == selected_range->second.line) ? selected_range->second.column : static_cast<int>(rendered_line.size());
+        const int clamped_start   = std::clamp(selection_start, 0, static_cast<int>(rendered_line.size()));
+        const int clamped_end     = std::clamp(selection_end, clamped_start, static_cast<int>(rendered_line.size()));
+        if (clamped_start == clamped_end)
+        {
+            continue;
+        }
+
+        TextViewStyle style;
+        style.inverted = true;
+        TextViewRangeDecoration decoration;
+        decoration.line_index = line_index;
+        decoration.col_start  = clamped_start;
+        decoration.col_end    = clamped_end;
+        decoration.style      = style;
+        data.range_decorations.push_back(decoration);
+    }
+
+    return data;
+}
+
 } // namespace
 
 ftxui::Element LogView::render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height)
 {
-    const int visible_line_count = estimate_visible_line_count(_viewport_box, screen_height);
-    const int first_visible_line = controller.first_visible_line_index(model, visible_line_count).value;
-
-    ftxui::Elements content;
-    content.reserve(static_cast<std::size_t>(std::max(1, visible_line_count)));
-
-    if (model.line_count() == 0)
-    {
-        content.push_back(ftxui::hbox({
-            ftxui::text("1 ") | ftxui::color(theme::muted),
-            ftxui::text(model.total_line_count() == 0 ? "<empty file>" : "<no matching lines>") | ftxui::color(theme::muted),
-        }));
-    }
-    else
-    {
-        const auto selected_range    = controller.selection_bounds(model);
-        const auto active_find_index = controller.active_find_visible_index(model);
-        const auto rendered_lines    = model.rendered_lines(first_visible_line, visible_line_count);
-
-        for (std::size_t offset = 0; offset < rendered_lines.size(); ++offset)
-        {
-            const int index            = first_visible_line + static_cast<int>(offset);
-            const bool is_find_match   = model.find_active() && model.visible_line_matches_find(index);
-            const bool is_active_match = active_find_index.has_value() && active_find_index->value == index;
-            const auto& rendered_line  = rendered_lines[offset];
-
-            if (!selected_range.has_value() || index < selected_range->first.line || index > selected_range->second.line)
-            {
-                auto row = ftxui::text(rendered_line);
-                if (is_find_match)
-                {
-                    row = theme::apply_find_highlight(std::move(row), is_active_match);
-                }
-                content.push_back(std::move(row));
-                continue;
-            }
-
-            const int highlight_start = (index == selected_range->first.line) ? selected_range->first.column : 0;
-            const int highlight_end =
-                (index == selected_range->second.line) ? selected_range->second.column : static_cast<int>(rendered_line.size());
-            const int clamped_start = std::clamp(highlight_start, 0, static_cast<int>(rendered_line.size()));
-            const int clamped_end   = std::clamp(highlight_end, clamped_start, static_cast<int>(rendered_line.size()));
-
-            ftxui::Elements row;
-            if (clamped_start > 0)
-            {
-                row.push_back(ftxui::text(rendered_line.substr(0, static_cast<std::size_t>(clamped_start))));
-            }
-
-            row.push_back(ftxui::text(rendered_line.substr(static_cast<std::size_t>(clamped_start),
-                                                           static_cast<std::size_t>(clamped_end - clamped_start))) |
-                          ftxui::inverted);
-
-            if (clamped_end < static_cast<int>(rendered_line.size()))
-            {
-                row.push_back(ftxui::text(rendered_line.substr(static_cast<std::size_t>(clamped_end))));
-            }
-
-            auto selection_row = ftxui::hbox(std::move(row));
-            if (is_find_match)
-            {
-                selection_row = theme::apply_find_highlight(std::move(selection_row), is_active_match);
-            }
-
-            content.push_back(std::move(selection_row));
-        }
-    }
-
-    // Scrollbar with visible track
-    ftxui::Element scrollbar = ftxui::text("");
-    if (model.line_count() > visible_line_count)
-    {
-        const int total_lines = model.line_count();
-        const int thumb_size  = std::max(1, (visible_line_count * visible_line_count) / std::max(total_lines, visible_line_count));
-        const int track_size  = std::max(1, visible_line_count - thumb_size);
-        const int max_offset  = std::max(1, total_lines - visible_line_count);
-        const int thumb_top   = (first_visible_line * track_size) / max_offset;
-
-        ftxui::Elements track;
-        track.reserve(static_cast<std::size_t>(visible_line_count));
-        for (int row = 0; row < visible_line_count; ++row)
-        {
-            const bool is_thumb = row >= thumb_top && row < (thumb_top + thumb_size);
-            track.push_back(ftxui::text(is_thumb ? "\xe2\x94\x83" : "\xe2\x94\x82") |
-                            ftxui::color(is_thumb ? theme::scrollbar_thumb_fg : theme::scrollbar_track_fg));
-        }
-
-        scrollbar = ftxui::vbox(std::move(track));
-    }
-
-    auto log_view = ftxui::hbox({
-                        ftxui::vbox(std::move(content)) | ftxui::reflect(_viewport_box) | ftxui::flex,
-                        scrollbar,
-                    }) |
-                    ftxui::flex;
+    const int visible_line_count = estimate_visible_line_count(_text_view.viewport_line_count(), screen_height);
+    const int visible_col_count  = std::max(1, _text_view.viewport_col_count());
+    auto log_view                = _text_view.render(build_text_view_data(model, controller, visible_line_count, visible_col_count)) | ftxui::flex;
 
     // Header with optional paused indicator
     ftxui::Element header;
@@ -247,33 +264,32 @@ ftxui::Element LogView::render(const LogModel& model, const LogController& contr
 
 int LogView::visible_line_count(int screen_height) const
 {
-    return estimate_visible_line_count(_viewport_box, screen_height);
+    return estimate_visible_line_count(_text_view.viewport_line_count(), screen_height);
 }
 
-std::optional<TextPosition> LogView::mouse_to_text_position(const LogModel& model, const LogController& controller,
-                                                            const ftxui::Mouse& mouse) const
+int LogView::visible_col_count() const
+{
+    return std::max(1, _text_view.viewport_col_count());
+}
+
+std::optional<TextPosition> LogView::mouse_to_text_position(const LogModel& model, const LogController& controller, const ftxui::Mouse& mouse) const
 {
     if (model.line_count() == 0)
     {
         return std::nullopt;
     }
 
-    if (mouse.x < _viewport_box.x_min || mouse.x > _viewport_box.x_max || mouse.y < _viewport_box.y_min || mouse.y > _viewport_box.y_max)
+    const int viewport_line_count = visible_line_count(1);
+    const int viewport_col_count  = std::max(1, _text_view.viewport_col_count());
+    const auto position           = _text_view.mouse_to_text_position(build_text_view_data(model, controller, viewport_line_count, viewport_col_count), mouse);
+    if (!position.has_value() || position->line_index < 0 || position->line_index >= model.line_count())
     {
         return std::nullopt;
     }
 
-    const int viewport_line_count = std::max(1, _viewport_box.y_max - _viewport_box.y_min + 1);
-    const int line_index          = controller.first_visible_line_index(model, viewport_line_count).value + (mouse.y - _viewport_box.y_min);
-    if (line_index < 0 || line_index >= model.line_count())
-    {
-        return std::nullopt;
-    }
-
-    const auto line = model.rendered_line(line_index);
     return TextPosition {
-        line_index,
-        std::clamp(mouse.x - _viewport_box.x_min, 0, static_cast<int>(line.size())),
+        position->line_index,
+        position->column,
     };
 }
 

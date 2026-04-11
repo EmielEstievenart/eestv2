@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "file_watcher.hpp"
+#include "watchers/file_watcher.hpp"
 
 namespace slayerlog
 {
@@ -41,10 +41,7 @@ public:
         std::filesystem::remove(_path, error);
     }
 
-    const std::filesystem::path& path() const
-    {
-        return _path;
-    }
+    const std::filesystem::path& path() const { return _path; }
 
     void write(const std::string& content) const
     {
@@ -70,14 +67,14 @@ private:
 
 void expect_poll_lines(FileWatcher& watcher, const std::vector<std::string>& expected_lines)
 {
-    std::vector<std::string> lines{"stale data"};
+    std::vector<std::string> lines {"stale data"};
     ASSERT_TRUE(watcher.poll(lines));
     EXPECT_EQ(lines, expected_lines);
 }
 
 void expect_no_poll_lines(FileWatcher& watcher)
 {
-    std::vector<std::string> lines{"stale data"};
+    std::vector<std::string> lines {"stale data"};
     EXPECT_FALSE(watcher.poll(lines));
     EXPECT_TRUE(lines.empty());
 }

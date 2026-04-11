@@ -25,7 +25,7 @@
 #include "command_manager.hpp"
 #include "command_palette_view.hpp"
 #include "debug_log.hpp"
-#include "file_watcher.hpp"
+#include "watchers/file_watcher.hpp"
 #include "log_batch.hpp"
 #include "log_controller.hpp"
 #include "log_source.hpp"
@@ -33,7 +33,7 @@
 #include "log_watcher.hpp"
 #include "master_controller.hpp"
 #include "master_view.hpp"
-#include "ssh_tail_watcher.hpp"
+#include "watchers/ssh_tail_watcher.hpp"
 #include "log_model.hpp"
 #include "settings_store.hpp"
 
@@ -122,8 +122,7 @@ std::vector<slayerlog::LogSource> parse_log_sources(const std::vector<std::strin
 
 bool contains_tracked_source(const std::vector<slayerlog::LogSource>& tracked_sources, const slayerlog::LogSource& candidate_source)
 {
-    return std::any_of(tracked_sources.begin(), tracked_sources.end(), [&](const slayerlog::LogSource& tracked_source)
-                       { return slayerlog::same_source(tracked_source, candidate_source); });
+    return std::any_of(tracked_sources.begin(), tracked_sources.end(), [&](const slayerlog::LogSource& tracked_source) { return slayerlog::same_source(tracked_source, candidate_source); });
 }
 
 struct WatchedFile
@@ -143,8 +142,7 @@ std::unique_ptr<slayerlog::LogWatcher> create_watcher_for_source(const slayerlog
     return std::make_unique<slayerlog::FileWatcher>(source.local_path);
 }
 
-std::vector<WatchedFile> create_file_watchers(const std::vector<slayerlog::LogSource>& sources,
-                                              const std::vector<std::string>& source_labels)
+std::vector<WatchedFile> create_file_watchers(const std::vector<slayerlog::LogSource>& sources, const std::vector<std::string>& source_labels)
 {
     std::vector<WatchedFile> watched_files;
     watched_files.reserve(sources.size());
@@ -170,16 +168,14 @@ std::vector<slayerlog::WatcherLineBatch> collect_watcher_batches(std::vector<Wat
     {
         slayerlog::WatcherLineBatch watcher_batch;
         watched_file.watcher->poll(watcher_batch);
-        SLAYERLOG_LOG_TRACE("Initial poll source=" << slayerlog::source_display_path(watched_file.source)
-                                                   << " returned_lines=" << watcher_batch.size());
+        SLAYERLOG_LOG_TRACE("Initial poll source=" << slayerlog::source_display_path(watched_file.source) << " returned_lines=" << watcher_batch.size());
         watcher_batches.push_back(std::move(watcher_batch));
     }
 
     return watcher_batches;
 }
 
-void append_batch_to_model(const std::vector<slayerlog::WatcherLineBatch>& watcher_batches, const std::vector<std::string>& source_labels,
-                           slayerlog::LogModel& model, ftxui::ScreenInteractive& screen)
+void append_batch_to_model(const std::vector<slayerlog::WatcherLineBatch>& watcher_batches, const std::vector<std::string>& source_labels, slayerlog::LogModel& model, ftxui::ScreenInteractive& screen)
 {
     const auto merged_lines = slayerlog::merge_log_batch(watcher_batches, source_labels);
     SLAYERLOG_LOG_TRACE("Merging watcher batches watcher_count=" << watcher_batches.size() << " merged_lines=" << merged_lines.size());
@@ -193,13 +189,11 @@ void append_batch_to_model(const std::vector<slayerlog::WatcherLineBatch>& watch
     screen.PostEvent(ftxui::Event::Custom);
 }
 
-std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>& watched_files,
-                                 const std::vector<std::string>& source_labels, std::mutex& model_mutex, slayerlog::LogModel& model,
-                                 ftxui::ScreenInteractive& screen, std::atomic<bool>& keep_running)
+std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>& watched_files, const std::vector<std::string>& source_labels, std::mutex& model_mutex, slayerlog::LogModel& model, ftxui::ScreenInteractive& screen,
+                                 std::atomic<bool>& keep_running)
 {
     return std::thread(
-        [poll_interval_ms, watched_files = &watched_files, source_labels = &source_labels, model_mutex = &model_mutex, model = &model,
-         screen = &screen, keep_running = &keep_running]
+        [poll_interval_ms, watched_files = &watched_files, source_labels = &source_labels, model_mutex = &model_mutex, model = &model, screen = &screen, keep_running = &keep_running]
         {
             while (*keep_running)
             {
@@ -224,18 +218,15 @@ std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>&
                         catch (const std::exception& ex)
                         {
                             // Ignore transient read errors while another process is writing.
-                            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << slayerlog::source_display_path(watched_file.source)
-                                                                                   << " error=" << ex.what());
+                            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << slayerlog::source_display_path(watched_file.source) << " error=" << ex.what());
                         }
                         catch (...)
                         {
                             // Ignore transient read errors while another process is writing.
-                            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << slayerlog::source_display_path(watched_file.source)
-                                                                                   << " error=<unknown>");
+                            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << slayerlog::source_display_path(watched_file.source) << " error=<unknown>");
                         }
 
-                        SLAYERLOG_LOG_TRACE("Live poll source=" << slayerlog::source_display_path(watched_file.source)
-                                                                << " returned_lines=" << watcher_batch.size());
+                        SLAYERLOG_LOG_TRACE("Live poll source=" << slayerlog::source_display_path(watched_file.source) << " returned_lines=" << watcher_batch.size());
                         watcher_batches.push_back(std::move(watcher_batch));
                     }
 
@@ -245,11 +236,8 @@ std::thread start_watcher_thread(int poll_interval_ms, std::vector<WatchedFile>&
         });
 }
 
-std::optional<std::string> reload_tracked_sources(std::vector<slayerlog::LogSource> candidate_sources,
-                                                  std::vector<slayerlog::LogSource>& tracked_sources,
-                                                  std::vector<std::string>& source_labels, std::string& header_text,
-                                                  std::vector<WatchedFile>& watched_files, slayerlog::LogModel& model,
-                                                  slayerlog::LogController& controller, ftxui::ScreenInteractive& screen)
+std::optional<std::string> reload_tracked_sources(std::vector<slayerlog::LogSource> candidate_sources, std::vector<slayerlog::LogSource>& tracked_sources, std::vector<std::string>& source_labels, std::string& header_text,
+                                                  std::vector<WatchedFile>& watched_files, slayerlog::LogModel& model, slayerlog::LogController& controller, ftxui::ScreenInteractive& screen)
 {
     auto candidate_source_labels = slayerlog::build_source_labels(candidate_sources);
     std::string candidate_header = build_header_text(candidate_source_labels);
@@ -279,10 +267,8 @@ std::optional<std::string> reload_tracked_sources(std::vector<slayerlog::LogSour
     return std::nullopt;
 }
 
-void register_commands(slayerlog::CommandManager& command_manager, slayerlog::LogModel& model, slayerlog::LogController& controller,
-                       std::function<int()> viewport_line_count,
-                       std::function<slayerlog::CommandResult(std::string_view)> open_file_command,
-                       std::function<slayerlog::CommandResult()> close_open_file_command)
+void register_commands(slayerlog::CommandManager& command_manager, slayerlog::LogModel& model, slayerlog::LogController& controller, std::function<int()> viewport_line_count,
+                       std::function<slayerlog::CommandResult(std::string_view)> open_file_command, std::function<slayerlog::CommandResult()> close_open_file_command)
 {
     command_manager.register_command({"filter-in", "Show lines matching text or regex", "filter-in <text|re:regex>"},
                                      [&](std::string_view arguments)
@@ -298,8 +284,7 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                          }
                                          catch (const std::invalid_argument& error)
                                          {
-                                             return slayerlog::CommandResult {false,
-                                                                              "Invalid filter-in pattern: " + std::string(error.what())};
+                                             return slayerlog::CommandResult {false, "Invalid filter-in pattern: " + std::string(error.what())};
                                          }
 
                                          return slayerlog::CommandResult {true, "Added include filter: " + std::string(arguments)};
@@ -319,8 +304,7 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                          }
                                          catch (const std::invalid_argument& error)
                                          {
-                                             return slayerlog::CommandResult {false,
-                                                                              "Invalid filter-out pattern: " + std::string(error.what())};
+                                             return slayerlog::CommandResult {false, "Invalid filter-out pattern: " + std::string(error.what())};
                                          }
 
                                          return slayerlog::CommandResult {true, "Added exclude filter: " + std::string(arguments)};
@@ -372,8 +356,7 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
 
                                          if (*line_number > model.total_line_count())
                                          {
-                                             return slayerlog::CommandResult {false,
-                                                                              "Line " + std::to_string(*line_number) + " is out of range"};
+                                             return slayerlog::CommandResult {false, "Line " + std::to_string(*line_number) + " is out of range"};
                                          }
 
                                          if (!controller.go_to_line(model, *line_number, viewport_line_count()))
@@ -436,15 +419,13 @@ void register_commands(slayerlog::CommandManager& command_manager, slayerlog::Lo
                                          {
                                              return slayerlog::CommandResult {
                                                  true,
-                                                 "Find active: " + model.find_query() + " (" + std::to_string(visible_matches) +
-                                                     " visible / " + std::to_string(total_matches) + " total)",
+                                                 "Find active: " + model.find_query() + " (" + std::to_string(visible_matches) + " visible / " + std::to_string(total_matches) + " total)",
                                              };
                                          }
 
                                          return slayerlog::CommandResult {
                                              true,
-                                             "Find active: " + model.find_query() + " (0 visible / " + std::to_string(total_matches) +
-                                                 " total)",
+                                             "Find active: " + model.find_query() + " (0 visible / " + std::to_string(total_matches) + " total)",
                                          };
                                      });
 }
@@ -463,8 +444,7 @@ int main(int argc, char** argv)
     SLAYERLOG_LOG_INFO("Starting slayerlog poll_interval_ms=" << config.poll_interval_ms << " watched_files=" << config.file_paths.size());
     for (std::size_t index = 0; index < tracked_sources.size(); ++index)
     {
-        SLAYERLOG_LOG_INFO("Configured watcher[" << index << "] source=" << slayerlog::source_display_path(tracked_sources[index])
-                                                 << " label=" << source_labels[index]);
+        SLAYERLOG_LOG_INFO("Configured watcher[" << index << "] source=" << slayerlog::source_display_path(tracked_sources[index]) << " label=" << source_labels[index]);
     }
 
     auto screen = ftxui::ScreenInteractive::Fullscreen();
@@ -514,8 +494,7 @@ int main(int argc, char** argv)
             std::vector<slayerlog::LogSource> candidate_sources = tracked_sources;
             candidate_sources.push_back(candidate_source);
 
-            const auto error = reload_tracked_sources(candidate_sources, tracked_sources, source_labels, header_text, watched_files, model,
-                                                      controller, screen);
+            const auto error = reload_tracked_sources(candidate_sources, tracked_sources, source_labels, header_text, watched_files, model, controller, screen);
             if (error.has_value())
             {
                 SLAYERLOG_LOG_ERROR("open-file failed file=" << file_path << " error=" << *error);
@@ -531,29 +510,27 @@ int main(int argc, char** argv)
                 return slayerlog::CommandResult {false, "No open files to close"};
             }
 
-            command_palette_controller.open_close_open_file_picker(
-                source_labels,
-                [&](std::size_t selected_index)
-                {
-                    if (selected_index >= tracked_sources.size())
-                    {
-                        return slayerlog::CommandResult {false, "Invalid open file selection"};
-                    }
+            command_palette_controller.open_close_open_file_picker(source_labels,
+                                                                   [&](std::size_t selected_index)
+                                                                   {
+                                                                       if (selected_index >= tracked_sources.size())
+                                                                       {
+                                                                           return slayerlog::CommandResult {false, "Invalid open file selection"};
+                                                                       }
 
-                    const std::string closed_label                      = source_labels[selected_index];
-                    std::vector<slayerlog::LogSource> candidate_sources = tracked_sources;
-                    candidate_sources.erase(candidate_sources.begin() + static_cast<std::ptrdiff_t>(selected_index));
+                                                                       const std::string closed_label                      = source_labels[selected_index];
+                                                                       std::vector<slayerlog::LogSource> candidate_sources = tracked_sources;
+                                                                       candidate_sources.erase(candidate_sources.begin() + static_cast<std::ptrdiff_t>(selected_index));
 
-                    const auto error = reload_tracked_sources(candidate_sources, tracked_sources, source_labels, header_text, watched_files,
-                                                              model, controller, screen);
-                    if (error.has_value())
-                    {
-                        SLAYERLOG_LOG_ERROR("close-open-file failed selected_index=" << selected_index << " error=" << *error);
-                        return slayerlog::CommandResult {false, *error};
-                    }
+                                                                       const auto error = reload_tracked_sources(candidate_sources, tracked_sources, source_labels, header_text, watched_files, model, controller, screen);
+                                                                       if (error.has_value())
+                                                                       {
+                                                                           SLAYERLOG_LOG_ERROR("close-open-file failed selected_index=" << selected_index << " error=" << *error);
+                                                                           return slayerlog::CommandResult {false, *error};
+                                                                       }
 
-                    return slayerlog::CommandResult {true, "Closed file: " + closed_label};
-                });
+                                                                       return slayerlog::CommandResult {true, "Closed file: " + closed_label};
+                                                                   });
 
             return slayerlog::CommandResult {true, "Select a file to close", false};
         });
@@ -573,8 +550,7 @@ int main(int argc, char** argv)
     }
 
     std::atomic<bool> keep_running = true;
-    std::thread watcher_thread =
-        start_watcher_thread(config.poll_interval_ms, watched_files, source_labels, model_mutex, model, screen, keep_running);
+    std::thread watcher_thread     = start_watcher_thread(config.poll_interval_ms, watched_files, source_labels, model_mutex, model, screen, keep_running);
 
     auto viewer = ftxui::Renderer(
         [&]

@@ -34,8 +34,11 @@ public:
 
     void scroll_up(const LogModel& model, int viewport_line_count, int amount = 1);
     void scroll_down(const LogModel& model, int viewport_line_count, int amount = 1);
+    void scroll_left(int amount = 1);
+    void scroll_right(const LogModel& model, int viewport_col_count, int amount = 1);
     void scroll_to_top(const LogModel& model, int viewport_line_count);
     void scroll_to_bottom();
+    int first_visible_col(const LogModel& model, int viewport_col_count) const;
     bool go_to_line(const LogModel& model, int line_number, int viewport_line_count);
 
     bool set_find_query(LogModel& model, std::string query, int viewport_line_count);
@@ -52,18 +55,19 @@ public:
     std::optional<std::pair<TextPosition, TextPosition>> selection_bounds(const LogModel& model) const;
     std::string selection_text(const LogModel& model) const;
 
-    LogEventResult handle_event(LogModel& model, ftxui::Event event, int viewport_line_count,
-                                const std::function<std::optional<TextPosition>(const ftxui::Mouse& mouse)>& mouse_to_text_position);
+    LogEventResult handle_event(LogModel& model, ftxui::Event event, int viewport_line_count, int viewport_col_count, const std::function<std::optional<TextPosition>(const ftxui::Mouse& mouse)>& mouse_to_text_position);
 
 private:
     bool copy_selection_to_clipboard(const LogModel& model) const;
 
     int max_first_visible_line_index(const LogModel& model, int viewport_line_count) const;
+    int max_first_visible_col(const LogModel& model, int viewport_col_count) const;
     void center_on_visible_line(const LogModel& model, VisibleLineIndex target_visible_index, int viewport_line_count);
     TextPosition clamp_selection_position(const LogModel& model, TextPosition position) const;
 
     VisibleLineIndex _first_visible_line_index {0};
-    bool _follow_bottom = true;
+    int _first_visible_col = 0;
+    bool _follow_bottom    = true;
 
     std::optional<AllLineIndex> _active_find_entry_index;
 

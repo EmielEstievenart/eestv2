@@ -3,6 +3,7 @@
 #include <functional>
 #include <ftxui/component/event.hpp>
 #include <ftxui/screen/color.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,35 @@ struct TextViewColumnHighlight
     bool active        = false;
 };
 
+struct TextViewStyle
+{
+    std::optional<ftxui::Color> foreground;
+    std::optional<ftxui::Color> background;
+    bool bold     = false;
+    bool dim      = false;
+    bool inverted = false;
+};
+
+struct TextViewLineDecoration
+{
+    int line_index = 0;
+    TextViewStyle style;
+};
+
+struct TextViewRangeDecoration
+{
+    int line_index = 0;
+    int col_start  = 0;
+    int col_end    = 0;
+    TextViewStyle style;
+};
+
+struct TextViewPosition
+{
+    int line_index = 0;
+    int column     = 0;
+};
+
 struct TextViewRenderData
 {
     int total_lines         = 0;
@@ -28,6 +58,8 @@ struct TextViewRenderData
     int viewport_col_count  = 1;
     TextViewColumnHighlight col_highlight;
     std::vector<std::string> visible_lines;
+    std::vector<TextViewLineDecoration> line_decorations;
+    std::vector<TextViewRangeDecoration> range_decorations;
 };
 
 class TextViewController

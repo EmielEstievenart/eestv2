@@ -149,7 +149,7 @@ TEST(LogControllerTest, HandleEventEscapeClearsFindBeforeRequestingExit)
     ASSERT_TRUE(controller.set_find_query(model, "error", 1));
     ASSERT_TRUE(model.find_active());
 
-    const auto result = controller.handle_event(model, ftxui::Event::Escape, 1, {});
+    const auto result = controller.handle_event(model, ftxui::Event::Escape, 1, 1, {});
 
     EXPECT_TRUE(result.handled);
     EXPECT_FALSE(result.request_exit);
@@ -171,13 +171,13 @@ TEST(LogControllerTest, HandleEventLeftAndRightArrowNavigateFindResults)
     ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
     EXPECT_EQ(controller.active_find_visible_index(model)->value, 1);
 
-    const auto previous_result = controller.handle_event(model, ftxui::Event::ArrowLeft, 1, {});
+    const auto previous_result = controller.handle_event(model, ftxui::Event::ArrowLeft, 1, 1, {});
     EXPECT_TRUE(previous_result.handled);
     EXPECT_FALSE(previous_result.request_exit);
     ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
     EXPECT_EQ(controller.active_find_visible_index(model)->value, 0);
 
-    const auto next_result = controller.handle_event(model, ftxui::Event::ArrowRight, 1, {});
+    const auto next_result = controller.handle_event(model, ftxui::Event::ArrowRight, 1, 1, {});
     EXPECT_TRUE(next_result.handled);
     EXPECT_FALSE(next_result.request_exit);
     ASSERT_TRUE(controller.active_find_visible_index(model).has_value());

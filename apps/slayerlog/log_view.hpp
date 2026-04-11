@@ -7,7 +7,8 @@
 
 #include <ftxui/component/mouse.hpp>
 #include <ftxui/dom/elements.hpp>
-#include <ftxui/screen/box.hpp>
+
+#include <ftxui_components/text_view_view.hpp>
 
 #include "log_controller.hpp"
 #include "log_model.hpp"
@@ -19,12 +20,12 @@ class LogView
 {
 public:
     int visible_line_count(int screen_height) const;
+    int visible_col_count() const;
     ftxui::Element render(const LogModel& model, const LogController& controller, const std::string& header_text, int screen_height);
-    std::optional<TextPosition> mouse_to_text_position(const LogModel& model, const LogController& controller,
-                                                       const ftxui::Mouse& mouse) const;
+    std::optional<TextPosition> mouse_to_text_position(const LogModel& model, const LogController& controller, const ftxui::Mouse& mouse) const;
 
 private:
-    ftxui::Box _viewport_box;
+    TextViewView _text_view;
 };
 
 } // namespace slayerlog
