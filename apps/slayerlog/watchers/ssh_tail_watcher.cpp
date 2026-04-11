@@ -148,8 +148,8 @@ std::vector<std::string> SshTailWatcher::build_ssh_arguments(const LogSource& so
                   << "exec tail -c +\"$start\" -f -- " << quoted_path;
 
     return {
-        "-o",  "BatchMode=yes",     "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", source.ssh_target, "sh",
-        "-lc", remote_script.str(),
+        // This watcher is read-only; prevent ssh from stealing terminal input from the UI.
+        "-n", "-T", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", source.ssh_target, "sh", "-lc", remote_script.str(),
     };
 }
 
