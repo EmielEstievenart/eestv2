@@ -3,20 +3,13 @@ project(slayerlog)
 add_executable(
   slayerlog
   main.cpp
-   commands/command_palette_controller.cpp
-  commands/command_palette_controller.hpp
-  commands/command_palette_model.hpp
-  commands/command_palette_view.cpp
-  commands/command_palette_view.hpp
-   commands/command_history.cpp
-   commands/command_history.hpp
-  commands/command_manager.cpp
-  commands/command_manager.hpp
+  tracked_source_manager.cpp
+  tracked_source_manager.hpp
+  tracked_source.cpp
+  tracked_source.hpp
   command_line_parser.cpp
   command_line_parser.hpp
   debug_log.hpp
-  watchers/file_watcher.cpp
-  watchers/file_watcher.hpp
   log_source.cpp
   log_source.hpp
   log_watcher.hpp
@@ -32,35 +25,49 @@ add_executable(
   master_view.hpp
   log_timestamp.cpp
   log_timestamp.hpp
-   watchers/process_pipe.cpp
-   watchers/process_pipe.hpp
   settings_ini.cpp
   settings_ini.hpp
   settings_store.cpp
   settings_store.hpp
-  watchers/ssh_tail_watcher.cpp
-  watchers/ssh_tail_watcher.hpp
-   watchers/stream_line_buffer.cpp
-   watchers/stream_line_buffer.hpp
   log_model.cpp
   log_model.hpp
   log4cplus.ini
-  view_theme.hpp)
+  view_theme.hpp
+  commands/command_palette_controller.cpp
+  commands/command_palette_controller.hpp
+  commands/command_palette_model.hpp
+  commands/command_palette_view.cpp
+  commands/command_palette_view.hpp
+  commands/command_history.cpp
+  commands/command_history.hpp
+  commands/command_manager.cpp
+  commands/command_manager.hpp
+  watchers/process_pipe.cpp
+  watchers/process_pipe.hpp
+  watchers/ssh_tail_watcher.cpp
+  watchers/ssh_tail_watcher.hpp
+  watchers/stream_line_buffer.cpp
+  watchers/stream_line_buffer.hpp
+  watchers/log_watcher_base.hpp
+  watchers/file_watcher.cpp
+  watchers/file_watcher.hpp)
 
-target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
+target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB
+                                             BOOST_USE_WINAPI_VERSION=0x0602)
 
-target_include_directories(slayerlog PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/commands)
+target_include_directories(
+  slayerlog PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/commands)
 
 target_link_libraries(
-  slayerlog
-  PRIVATE component
-          ftxui_components
-          Boost::program_options
-          log4cplus::log4cplus)
+  slayerlog PRIVATE component ftxui_components Boost::program_options
+                    log4cplus::log4cplus)
 
 add_custom_command(
   TARGET slayerlog
   POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/log4cplus.ini"
-          "$<TARGET_FILE_DIR:slayerlog>/log4cplus.ini"
+  COMMAND
+    ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/log4cplus.ini"
+    "$<TARGET_FILE_DIR:slayerlog>/log4cplus.ini"
   COMMENT "Copy log4cplus.ini next to slayerlog executable")

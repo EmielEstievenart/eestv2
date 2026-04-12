@@ -53,8 +53,7 @@ std::string quote_for_log(std::string_view text)
             }
             else
             {
-                output << "\\x" << std::uppercase << std::hex << std::setw(2) << std::setfill('0')
-                       << static_cast<int>(character) << std::dec << std::nouppercase << std::setfill(' ');
+                output << "\\x" << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(character) << std::dec << std::nouppercase << std::setfill(' ');
             }
             break;
         }
@@ -90,10 +89,8 @@ std::string describe_lines_for_log(const std::vector<std::string>& lines)
 
 void FileWatcher::parse_lines_from_chunk(std::string chunk, FileWatcher::State& state, std::vector<std::string>& lines)
 {
-    SLAYERLOG_LOG_TRACE(
-        "parse_lines_from_chunk begin chunk_bytes=" << chunk.size() << " chunk=" << quote_for_log(chunk)
-                                                   << " pending_fragment_bytes=" << state.pending_fragment.size()
-                                                   << " pending_fragment=" << quote_for_log(state.pending_fragment));
+    SLAYERLOG_LOG_TRACE("parse_lines_from_chunk begin chunk_bytes=" << chunk.size() << " chunk=" << quote_for_log(chunk) << " pending_fragment_bytes=" << state.pending_fragment.size()
+                                                                    << " pending_fragment=" << quote_for_log(state.pending_fragment));
 
     if (!state.pending_fragment.empty())
     {
@@ -109,9 +106,7 @@ void FileWatcher::parse_lines_from_chunk(std::string chunk, FileWatcher::State& 
         if (newline == std::string::npos)
         {
             state.pending_fragment = chunk.substr(start);
-            SLAYERLOG_LOG_TRACE(
-                "Stored trailing pending fragment bytes=" << state.pending_fragment.size()
-                                                          << " fragment=" << quote_for_log(state.pending_fragment));
+            SLAYERLOG_LOG_TRACE("Stored trailing pending fragment bytes=" << state.pending_fragment.size() << " fragment=" << quote_for_log(state.pending_fragment));
             break;
         }
 
@@ -126,10 +121,8 @@ void FileWatcher::parse_lines_from_chunk(std::string chunk, FileWatcher::State& 
         start = newline + 1;
     }
 
-    SLAYERLOG_LOG_TRACE(
-        "parse_lines_from_chunk end produced_lines=" << lines.size() << " lines=" << describe_lines_for_log(lines)
-                                                     << " remaining_pending_bytes=" << state.pending_fragment.size()
-                                                     << " remaining_pending=" << quote_for_log(state.pending_fragment));
+    SLAYERLOG_LOG_TRACE("parse_lines_from_chunk end produced_lines=" << lines.size() << " lines=" << describe_lines_for_log(lines) << " remaining_pending_bytes=" << state.pending_fragment.size()
+                                                                     << " remaining_pending=" << quote_for_log(state.pending_fragment));
 }
 
 void FileWatcher::update_offset_tail_bytes(std::string_view chunk, FileWatcher::State& state)
@@ -205,85 +198,66 @@ std::uintmax_t FileWatcher::get_file_size(const std::string& path)
     return std::filesystem::file_size(std::filesystem::path(path));
 }
 
-FileWatcher::FileWatcher(std::string file_path)
-    : _file_path(std::move(file_path))
+FileWatcher::FileWatcher(std::string file_path) : _file_path(std::move(file_path))
 {
     SLAYERLOG_LOG_INFO("Created file watcher for file=" << _file_path);
 }
 
-bool FileWatcher::poll(std::vector<std::string>& lines)
+bool FileWatcher::poll_locked(std::vector<std::string>& lines)
 {
-    SLAYERLOG_LOG_TRACE("poll begin file=" << _file_path << " caller_lines_size_before_clear=" << lines.size());
-    lines.clear();
+    SLAYERLOG_LOG_TRACE("poll begin file=" << _file_path);
+    SLAYERLOG_LOG_TRACE("poll locked file=" << _file_path << " state.offset=" << _state.offset << " state.pending_fragment_bytes=" << _state.pending_fragment.size()
+                                            << " state.awaiting_regrowth_after_shrink=" << _state.awaiting_regrowth_after_shrink << " state.shrink_candidate_size=" << _state.shrink_candidate_size);
+    if (!collect_update_locked(lines))
     {
-        std::lock_guard lock(_mutex);
-        SLAYERLOG_LOG_TRACE(
-            "poll locked file=" << _file_path << " state.offset=" << _state.offset
-                                << " state.pending_fragment_bytes=" << _state.pending_fragment.size()
-                                << " state.awaiting_regrowth_after_shrink=" << _state.awaiting_regrowth_after_shrink
-                                << " state.shrink_candidate_size=" << _state.shrink_candidate_size);
-        if (!collect_update_locked(lines))
-        {
-            SLAYERLOG_LOG_TRACE("poll end file=" << _file_path << " returned=false");
-            return false;
-        }
+        SLAYERLOG_LOG_TRACE("poll end file=" << _file_path << " returned=false");
+        return false;
     }
 
-    SLAYERLOG_LOG_DEBUG(
-        "poll end file=" << _file_path << " returned=true line_count=" << lines.size() << " lines=" << describe_lines_for_log(lines));
+    SLAYERLOG_LOG_DEBUG("poll end file=" << _file_path << " returned=true line_count=" << lines.size() << " lines=" << describe_lines_for_log(lines));
     return true;
 }
 
 bool FileWatcher::collect_update_locked(std::vector<std::string>& lines)
 {
     auto file_size = get_file_size(_file_path);
-    SLAYERLOG_LOG_TRACE(
-        "collect_update_locked file=" << _file_path << " file_size=" << file_size << " offset=" << _state.offset
-                                      << " pending_fragment_bytes=" << _state.pending_fragment.size()
-                                      << " awaiting_regrowth=" << _state.awaiting_regrowth_after_shrink
-                                      << " shrink_candidate_size=" << _state.shrink_candidate_size);
+    SLAYERLOG_LOG_TRACE("collect_update_locked file=" << _file_path << " file_size=" << file_size << " offset=" << _state.offset << " pending_fragment_bytes=" << _state.pending_fragment.size()
+                                                      << " awaiting_regrowth=" << _state.awaiting_regrowth_after_shrink << " shrink_candidate_size=" << _state.shrink_candidate_size);
 
     if (file_size < _state.offset)
     {
-        SLAYERLOG_LOG_DEBUG(
-            "Detected shrink file=" << _file_path << " file_size=" << file_size << " previous_offset=" << _state.offset);
+        SLAYERLOG_LOG_DEBUG("Detected shrink file=" << _file_path << " file_size=" << file_size << " previous_offset=" << _state.offset);
         // Some editors save by truncating and rewriting the whole file. Wait briefly to
         // see whether the file grows back to the old offset before treating it as rollover.
         if (!_state.awaiting_regrowth_after_shrink)
         {
             _state.awaiting_regrowth_after_shrink = true;
-            _state.shrink_candidate_size         = file_size;
-            SLAYERLOG_LOG_DEBUG(
-                "Armed regrowth detection file=" << _file_path << " shrink_candidate_size=" << _state.shrink_candidate_size);
+            _state.shrink_candidate_size          = file_size;
+            SLAYERLOG_LOG_DEBUG("Armed regrowth detection file=" << _file_path << " shrink_candidate_size=" << _state.shrink_candidate_size);
             return false;
         }
 
         if (file_size != _state.shrink_candidate_size)
         {
-            SLAYERLOG_LOG_DEBUG(
-                "Shrink candidate changed while waiting file=" << _file_path << " previous_candidate="
-                                                              << _state.shrink_candidate_size << " new_candidate=" << file_size);
+            SLAYERLOG_LOG_DEBUG("Shrink candidate changed while waiting file=" << _file_path << " previous_candidate=" << _state.shrink_candidate_size << " new_candidate=" << file_size);
             _state.shrink_candidate_size = file_size;
             return false;
         }
 
         SLAYERLOG_LOG_DEBUG("Confirmed rollover after stable shrink file=" << _file_path << "; resetting state");
-        _state    = State{};
+        _state    = State {};
         file_size = get_file_size(_file_path);
         SLAYERLOG_LOG_TRACE("After rollover reset file=" << _file_path << " reloaded_file_size=" << file_size);
     }
     else if (_state.awaiting_regrowth_after_shrink)
     {
         const auto window = read_window_ending_at(_file_path, _state.offset);
-        SLAYERLOG_LOG_TRACE(
-            "Comparing regrowth window file=" << _file_path << " window_bytes=" << window.size()
-                                              << " expected_tail_bytes=" << _state.offset_tail_bytes.size()
-                                              << " window=" << quote_for_log(window)
-                                              << " expected_tail=" << quote_for_log(_state.offset_tail_bytes));
+        SLAYERLOG_LOG_TRACE("Comparing regrowth window file=" << _file_path << " window_bytes=" << window.size() << " expected_tail_bytes=" << _state.offset_tail_bytes.size() << " window=" << quote_for_log(window)
+                                                              << " expected_tail=" << quote_for_log(_state.offset_tail_bytes));
         if (window != _state.offset_tail_bytes)
         {
             SLAYERLOG_LOG_DEBUG("Regrowth no longer matches previous tail file=" << _file_path << "; treating as rollover");
-            _state = State{};
+            _state    = State {};
             file_size = get_file_size(_file_path);
             SLAYERLOG_LOG_TRACE("After regrowth mismatch reset file=" << _file_path << " reloaded_file_size=" << file_size);
         }
@@ -301,9 +275,7 @@ bool FileWatcher::collect_update_locked(std::vector<std::string>& lines)
     }
 
     auto chunk = read_file_tail(_file_path, _state.offset);
-    SLAYERLOG_LOG_TRACE(
-        "Read file tail file=" << _file_path << " previous_offset=" << _state.offset << " new_file_size=" << file_size
-                               << " chunk_bytes=" << chunk.size() << " chunk=" << quote_for_log(chunk));
+    SLAYERLOG_LOG_TRACE("Read file tail file=" << _file_path << " previous_offset=" << _state.offset << " new_file_size=" << file_size << " chunk_bytes=" << chunk.size() << " chunk=" << quote_for_log(chunk));
     _state.offset = file_size;
     update_offset_tail_bytes(chunk, _state);
     if (chunk.empty())
@@ -315,17 +287,12 @@ bool FileWatcher::collect_update_locked(std::vector<std::string>& lines)
     parse_lines_from_chunk(std::move(chunk), _state, lines);
     if (lines.empty())
     {
-        SLAYERLOG_LOG_DEBUG(
-            "Chunk produced no complete lines file=" << _file_path << " pending_fragment_bytes=" << _state.pending_fragment.size()
-                                                     << " pending_fragment=" << quote_for_log(_state.pending_fragment));
+        SLAYERLOG_LOG_DEBUG("Chunk produced no complete lines file=" << _file_path << " pending_fragment_bytes=" << _state.pending_fragment.size() << " pending_fragment=" << quote_for_log(_state.pending_fragment));
         return false;
     }
 
-    SLAYERLOG_LOG_DEBUG(
-        "collect_update_locked returning lines file=" << _file_path << " line_count=" << lines.size()
-                                                      << " lines=" << describe_lines_for_log(lines)
-                                                      << " pending_fragment_bytes=" << _state.pending_fragment.size()
-                                                      << " pending_fragment=" << quote_for_log(_state.pending_fragment));
+    SLAYERLOG_LOG_DEBUG("collect_update_locked returning lines file=" << _file_path << " line_count=" << lines.size() << " lines=" << describe_lines_for_log(lines) << " pending_fragment_bytes=" << _state.pending_fragment.size()
+                                                                      << " pending_fragment=" << quote_for_log(_state.pending_fragment));
     return true;
 }
 

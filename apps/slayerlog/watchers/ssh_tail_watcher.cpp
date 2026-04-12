@@ -31,11 +31,8 @@ SshTailWatcher::SshTailWatcher(LogSource source) : _source(std::move(source))
     }
 }
 
-bool SshTailWatcher::poll(std::vector<std::string>& lines)
+bool SshTailWatcher::poll_locked(std::vector<std::string>& lines)
 {
-    lines.clear();
-
-    std::lock_guard lock(_mutex);
     const auto now = std::chrono::steady_clock::now();
     if (_pipe == nullptr && now < _next_retry_at)
     {

@@ -1,17 +1,16 @@
 #pragma once
 
 #include <cstdint>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include "log_watcher.hpp"
+#include "log_watcher_base.hpp"
 
 namespace slayerlog
 {
 
-class FileWatcher : public LogWatcher
+class FileWatcher : public LogWatcherBase
 {
 public:
     explicit FileWatcher(std::string file_path);
@@ -19,7 +18,8 @@ public:
     FileWatcher(const FileWatcher&)            = delete;
     FileWatcher& operator=(const FileWatcher&) = delete;
 
-    bool poll(std::vector<std::string>& lines) override;
+protected:
+    bool poll_locked(std::vector<std::string>& lines) override;
 
 private:
     struct State
@@ -41,7 +41,6 @@ private:
 
     std::string _file_path;
     State _state;
-    std::mutex _mutex;
 };
 
 } // namespace slayerlog
