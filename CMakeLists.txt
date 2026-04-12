@@ -106,6 +106,24 @@ if(NOT DEFINED BUILD_SHARED_LIBS)
 endif()
 add_subdirectory(libs/log4cplus)
 
+# Keep zstd lean in the superproject build.
+set(ZSTD_BUILD_PROGRAMS
+    OFF
+    CACHE BOOL "Disable zstd command-line programs in the superproject" FORCE)
+set(ZSTD_BUILD_TESTS
+    OFF
+    CACHE BOOL "Disable zstd tests in the superproject" FORCE)
+set(ZSTD_BUILD_CONTRIB
+    OFF
+    CACHE BOOL "Disable zstd contrib targets in the superproject" FORCE)
+set(ZSTD_BUILD_SHARED
+    OFF
+    CACHE BOOL "Disable shared zstd library in the superproject" FORCE)
+set(ZSTD_BUILD_STATIC
+    ON
+    CACHE BOOL "Build static zstd library in the superproject" FORCE)
+add_subdirectory(libs/zstd)
+
 add_subdirectory(code)
 add_subdirectory(apps)
 add_subdirectory(examples)

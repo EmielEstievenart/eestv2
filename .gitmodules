@@ -11,3 +11,6 @@
 	path = libs/log4cplus
 	url = https://github.com/log4cplus/log4cplus.git
 	branch = 2.1.x
+[submodule "libs/zstd"]
+	path = libs/zstd
+	url = https://github.com/facebook/zstd.git

@@ -15,6 +15,7 @@
 #include "debug_log.hpp"
 #include "log_controller.hpp"
 #include "log_model.hpp"
+#include "log_source.hpp"
 #include "tracked_source_manager.hpp"
 
 namespace slayerlog
@@ -24,7 +25,7 @@ std::string build_header_text(const std::vector<std::string>& labels)
 {
     if (labels.empty())
     {
-        return "No files opened (use open-file <path>)";
+        return "No files opened (use open-file <path> or open-folder <path>)";
     }
 
     std::ostringstream output;
@@ -120,6 +121,29 @@ CommandResult open_file_command(std::string_view file_path, TrackedSourceManager
 
     reload_model_from_manager(tracked_source_manager, header_text, model, screen);
     return CommandResult {true, "Opened file: " + std::string(file_path)};
+}
+
+CommandResult open_folder_command(std::string_view folder_path, TrackedSourceManager& tracked_source_manager, std::string& header_text, LogModel& model, ftxui::ScreenInteractive& screen)
+{
+    LogSource source;
+    try
+    {
+        source = make_local_folder_source(folder_path);
+    }
+    catch (const std::exception& ex)
+    {
+        return CommandResult {false, ex.what()};
+    }
+
+    const auto error = tracked_source_manager.open_source(source);
+    if (error.has_value())
+    {
+        SLAYERLOG_LOG_ERROR("open-folder failed folder=" << source_display_path(source) << " error=" << *error);
+        return CommandResult {false, *error};
+    }
+
+    reload_model_from_manager(tracked_source_manager, header_text, model, screen);
+    return CommandResult {true, "Opened folder: " + source_display_path(source)};
 }
 
 CommandResult close_open_file_command(CommandPaletteController& command_palette_controller, TrackedSourceManager& tracked_source_manager, std::string& header_text, LogModel& model, ftxui::ScreenInteractive& screen)
@@ -267,6 +291,18 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                          }
 
                                          return open_file_command(file_path, tracked_source_manager, header_text, model, screen);
+                                     });
+
+    command_manager.register_command({"open-folder", "Open folder and reload all tracked logs", "open-folder <path>"},
+                                     [&](std::string_view arguments)
+                                     {
+                                         const std::string folder_path = trim_text(arguments);
+                                         if (folder_path.empty())
+                                         {
+                                             return CommandResult {false, "Usage: open-folder <path>"};
+                                         }
+
+                                         return open_folder_command(folder_path, tracked_source_manager, header_text, model, screen);
                                      });
 
     command_manager.register_command({"close-open-file", "Close one currently open file", "close-open-file"},

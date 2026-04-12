@@ -51,6 +51,8 @@ add_executable(
   watchers/stream_line_buffer.cpp
   watchers/stream_line_buffer.hpp
   watchers/log_watcher_base.hpp
+  watchers/folder_watcher.cpp
+  watchers/folder_watcher.hpp
   watchers/file_watcher.cpp
   watchers/file_watcher.hpp)
 
@@ -63,7 +65,7 @@ target_include_directories(
 
 target_link_libraries(
   slayerlog PRIVATE component ftxui_components Boost::program_options
-                    log4cplus::log4cplus)
+                    log4cplus::log4cplus libzstd)
 
 add_custom_command(
   TARGET slayerlog

@@ -16,6 +16,7 @@ add_executable(
   data_bridge/data_bridge_cli_tests.cpp
   flags/flags_tests.cpp
   slayerlog/file_watcher_tests.cpp
+  slayerlog/folder_watcher_tests.cpp
   slayerlog/log_source_tests.cpp
   slayerlog/tracked_source_tests.cpp
   slayerlog/tracked_source_manager_tests.cpp
@@ -55,6 +56,7 @@ add_executable(
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/process_pipe.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/folder_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.cpp
@@ -75,7 +77,8 @@ target_link_libraries(
           Boost::filesystem
           Boost::thread
           Boost::program_options
-          log4cplus::log4cplus)
+          log4cplus::log4cplus
+          libzstd)
 
 target_compile_definitions(unit_tests PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
 target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands)

@@ -8,6 +8,7 @@
 #include "debug_log.hpp"
 #include "tracked_source.hpp"
 #include "watchers/file_watcher.hpp"
+#include "watchers/folder_watcher.hpp"
 #include "watchers/log_watcher_base.hpp"
 #include "watchers/ssh_tail_watcher.hpp"
 
@@ -39,7 +40,7 @@ std::optional<std::string> TrackedSourceManager::open_source(const LogSource& so
 {
     if (contains_source(source))
     {
-        return "File already open: " + source_display_path(source);
+        return "Source already open: " + source_display_path(source);
     }
 
     try
@@ -159,6 +160,11 @@ std::unique_ptr<LogWatcherBase> TrackedSourceManager::create_watcher_for_source(
     if (source.kind == LogSourceKind::SshRemoteFile)
     {
         return std::make_unique<SshTailWatcher>(source);
+    }
+
+    if (source.kind == LogSourceKind::LocalFolder)
+    {
+        return std::make_unique<FolderWatcher>(source.local_folder_path);
     }
 
     return std::make_unique<FileWatcher>(source.local_path);

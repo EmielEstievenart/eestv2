@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "log_batch.hpp"
+#include "log_source.hpp"
 #include "tracked_source_manager.hpp"
 
 namespace slayerlog
@@ -126,6 +127,29 @@ TEST(TrackedSourceManagerTest, RebuildsSourceLabelsWhenBasenameCollisionsChange)
     const auto labels_without_collision = manager.source_labels();
     ASSERT_EQ(labels_without_collision.size(), 1U);
     EXPECT_EQ(labels_without_collision[0], "app.log");
+}
+
+TEST(TrackedSourceManagerTest, OpenFolderLoadsInitialContentsAsSingleTrackedSource)
+{
+    const auto root   = make_unique_test_path("");
+    const auto folder = root / "archive";
+    const auto first  = folder / "alpha.log";
+    const auto second = folder / "beta.log";
+    ScopedTestFile first_file(first);
+    ScopedTestFile second_file(second);
+    first_file.write("2026-04-01T10:02:00 alpha second\n");
+    second_file.write("2026-04-01T10:01:00 beta first\n");
+
+    TrackedSourceManager manager;
+    ASSERT_FALSE(manager.open_source(make_local_folder_source(folder.string())).has_value());
+
+    EXPECT_EQ(manager.source_count(), 1U);
+    EXPECT_EQ(manager.source_labels(), (std::vector<std::string> {"archive"}));
+    EXPECT_EQ(merged_texts(manager.snapshot()), (std::vector<std::string> {
+                                                    "2026-04-01T10:01:00 beta first",
+                                                    "2026-04-01T10:02:00 alpha second",
+                                                }));
+    EXPECT_TRUE(manager.poll().empty());
 }
 
 } // namespace slayerlog
