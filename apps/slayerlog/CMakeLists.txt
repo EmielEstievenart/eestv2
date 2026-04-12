@@ -38,6 +38,8 @@ add_executable(
   commands/command_palette_model.hpp
   commands/command_palette_view.cpp
   commands/command_palette_view.hpp
+  commands/command_registrar.cpp
+  commands/command_registrar.hpp
   commands/command_history.cpp
   commands/command_history.hpp
   commands/command_manager.cpp
