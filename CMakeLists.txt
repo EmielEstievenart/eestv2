@@ -150,3 +150,20 @@ add_custom_target(
   DEPENDS "${_cc_src}"
   COMMENT "Copy and normalize compile_commands.json into source directory"
   VERBATIM)
+
+function(add_copy_compile_commands_dependency_recursive dir)
+  get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+
+  foreach(_target IN LISTS _targets)
+    if(NOT _target STREQUAL "copy_compile_commands")
+      add_dependencies("${_target}" copy_compile_commands)
+    endif()
+  endforeach()
+
+  get_property(_subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+  foreach(_subdir IN LISTS _subdirs)
+    add_copy_compile_commands_dependency_recursive("${_subdir}")
+  endforeach()
+endfunction()
+
+add_copy_compile_commands_dependency_recursive("${CMAKE_SOURCE_DIR}")
