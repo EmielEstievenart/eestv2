@@ -28,17 +28,17 @@ add_executable(
   slayerlog/log_controller_tests.cpp
   slayerlog/master_controller_tests.cpp
   slayerlog/settings_ini_tests.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.hpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_model.hpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_view.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_view.hpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_controller.hpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_model.hpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_view.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_view.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_history.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_history.hpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_manager.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_manager.hpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_manager.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_manager.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/debug_log.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/file_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_source.cpp
@@ -74,7 +74,7 @@ target_link_libraries(
           log4cplus::log4cplus)
 
 target_compile_definitions(unit_tests PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
-target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog)
+target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands)
 
 # Conditionally discover tests (disabled for TSAN where it doesn't work well)
 if(ENABLE_CTEST)

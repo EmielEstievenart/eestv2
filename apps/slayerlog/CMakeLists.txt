@@ -4,14 +4,14 @@ add_executable(
   slayerlog
   main.cpp
   command_palette_controller.cpp
-  command_palette_controller.hpp
-  command_palette_model.hpp
-  command_palette_view.cpp
-  command_palette_view.hpp
+  commands/command_palette_controller.hpp
+  commands/command_palette_model.hpp
+  commands/command_palette_view.cpp
+  commands/command_palette_view.hpp
   command_history.cpp
   command_history.hpp
-  command_manager.cpp
-  command_manager.hpp
+  commands/command_manager.cpp
+  commands/command_manager.hpp
   command_line_parser.cpp
   command_line_parser.hpp
   debug_log.hpp
@@ -49,7 +49,7 @@ add_executable(
 
 target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
 
-target_include_directories(slayerlog PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(slayerlog PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/commands)
 
 target_link_libraries(
   slayerlog
