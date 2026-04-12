@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "stream_line_buffer.hpp"
+#include "watchers/stream_line_buffer.hpp"
 
 namespace slayerlog
 {

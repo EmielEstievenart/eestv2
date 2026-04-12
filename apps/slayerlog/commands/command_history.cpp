@@ -15,8 +15,7 @@ constexpr std::string_view command_entry_key       = "entry";
 
 } // namespace
 
-CommandHistory::CommandHistory(SettingsStore& settings_store, std::size_t max_entries)
-    : _settings_store(settings_store), _max_entries(std::max<std::size_t>(max_entries, 1))
+CommandHistory::CommandHistory(SettingsStore& settings_store, std::size_t max_entries) : _settings_store(settings_store), _max_entries(std::max<std::size_t>(max_entries, 1))
 {
 }
 

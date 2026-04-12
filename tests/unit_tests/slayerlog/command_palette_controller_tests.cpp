@@ -6,7 +6,7 @@
 
 #include <ftxui/component/event.hpp>
 
-#include "command_history.hpp"
+#include "commands/command_history.hpp"
 #include "command_palette_controller.hpp"
 #include "settings_store.hpp"
 

@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <string>
 
-#include "command_history.hpp"
+#include "commands/command_history.hpp"
 
 namespace slayerlog
 {

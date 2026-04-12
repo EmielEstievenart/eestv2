@@ -202,11 +202,8 @@ ProcessPipe::ProcessPipe(std::string executable, std::vector<std::string> argume
     HANDLE stdin_read   = invalid_handle();
     HANDLE stdin_write  = invalid_handle();
 
-    if (CreatePipe(&_stdout_read_handle, &stdout_write, &security_attributes, 0) == 0 ||
-        SetHandleInformation(_stdout_read_handle, HANDLE_FLAG_INHERIT, 0) == 0 ||
-        CreatePipe(&_stderr_read_handle, &stderr_write, &security_attributes, 0) == 0 ||
-        SetHandleInformation(_stderr_read_handle, HANDLE_FLAG_INHERIT, 0) == 0 ||
-        CreatePipe(&stdin_read, &stdin_write, &security_attributes, 0) == 0)
+    if (CreatePipe(&_stdout_read_handle, &stdout_write, &security_attributes, 0) == 0 || SetHandleInformation(_stdout_read_handle, HANDLE_FLAG_INHERIT, 0) == 0 ||
+        CreatePipe(&_stderr_read_handle, &stderr_write, &security_attributes, 0) == 0 || SetHandleInformation(_stderr_read_handle, HANDLE_FLAG_INHERIT, 0) == 0 || CreatePipe(&stdin_read, &stdin_write, &security_attributes, 0) == 0)
     {
         close_handle_if_valid(stdout_write);
         close_handle_if_valid(stderr_write);
@@ -227,8 +224,7 @@ ProcessPipe::ProcessPipe(std::string executable, std::vector<std::string> argume
 
     PROCESS_INFORMATION process_info {};
     std::string command_line = build_command_line(executable, arguments);
-    if (CreateProcessA(nullptr, command_line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup_info,
-                       &process_info) == 0)
+    if (CreateProcessA(nullptr, command_line.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup_info, &process_info) == 0)
     {
         close_handle_if_valid(stdout_write);
         close_handle_if_valid(stderr_write);

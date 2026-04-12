@@ -3,13 +3,13 @@ project(slayerlog)
 add_executable(
   slayerlog
   main.cpp
-  command_palette_controller.cpp
+   commands/command_palette_controller.cpp
   commands/command_palette_controller.hpp
   commands/command_palette_model.hpp
   commands/command_palette_view.cpp
   commands/command_palette_view.hpp
-  command_history.cpp
-  command_history.hpp
+   commands/command_history.cpp
+   commands/command_history.hpp
   commands/command_manager.cpp
   commands/command_manager.hpp
   command_line_parser.cpp
@@ -32,16 +32,16 @@ add_executable(
   master_view.hpp
   log_timestamp.cpp
   log_timestamp.hpp
-  process_pipe.cpp
-  process_pipe.hpp
+   watchers/process_pipe.cpp
+   watchers/process_pipe.hpp
   settings_ini.cpp
   settings_ini.hpp
   settings_store.cpp
   settings_store.hpp
   watchers/ssh_tail_watcher.cpp
   watchers/ssh_tail_watcher.hpp
-  stream_line_buffer.cpp
-  stream_line_buffer.hpp
+   watchers/stream_line_buffer.cpp
+   watchers/stream_line_buffer.hpp
   log_model.cpp
   log_model.hpp
   log4cplus.ini

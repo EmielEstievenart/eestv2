@@ -28,15 +28,15 @@ add_executable(
   slayerlog/log_controller_tests.cpp
   slayerlog/master_controller_tests.cpp
   slayerlog/settings_ini_tests.cpp
-   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_palette_controller.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_controller.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_controller.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_model.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_view.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_view.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.hpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_history.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_history.hpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_history.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_history.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_manager.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_manager.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/debug_log.hpp
@@ -48,15 +48,15 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_timestamp.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_controller.hpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.hpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/process_pipe.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.hpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/process_pipe.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.hpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/ssh_tail_watcher.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/stream_line_buffer.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/ssh_tail_watcher.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/stream_line_buffer.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_model.cpp)
 
 # Link libraries (assuming eestv_lib provides sources and Boost)

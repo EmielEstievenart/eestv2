@@ -19,7 +19,7 @@
 #include <ftxui/component/screen_interactive.hpp>
 
 #include "command_line_parser.hpp"
-#include "command_history.hpp"
+#include "commands/command_history.hpp"
 #include "command_palette_controller.hpp"
 #include "command_palette_model.hpp"
 #include "command_manager.hpp"
