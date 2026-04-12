@@ -1,27 +1,47 @@
 #pragma once
-#include <string>
-#include <vector>
-#include <chrono>
+
+#include <cstdint>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "log_source.hpp"
+#include "log_timestamp.hpp"
+
+namespace slayerlog
+{
 
 struct LogEntry
 {
-    using timestamp_t = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
     std::string raw_text;
-    std::optional<timestamp_t> timestamp;
-
+    std::optional<LogTimePoint> timestamp;
     std::string extracted_timestamp_text;
-    std::uint64_t sequence_number {0};
+    std::uint64_t sequence_number = 0;
 };
 
 class TrackedSource
 {
-    TrackedSource(std::string source_name) : _source_name {source_name} { };
+public:
+    TrackedSource(LogSource source, std::string source_label);
 
-    void add_entry_from_raw_string(const std::string& string) { };
-    void add_entry_from_raw_string(const std::vector<std::string>& strings) { };
+    const LogSource& source() const;
+    const std::string& source_label() const;
+    void set_source_label(std::string source_label);
+
+    void add_entry_from_raw_string(std::string_view text);
+    void add_entries_from_raw_strings(const std::vector<std::string>& lines);
+
+    const std::vector<LogEntry>& entries() const;
 
 private:
+    static std::string extract_timestamp_text(std::string_view text, bool has_timestamp);
+
+    LogSource _source;
+    std::string _source_label;
     std::vector<LogEntry> _entries;
-    const std::string _source_name;
+    std::uint64_t _next_sequence_number = 0;
 };
+
+} // namespace slayerlog

@@ -107,6 +107,30 @@ void LogModel::append_lines(const std::vector<ObservedLogLine>& lines)
     }
 }
 
+void LogModel::append_batch(const LogBatch& batch)
+{
+    append_lines(merge_log_batch(batch));
+}
+
+void LogModel::replace_batch(const LogBatch& batch)
+{
+    const auto merged_lines = merge_log_batch(batch);
+
+    _all_entries.clear();
+    _visible_entry_indices.clear();
+    _paused_updates.clear();
+    _find_match_entry_indices.clear();
+
+    _all_entries.reserve(merged_lines.size());
+    for (const auto& line : merged_lines)
+    {
+        _all_entries.push_back(line);
+    }
+
+    rebuild_visible_entries();
+    rebuild_find_matches();
+}
+
 void LogModel::toggle_pause()
 {
     _updates_paused = !_updates_paused;

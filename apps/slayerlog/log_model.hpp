@@ -124,6 +124,10 @@ public:
 
     /** @brief Appends already ordered lines to the rendered log view. */
     void append_lines(const std::vector<ObservedLogLine>& lines);
+    /** @brief Merges and appends a tracked-source batch to the rendered log view. */
+    void append_batch(const LogBatch& batch);
+    /** @brief Replaces loaded lines from a tracked-source batch while preserving session state. */
+    void replace_batch(const LogBatch& batch);
     /** @brief Toggles update buffering so users can inspect the view without live movement. */
     void toggle_pause();
     /** @brief Returns whether incoming updates are currently buffered instead of rendered immediately. */

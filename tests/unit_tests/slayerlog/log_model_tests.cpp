@@ -77,6 +77,43 @@ TEST(LogModelTest, PausedUpdatesAppendWhenResumed)
                                      }));
 }
 
+TEST(LogModelTest, ReplaceBatchPreservesSessionState)
+{
+    LogModel model;
+    model.set_show_source_labels(true);
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error seed"},
+    });
+    model.add_include_filter("error");
+    model.hide_before_line_number(2);
+    model.hide_columns(2, 4);
+    ASSERT_TRUE(model.set_find_query("error"));
+    model.toggle_pause();
+
+    model.replace_batch({
+        LogBatchEntry {0, "alpha.log", "info one", std::nullopt, 0},
+        LogBatchEntry {0, "alpha.log", "error two", std::nullopt, 1},
+    });
+
+    EXPECT_TRUE(model.updates_paused());
+    EXPECT_EQ(model.hidden_before_line_number(), 2);
+    ASSERT_TRUE(model.hidden_columns().has_value());
+    EXPECT_EQ(*model.hidden_columns(), (HiddenColumnRange {2, 4}));
+    EXPECT_TRUE(model.find_active());
+    EXPECT_EQ(model.find_query(), "error");
+    EXPECT_EQ(model.total_find_match_count(), 1);
+    EXPECT_EQ(model.visible_find_match_count(), 1);
+    EXPECT_EQ(model.line_count(), 1);
+
+    model.append_batch({
+        LogBatchEntry {0, "alpha.log", "error three", std::nullopt, 2},
+    });
+    EXPECT_EQ(model.line_count(), 1);
+
+    model.toggle_pause();
+    EXPECT_EQ(model.line_count(), 2);
+}
+
 TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
 {
     LogModel model;

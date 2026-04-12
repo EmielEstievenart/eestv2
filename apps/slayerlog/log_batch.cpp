@@ -1,11 +1,8 @@
 #include "log_batch.hpp"
 
-#include <cassert>
+#include <algorithm>
 #include <cstddef>
-#include <optional>
 #include <vector>
-
-#include "log_timestamp.hpp"
 
 namespace slayerlog
 {
@@ -13,120 +10,101 @@ namespace slayerlog
 namespace
 {
 
-struct WatcherState
+struct SourceBatchState
 {
-    std::size_t next_line_index = 0;
-    bool current_timestamp_parsed = false;
-    std::optional<LogTimePoint> current_timestamp;
+    std::vector<const LogBatchEntry*> entries;
+    std::size_t next_entry_index = 0;
 };
 
-bool has_pending_line(const WatcherLineBatch& watcher_batch, const WatcherState& watcher_state)
+bool has_pending_entry(const SourceBatchState& state)
 {
-    return watcher_state.next_line_index < watcher_batch.size();
+    return state.next_entry_index < state.entries.size();
 }
 
-std::optional<LogTimePoint> get_current_timestamp(const WatcherLineBatch& watcher_batch, WatcherState& watcher_state)
+const LogBatchEntry& current_entry(const SourceBatchState& state)
 {
-    if (!watcher_state.current_timestamp_parsed && has_pending_line(watcher_batch, watcher_state))
-    {
-        watcher_state.current_timestamp = parse_log_timestamp(watcher_batch[watcher_state.next_line_index]);
-        watcher_state.current_timestamp_parsed = true;
-    }
-
-    return watcher_state.current_timestamp;
+    return *state.entries[state.next_entry_index];
 }
 
-void advance_watcher(WatcherState& watcher_state)
+void advance_source(SourceBatchState& state)
 {
-    ++watcher_state.next_line_index;
-    watcher_state.current_timestamp.reset();
-    watcher_state.current_timestamp_parsed = false;
+    ++state.next_entry_index;
 }
 
 } // namespace
 
-std::vector<ObservedLogLine> merge_log_batch(
-    const std::vector<WatcherLineBatch>& watcher_batches,
-    const std::vector<std::string>& source_labels)
+std::vector<ObservedLogLine> merge_log_batch(const LogBatch& batch)
 {
-    assert(source_labels.size() == watcher_batches.size());
-
-    std::size_t total_line_count = 0;
-    for (const auto& watcher_batch : watcher_batches)
+    std::size_t highest_source_index = 0;
+    for (const auto& entry : batch)
     {
-        total_line_count += watcher_batch.size();
+        highest_source_index = std::max(highest_source_index, entry.source_index);
+    }
+
+    std::vector<SourceBatchState> source_states(batch.empty() ? 0 : highest_source_index + 1);
+    for (const auto& entry : batch)
+    {
+        source_states[entry.source_index].entries.push_back(&entry);
     }
 
     std::vector<ObservedLogLine> merged_lines;
-    merged_lines.reserve(total_line_count);
+    merged_lines.reserve(batch.size());
 
-    std::vector<WatcherState> watcher_states(watcher_batches.size());
-
-    while (merged_lines.size() < total_line_count)
+    while (merged_lines.size() < batch.size())
     {
-        for (std::size_t watcher_index = 0; watcher_index < watcher_batches.size(); ++watcher_index)
+        for (auto& source_state : source_states)
         {
-            const auto& watcher_batch = watcher_batches[watcher_index];
-            auto& watcher_state = watcher_states[watcher_index];
-
-            while (has_pending_line(watcher_batch, watcher_state))
+            while (has_pending_entry(source_state))
             {
-                const auto current_timestamp = get_current_timestamp(watcher_batch, watcher_state);
-                if (current_timestamp.has_value())
+                const auto& entry = current_entry(source_state);
+                if (entry.timestamp.has_value())
                 {
                     break;
                 }
 
-                merged_lines.push_back({
-                    source_labels[watcher_index],
-                    watcher_batch[watcher_state.next_line_index],
-                });
-                advance_watcher(watcher_state);
+                merged_lines.push_back({entry.source_label, entry.text});
+                advance_source(source_state);
             }
         }
 
-        if (merged_lines.size() >= total_line_count)
+        if (merged_lines.size() >= batch.size())
         {
             break;
         }
 
-        std::optional<std::size_t> next_watcher_index;
+        std::optional<std::size_t> next_source_index;
         std::optional<LogTimePoint> next_timestamp;
 
-        for (std::size_t watcher_index = 0; watcher_index < watcher_batches.size(); ++watcher_index)
+        for (std::size_t source_index = 0; source_index < source_states.size(); ++source_index)
         {
-            const auto& watcher_batch = watcher_batches[watcher_index];
-            auto& watcher_state = watcher_states[watcher_index];
-            if (!has_pending_line(watcher_batch, watcher_state))
+            const auto& source_state = source_states[source_index];
+            if (!has_pending_entry(source_state))
             {
                 continue;
             }
 
-            const auto current_timestamp = get_current_timestamp(watcher_batch, watcher_state);
-            if (!current_timestamp.has_value())
+            const auto& entry = current_entry(source_state);
+            if (!entry.timestamp.has_value())
             {
                 continue;
             }
 
-            if (!next_watcher_index.has_value()
-                || current_timestamp.value() < next_timestamp.value())
+            if (!next_source_index.has_value() || entry.timestamp.value() < next_timestamp.value())
             {
-                next_watcher_index = watcher_index;
-                next_timestamp = current_timestamp;
+                next_source_index = source_index;
+                next_timestamp    = entry.timestamp;
             }
         }
 
-        if (!next_watcher_index.has_value())
+        if (!next_source_index.has_value())
         {
             break;
         }
 
-        auto& next_watcher_state = watcher_states[next_watcher_index.value()];
-        merged_lines.push_back({
-            source_labels[next_watcher_index.value()],
-            watcher_batches[next_watcher_index.value()][next_watcher_state.next_line_index],
-        });
-        advance_watcher(next_watcher_state);
+        auto& source_state = source_states[*next_source_index];
+        const auto& entry  = current_entry(source_state);
+        merged_lines.push_back({entry.source_label, entry.text});
+        advance_source(source_state);
     }
 
     return merged_lines;

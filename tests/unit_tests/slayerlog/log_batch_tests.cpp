@@ -1,44 +1,36 @@
 #include <gtest/gtest.h>
 
+#include <optional>
 #include <string>
-#include <vector>
+#include <utility>
 
 #include "log_batch.hpp"
+#include "log_timestamp.hpp"
 
 namespace slayerlog
 {
 
-#if !defined(NDEBUG)
 namespace
 {
 
-void merge_log_batch_with_mismatched_source_labels()
+LogBatchEntry make_entry(std::size_t source_index, std::string source_label, std::string text)
 {
-    const std::vector<WatcherLineBatch> watcher_batches{
-        WatcherLineBatch{
-            "2026-04-01T10:02:00 alpha timed",
-        },
+    const auto timestamp = parse_log_timestamp(text);
+    return LogBatchEntry {
+        source_index, std::move(source_label), std::move(text), timestamp, 0,
     };
-    const std::vector<std::string> source_labels;
-    const auto merged = merge_log_batch(watcher_batches, source_labels);
-    (void)merged;
 }
 
 } // namespace
-#endif
 
 TEST(LogBatchTest, PlacesUnsortableLinesBeforeTimestampedLines)
 {
     const auto merged = merge_log_batch({
-        WatcherLineBatch{
-            "plain alpha",
-            "2026-04-01T10:02:00 alpha timed",
-        },
-        WatcherLineBatch{
-            "plain beta",
-            "2026-04-01T10:01:00 beta timed",
-        },
-    }, {"alpha.log", "beta.log"});
+        make_entry(0, "alpha.log", "plain alpha"),
+        make_entry(0, "alpha.log", "2026-04-01T10:02:00 alpha timed"),
+        make_entry(1, "beta.log", "plain beta"),
+        make_entry(1, "beta.log", "2026-04-01T10:01:00 beta timed"),
+    });
 
     ASSERT_EQ(merged.size(), 4U);
     EXPECT_EQ(merged[0].text, "plain alpha");
@@ -50,14 +42,10 @@ TEST(LogBatchTest, PlacesUnsortableLinesBeforeTimestampedLines)
 TEST(LogBatchTest, SortsTimestampedLinesAcrossFilesByParsedTime)
 {
     const auto merged = merge_log_batch({
-        WatcherLineBatch{
-            "2026-04-01T10:03:00 alpha third",
-            "2026-04-01T10:05:00 alpha fifth",
-        },
-        WatcherLineBatch{
-            "2026-04-01T10:04:00 beta fourth",
-        },
-    }, {"alpha.log", "beta.log"});
+        make_entry(0, "alpha.log", "2026-04-01T10:03:00 alpha third"),
+        make_entry(0, "alpha.log", "2026-04-01T10:05:00 alpha fifth"),
+        make_entry(1, "beta.log", "2026-04-01T10:04:00 beta fourth"),
+    });
 
     ASSERT_EQ(merged.size(), 3U);
     EXPECT_EQ(merged[0].text, "2026-04-01T10:03:00 alpha third");
@@ -65,16 +53,12 @@ TEST(LogBatchTest, SortsTimestampedLinesAcrossFilesByParsedTime)
     EXPECT_EQ(merged[2].text, "2026-04-01T10:05:00 alpha fifth");
 }
 
-TEST(LogBatchTest, KeepsOriginalOrderForEqualTimestamps)
+TEST(LogBatchTest, KeepsOriginalSourceOrderForEqualTimestamps)
 {
     const auto merged = merge_log_batch({
-        WatcherLineBatch{
-            "2026-04-01T10:00:00 alpha first",
-        },
-        WatcherLineBatch{
-            "2026-04-01T10:00:00 beta second",
-        },
-    }, {"alpha.log", "beta.log"});
+        make_entry(0, "alpha.log", "2026-04-01T10:00:00 alpha first"),
+        make_entry(1, "beta.log", "2026-04-01T10:00:00 beta second"),
+    });
 
     ASSERT_EQ(merged.size(), 2U);
     EXPECT_EQ(merged[0].text, "2026-04-01T10:00:00 alpha first");
@@ -84,16 +68,12 @@ TEST(LogBatchTest, KeepsOriginalOrderForEqualTimestamps)
 TEST(LogBatchTest, EmitsUntimestampedLinesWhenTheyReachTheFront)
 {
     const auto merged = merge_log_batch({
-        WatcherLineBatch{
-            "2026-04-01T10:02:00 alpha timed",
-            "plain alpha first follow-up",
-            "plain alpha second follow-up",
-            "2026-04-01T10:05:00 alpha later",
-        },
-        WatcherLineBatch{
-            "2026-04-01T10:03:00 beta timed",
-        },
-    }, {"alpha.log", "beta.log"});
+        make_entry(0, "alpha.log", "2026-04-01T10:02:00 alpha timed"),
+        make_entry(0, "alpha.log", "plain alpha first follow-up"),
+        make_entry(0, "alpha.log", "plain alpha second follow-up"),
+        make_entry(0, "alpha.log", "2026-04-01T10:05:00 alpha later"),
+        make_entry(1, "beta.log", "2026-04-01T10:03:00 beta timed"),
+    });
 
     ASSERT_EQ(merged.size(), 5U);
     EXPECT_EQ(merged[0].text, "2026-04-01T10:02:00 alpha timed");
@@ -102,12 +82,5 @@ TEST(LogBatchTest, EmitsUntimestampedLinesWhenTheyReachTheFront)
     EXPECT_EQ(merged[3].text, "2026-04-01T10:03:00 beta timed");
     EXPECT_EQ(merged[4].text, "2026-04-01T10:05:00 alpha later");
 }
-
-#if !defined(NDEBUG)
-TEST(LogBatchTest, AssertsWhenSourceLabelCountDoesNotMatchWatcherCount)
-{
-    EXPECT_DEATH(merge_log_batch_with_mismatched_source_labels(), "");
-}
-#endif
 
 } // namespace slayerlog
