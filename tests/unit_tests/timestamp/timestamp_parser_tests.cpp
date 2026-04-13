@@ -8,10 +8,10 @@ namespace eestv
 namespace
 {
 
-bool apply_parser(const compiledDataAndTimeParser& parser, const std::string& input, DateAndTime& output)
+bool apply_parser(const compiledDataAndTimeParser& parser, const std::string& input, DateAndTime& output, int start_index = 0, int* end_index = nullptr)
 {
     std::string to_parse = input;
-    int index            = 0;
+    int index            = start_index;
 
     for (const auto& step : parser.dateParser)
     {
@@ -25,7 +25,41 @@ bool apply_parser(const compiledDataAndTimeParser& parser, const std::string& in
         index += index_jump;
     }
 
-    return index == static_cast<int>(to_parse.size());
+    if (end_index != nullptr)
+    {
+        *end_index = index;
+    }
+
+    return true;
+}
+
+bool find_parser_match(const compiledDataAndTimeParser& parser, const std::string& input, DateAndTime& output, int* match_start = nullptr, int* match_end = nullptr)
+{
+    for (int start_index = 0; start_index < static_cast<int>(input.size()); ++start_index)
+    {
+        DateAndTime candidate;
+        int end_index = 0;
+
+        if (!apply_parser(parser, input, candidate, start_index, &end_index))
+        {
+            continue;
+        }
+
+        output = candidate;
+        if (match_start != nullptr)
+        {
+            *match_start = start_index;
+        }
+
+        if (match_end != nullptr)
+        {
+            *match_end = end_index;
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 } // namespace
@@ -406,14 +440,60 @@ TEST(TimestampParserTest, ParsesLeapYearFebruary29)
     EXPECT_EQ(output.day, 29U);
 }
 
-TEST(TimestampParserTest, RejectsTrailingGarbage)
+TEST(TimestampParserTest, AllowsTrailingGarbageAfterParsedTimestamp)
 {
     TimestampParser parser;
     const auto compiled = parser.CompileFormat("YYYY-MM-DD hh:mm:ss");
 
     DateAndTime output;
 
-    EXPECT_FALSE(apply_parser(compiled, "2026-04-13 17:42:58 abc", output));
+    EXPECT_TRUE(apply_parser(compiled, "2026-04-13 17:42:58 abc", output));
+    EXPECT_EQ(output.year, 2026);
+    EXPECT_EQ(output.month, 4U);
+    EXPECT_EQ(output.day, 13U);
+    EXPECT_EQ(output.hour, 17U);
+    EXPECT_EQ(output.minute, 42U);
+    EXPECT_EQ(output.second, 58U);
+}
+
+TEST(TimestampParserTest, DetectsTimestampWhenNotAtStartOfString)
+{
+    TimestampParser parser;
+    const auto compiled = parser.CompileFormat("YYYY-MM-DD hh:mm:ss");
+
+    DateAndTime output;
+    int match_start = -1;
+    int match_end   = -1;
+
+    EXPECT_TRUE(find_parser_match(compiled, "INFO 2026-04-13 17:42:58 abc", output, &match_start, &match_end));
+    EXPECT_EQ(match_start, 5);
+    EXPECT_EQ(match_end, 24);
+    EXPECT_EQ(output.year, 2026);
+    EXPECT_EQ(output.month, 4U);
+    EXPECT_EQ(output.day, 13U);
+    EXPECT_EQ(output.hour, 17U);
+    EXPECT_EQ(output.minute, 42U);
+    EXPECT_EQ(output.second, 58U);
+}
+
+TEST(TimestampParserTest, RejectsIncompleteTimestampWhenNotAtStartOfString)
+{
+    TimestampParser parser;
+    const auto compiled = parser.CompileFormat("YYYY-MM-DD hh:mm:ss");
+
+    DateAndTime output;
+
+    EXPECT_FALSE(find_parser_match(compiled, "INFO 2026-04-13 17:42 abc", output));
+}
+
+TEST(TimestampParserTest, RejectsInvalidTimestampWhenNotAtStartOfString)
+{
+    TimestampParser parser;
+    const auto compiled = parser.CompileFormat("YYYY-MM-DD hh:mm:ss");
+
+    DateAndTime output;
+
+    EXPECT_FALSE(find_parser_match(compiled, "INFO 2026-02-30 17:42:58 abc", output));
 }
 
 } // namespace eestv
