@@ -13,6 +13,7 @@ add_executable(
   data/linear_buffer_tests.cpp
   serial/serialization_tests.cpp
   serial/serialization_mux_tests.cpp
+  timestamp/timestamp_parser_tests.cpp
   data_bridge/data_bridge_cli_tests.cpp
   flags/flags_tests.cpp
   slayerlog/file_watcher_tests.cpp
