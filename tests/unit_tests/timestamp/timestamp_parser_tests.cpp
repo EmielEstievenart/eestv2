@@ -35,7 +35,7 @@ bool apply_parser(const compiledDataAndTimeParser& parser, const std::string& in
 
 bool find_parser_match(const compiledDataAndTimeParser& parser, const std::string& input, DateAndTime& output, int* match_start = nullptr, int* match_end = nullptr)
 {
-    for (int start_index = 0; start_index < static_cast<int>(input.size()); ++start_index)
+    for (const int start_index : TimestampParser::possible_parse_start_indices(input))
     {
         DateAndTime candidate;
         int end_index = 0;
@@ -63,6 +63,26 @@ bool find_parser_match(const compiledDataAndTimeParser& parser, const std::strin
 }
 
 } // namespace
+
+TEST(TimestampParserTest, DetectsPossibleParseStartIndices)
+{
+    const auto indices = TimestampParser::possible_parse_start_indices("INFO\t 2026-04-13 17:42:58  next");
+
+    ASSERT_EQ(indices.size(), 4U);
+    EXPECT_EQ(indices[0], 0);
+    EXPECT_EQ(indices[1], 6);
+    EXPECT_EQ(indices[2], 17);
+    EXPECT_EQ(indices[3], 29);
+}
+
+TEST(TimestampParserTest, DetectsPossibleParseStartIndicesWithLeadingWhitespace)
+{
+    const auto indices = TimestampParser::possible_parse_start_indices(" \t 2026");
+
+    ASSERT_EQ(indices.size(), 2U);
+    EXPECT_EQ(indices[0], 0);
+    EXPECT_EQ(indices[1], 3);
+}
 
 TEST(TimestampParserTest, ParsesTwoDigitYearToken)
 {
