@@ -1,5 +1,6 @@
 if(NOT EXISTS "@CC_SRC@")
-  message(FATAL_ERROR "compile_commands.json not found at @CC_SRC@")
+  message(STATUS "Skipping compile_commands.json copy; file not found at @CC_SRC@")
+  return()
 endif()
 
 file(READ "@CC_SRC@" _contents)
