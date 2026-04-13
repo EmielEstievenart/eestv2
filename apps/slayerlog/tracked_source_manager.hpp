@@ -9,6 +9,7 @@
 
 #include "log_batch.hpp"
 #include "log_source.hpp"
+#include "log_timestamp.hpp"
 
 namespace slayerlog
 {
@@ -18,7 +19,7 @@ class LogWatcherBase;
 class TrackedSourceManager
 {
 public:
-    TrackedSourceManager();
+    explicit TrackedSourceManager(std::shared_ptr<const TimestampFormatCatalog> timestamp_formats = default_timestamp_format_catalog());
     ~TrackedSourceManager();
 
     /** @brief Parses and opens a new source, creating its watcher and initial tracked storage. */
@@ -40,12 +41,13 @@ public:
 private:
     struct SourceState;
 
-    static std::unique_ptr<LogWatcherBase> create_watcher_for_source(const LogSource& source);
+    std::unique_ptr<LogWatcherBase> create_watcher_for_source(const LogSource& source) const;
     bool contains_source(const LogSource& candidate_source) const;
     void rebuild_source_labels();
     void append_entries_to_batch(LogBatch& batch, const SourceState& source_state, std::size_t source_index, std::size_t first_entry_index) const;
 
     std::vector<SourceState> _sources;
+    std::shared_ptr<const TimestampFormatCatalog> _timestamp_formats;
 };
 
 } // namespace slayerlog

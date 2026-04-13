@@ -174,6 +174,19 @@ bool SettingsStore::save(std::string& error_message) const
     return true;
 }
 
+bool SettingsStore::ensure_default_values(std::string_view section, std::string_view key, const std::vector<std::string>& values, std::string& error_message)
+{
+    error_message.clear();
+
+    if (!_ini.values(section, key).empty())
+    {
+        return true;
+    }
+
+    _ini.set_values(std::string(section), std::string(key), values);
+    return save(error_message);
+}
+
 const std::filesystem::path& SettingsStore::file_path() const
 {
     return _file_path;

@@ -20,11 +20,13 @@ TEST(TrackedSourceTest, StoresParsedEntriesAndSequenceNumbers)
     EXPECT_EQ(entries[0].raw_text, "2026-04-01T10:00:00 first");
     EXPECT_TRUE(entries[0].timestamp.has_value());
     EXPECT_EQ(entries[0].extracted_timestamp_text, "2026-04-01T10:00:00");
+    EXPECT_EQ(entries[0].parsed_timestamp_text, "2026-04-01 10:00:00");
     EXPECT_EQ(entries[0].sequence_number, 0U);
 
     EXPECT_EQ(entries[1].raw_text, "plain second");
     EXPECT_FALSE(entries[1].timestamp.has_value());
     EXPECT_TRUE(entries[1].extracted_timestamp_text.empty());
+    EXPECT_TRUE(entries[1].parsed_timestamp_text.empty());
     EXPECT_EQ(entries[1].sequence_number, 1U);
 }
 

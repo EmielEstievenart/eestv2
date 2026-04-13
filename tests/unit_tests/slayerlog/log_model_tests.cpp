@@ -38,6 +38,18 @@ std::vector<ObservedLogLine> numbered_lines(int count)
     return lines;
 }
 
+LogBatchEntry make_batch_entry(std::size_t source_index, std::string source_label, std::string text, std::uint64_t sequence_number, std::optional<LogTimePoint> timestamp = std::nullopt, std::string parsed_time_text = {})
+{
+    LogBatchEntry entry;
+    entry.source_index           = source_index;
+    entry.source_label           = std::move(source_label);
+    entry.text                   = std::move(text);
+    entry.timestamp              = timestamp;
+    entry.source_sequence_number = sequence_number;
+    entry.parsed_time_text       = std::move(parsed_time_text);
+    return entry;
+}
+
 } // namespace
 
 TEST(LogModelTest, AppendsLinesInProvidedOrder)
@@ -91,8 +103,8 @@ TEST(LogModelTest, ReplaceBatchPreservesSessionState)
     model.toggle_pause();
 
     model.replace_batch({
-        LogBatchEntry {0, "alpha.log", "info one", std::nullopt, 0},
-        LogBatchEntry {0, "alpha.log", "error two", std::nullopt, 1},
+        make_batch_entry(0, "alpha.log", "info one", 0),
+        make_batch_entry(0, "alpha.log", "error two", 1),
     });
 
     EXPECT_TRUE(model.updates_paused());
@@ -106,7 +118,7 @@ TEST(LogModelTest, ReplaceBatchPreservesSessionState)
     EXPECT_EQ(model.line_count(), 1);
 
     model.append_batch({
-        LogBatchEntry {0, "alpha.log", "error three", std::nullopt, 2},
+        make_batch_entry(0, "alpha.log", "error three", 2),
     });
     EXPECT_EQ(model.line_count(), 1);
 
@@ -162,6 +174,17 @@ TEST(LogModelTest, RendersSourceLabelsWhenEnabled)
     });
 
     EXPECT_EQ(model.rendered_line(0), "1 [alpha.log] hello");
+}
+
+TEST(LogModelTest, RendersParsedTimeBeforeOriginalText)
+{
+    LogModel model;
+
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, "2026-04-01 10:00:00"},
+    });
+
+    EXPECT_EQ(model.rendered_line(0), "1 {2026-04-01 10:00:00} INFO 2026-04-01 10:00:00 hello");
 }
 
 TEST(LogModelTest, RenderedLinesReturnsVisibleSlice)

@@ -406,6 +406,11 @@ std::string LogModel::render_entry(AllLineIndex entry_index) const
     std::ostringstream output;
     const auto& entry = _all_entries[entry_index];
     output << entry_index.value + 1 << " ";
+    if (!entry.parsed_time_text.empty())
+    {
+        output << "{" << entry.parsed_time_text << "} ";
+    }
+
     if (_show_source_labels)
     {
         output << "[" << entry.source_label << "] ";

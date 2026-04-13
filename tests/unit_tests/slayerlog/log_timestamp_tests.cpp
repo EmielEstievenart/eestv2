@@ -44,4 +44,27 @@ TEST(LogTimestampTest, RejectsUnsupportedStrings)
     EXPECT_FALSE(parse_log_timestamp("[2026-04-01T12:34:56 missing bracket").has_value());
 }
 
+TEST(LogTimestampTest, DetectsTimestampAfterPrefixAndKeepsCompiledParser)
+{
+    auto formats = std::make_shared<const TimestampFormatCatalog>(std::vector<std::string> {"YYYY-MM-DD hh:mm:ss"});
+    SourceTimestampParser parser(formats);
+
+    const auto first  = parser.parse("INFO 2026-04-01 12:34:56 first");
+    const auto second = parser.parse("WARN 2026-04-01 12:35:56 second");
+
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(second.has_value());
+    EXPECT_EQ(first->extracted_text, "2026-04-01 12:34:56");
+    EXPECT_EQ(second->extracted_text, "2026-04-01 12:35:56");
+    EXPECT_EQ(first->display_text, "2026-04-01 12:34:56");
+    EXPECT_EQ(second->display_text, "2026-04-01 12:35:56");
+}
+
+TEST(LogTimestampTest, FormatsTimezoneInDisplayText)
+{
+    const auto parsed = parse_log_timestamp_details("2026-04-01T12:34:56+0200 event");
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed->display_text, "2026-04-01 12:34:56+02:00");
+}
+
 } // namespace slayerlog

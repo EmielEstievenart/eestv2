@@ -48,4 +48,15 @@ TEST(SettingsIniTest, ReturnsErrorForMalformedSectionLine)
     EXPECT_FALSE(error_message.empty());
 }
 
+TEST(SettingsIniTest, StoresTimestampFormatsAsRepeatedValues)
+{
+    SettingsIni ini;
+    ini.set_values("timestamp_formats", "format", {"YYYY-MM-DDThh:mm:ss", "DD-MMM-YYYY hh:mm:ss"});
+
+    const auto serialized = ini.serialize();
+    EXPECT_NE(serialized.find("[timestamp_formats]"), std::string::npos);
+    EXPECT_NE(serialized.find("format=YYYY-MM-DDThh:mm:ss"), std::string::npos);
+    EXPECT_NE(serialized.find("format=DD-MMM-YYYY hh:mm:ss"), std::string::npos);
+}
+
 } // namespace slayerlog

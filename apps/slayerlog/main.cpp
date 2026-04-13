@@ -18,6 +18,7 @@
 #include "debug_log.hpp"
 #include "log_controller.hpp"
 #include "log_model.hpp"
+#include "log_timestamp.hpp"
 #include "log_view.hpp"
 #include "master_controller.hpp"
 #include "master_view.hpp"
@@ -26,6 +27,9 @@
 
 namespace
 {
+
+constexpr std::string_view timestamp_formats_section = "timestamp_formats";
+constexpr std::string_view timestamp_format_key      = "format";
 
 void append_batch_to_model(const slayerlog::LogBatch& batch, slayerlog::LogModel& model, ftxui::ScreenInteractive& screen)
 {
@@ -61,12 +65,30 @@ std::thread start_watcher_thread(int poll_interval_ms, slayerlog::TrackedSourceM
 
 int main(int argc, char** argv)
 {
-    slayerlog::TrackedSourceManager tracked_source_manager;
     slayerlog::debug_log::initialize(argc > 0 ? argv[0] : nullptr);
     SLAYERLOG_LOG_INFO("Debug log initialized at " << slayerlog::debug_log::log_file_path().string());
 
     const auto config       = slayerlog::parse_command_line(argc, argv);
     std::string header_text = slayerlog::build_header_text({});
+
+    slayerlog::SettingsStore settings_store(slayerlog::default_settings_file_path());
+    std::string settings_error_message;
+    if (!settings_store.load(settings_error_message))
+    {
+        SLAYERLOG_LOG_WARNING("Failed to load settings from " << settings_store.file_path() << ": " << settings_error_message);
+        settings_error_message.clear();
+    }
+
+    if (!settings_store.ensure_default_values(timestamp_formats_section, timestamp_format_key, slayerlog::default_timestamp_formats(), settings_error_message))
+    {
+        SLAYERLOG_LOG_WARNING("Failed to seed timestamp formats in settings file " << settings_store.file_path() << ": " << settings_error_message);
+        settings_error_message.clear();
+    }
+
+    auto timestamp_catalog = std::make_shared<const slayerlog::TimestampFormatCatalog>(settings_store.ini().values(timestamp_formats_section, timestamp_format_key));
+    slayerlog::set_default_timestamp_format_catalog(timestamp_catalog);
+    slayerlog::TrackedSourceManager tracked_source_manager(timestamp_catalog);
+
     SLAYERLOG_LOG_INFO("Starting slayerlog poll_interval_ms=" << config.poll_interval_ms << " configured_sources=" << config.file_paths.size());
     for (const auto& file_path : config.file_paths)
     {
@@ -86,9 +108,7 @@ int main(int argc, char** argv)
     slayerlog::LogModel model;
     model.set_show_source_labels(tracked_source_manager.source_count() > 1);
 
-    slayerlog::SettingsStore settings_store(slayerlog::default_settings_file_path());
     slayerlog::CommandHistory command_history(settings_store);
-    std::string settings_error_message;
     if (!command_history.load(settings_error_message))
     {
         SLAYERLOG_LOG_WARNING("Failed to load settings from " << settings_store.file_path() << ": " << settings_error_message);

@@ -1,11 +1,16 @@
 #include "log_timestamp.hpp"
 
 #include <algorithm>
-#include <cctype>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
+#include <array>
 #include <ctime>
+#include <iomanip>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <utility>
+#include <vector>
+
+#include "../../code/eestv/timestamp/timestamp_parser.hpp"
 
 namespace slayerlog
 {
@@ -13,86 +18,8 @@ namespace slayerlog
 namespace
 {
 
-bool is_digit(char character)
-{
-    return std::isdigit(static_cast<unsigned char>(character)) != 0;
-}
-
-bool parse_fixed_digits(const std::string& text, std::size_t position, int digit_count, int& value)
-{
-    if ((position + static_cast<std::size_t>(digit_count)) > text.size())
-    {
-        return false;
-    }
-
-    int parsed_value = 0;
-    for (int index = 0; index < digit_count; ++index)
-    {
-        const char character = text[position + static_cast<std::size_t>(index)];
-        if (!is_digit(character))
-        {
-            return false;
-        }
-
-        parsed_value = (parsed_value * 10) + (character - '0');
-    }
-
-    value = parsed_value;
-    return true;
-}
-
-bool is_leap_year(int year)
-{
-    return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-}
-
-bool is_valid_date(int year, int month, int day)
-{
-    if (month < 1 || month > 12 || day < 1)
-    {
-        return false;
-    }
-
-    static constexpr int days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    int max_day = days_in_month[month - 1];
-    if (month == 2 && is_leap_year(year))
-    {
-        max_day = 29;
-    }
-
-    return day <= max_day;
-}
-
-bool is_valid_time(int hour, int minute, int second)
-{
-    return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59;
-}
-
-bool is_boundary_character(char character)
-{
-    return !std::isalnum(static_cast<unsigned char>(character));
-}
-
-struct ParsedTimestamp
-{
-    int year            = 0;
-    int month           = 0;
-    int day             = 0;
-    int hour            = 0;
-    int minute          = 0;
-    int second          = 0;
-    int nanoseconds     = 0;
-    bool has_timezone   = false;
-    int timezone_sign   = 0;
-    int timezone_hour   = 0;
-    int timezone_minute = 0;
-};
-
-struct ParseState
-{
-    std::size_t position = 0;
-    bool bracketed       = false;
-};
+using eestv::DateAndTime;
+using eestv::TimestampParser;
 
 std::time_t make_utc_time(std::tm* utc_time)
 {
@@ -103,28 +30,18 @@ std::time_t make_utc_time(std::tm* utc_time)
 #endif
 }
 
-std::optional<LogTimePoint> build_time_point(
-    int year,
-    int month,
-    int day,
-    int hour,
-    int minute,
-    int second,
-    int nanoseconds,
-    bool has_timezone,
-    int timezone_sign,
-    int timezone_hour,
-    int timezone_minute)
+std::optional<LogTimePoint> build_time_point(const DateAndTime& parsed)
 {
     std::tm timestamp {};
-    timestamp.tm_year  = year - 1900;
-    timestamp.tm_mon   = month - 1;
-    timestamp.tm_mday  = day;
-    timestamp.tm_hour  = hour;
-    timestamp.tm_min   = minute;
-    timestamp.tm_sec   = second;
+    timestamp.tm_year  = parsed.year - 1900;
+    timestamp.tm_mon   = static_cast<int>(parsed.month) - 1;
+    timestamp.tm_mday  = static_cast<int>(parsed.day);
+    timestamp.tm_hour  = static_cast<int>(parsed.hour);
+    timestamp.tm_min   = static_cast<int>(parsed.minute);
+    timestamp.tm_sec   = static_cast<int>(std::min(parsed.second, 59U));
     timestamp.tm_isdst = -1;
 
+    const bool has_timezone   = parsed.utc_offset_minutes.has_value();
     std::time_t epoch_seconds = has_timezone ? make_utc_time(&timestamp) : std::mktime(&timestamp);
     if (epoch_seconds == static_cast<std::time_t>(-1))
     {
@@ -133,231 +50,233 @@ std::optional<LogTimePoint> build_time_point(
 
     if (has_timezone)
     {
-        const int offset_seconds = ((timezone_hour * 60) + timezone_minute) * 60;
-        epoch_seconds -= timezone_sign * offset_seconds;
+        epoch_seconds -= static_cast<std::time_t>(*parsed.utc_offset_minutes) * 60;
     }
 
-    const auto duration = std::chrono::seconds(epoch_seconds) + std::chrono::nanoseconds(nanoseconds);
+    const auto duration = std::chrono::seconds(epoch_seconds) + std::chrono::nanoseconds(parsed.nanosecond);
     return LogTimePoint(std::chrono::duration_cast<LogTimePoint::duration>(duration));
 }
 
-void consume_leading_whitespace(const std::string& line, ParseState& state)
+bool apply_parser(const eestv::compiledDataAndTimeParser& parser, const std::string& input, int start_index, DateAndTime& output, int& end_index)
 {
-    while (state.position < line.size() && std::isspace(static_cast<unsigned char>(line[state.position])) != 0)
+    std::string to_parse = input;
+    int index            = start_index;
+
+    for (const auto& step : parser.dateParser)
     {
-        ++state.position;
-    }
-}
-
-void parse_optional_brackets(const std::string& line, ParseState& state)
-{
-    state.bracketed = state.position < line.size() && line[state.position] == '[';
-    if (state.bracketed)
-    {
-        ++state.position;
-    }
-}
-
-bool consume_separator(const std::string& line, ParseState& state, char separator)
-{
-    if (state.position >= line.size() || line[state.position] != separator)
-    {
-        return false;
-    }
-
-    ++state.position;
-    return true;
-}
-
-bool parse_date(const std::string& line, ParseState& state, ParsedTimestamp& parsed)
-{
-    if (!parse_fixed_digits(line, state.position, 4, parsed.year))
-    {
-        return false;
-    }
-    state.position += 4;
-
-    if (!consume_separator(line, state, '-'))
-    {
-        return false;
-    }
-
-    if (!parse_fixed_digits(line, state.position, 2, parsed.month))
-    {
-        return false;
-    }
-    state.position += 2;
-
-    if (!consume_separator(line, state, '-'))
-    {
-        return false;
-    }
-
-    if (!parse_fixed_digits(line, state.position, 2, parsed.day))
-    {
-        return false;
-    }
-    state.position += 2;
-
-    return is_valid_date(parsed.year, parsed.month, parsed.day);
-}
-
-bool parse_time(const std::string& line, ParseState& state, ParsedTimestamp& parsed)
-{
-    if (state.position >= line.size() || (line[state.position] != 'T' && line[state.position] != ' '))
-    {
-        return false;
-    }
-    ++state.position;
-
-    if (!parse_fixed_digits(line, state.position, 2, parsed.hour))
-    {
-        return false;
-    }
-    state.position += 2;
-
-    if (!consume_separator(line, state, ':'))
-    {
-        return false;
-    }
-
-    if (!parse_fixed_digits(line, state.position, 2, parsed.minute))
-    {
-        return false;
-    }
-    state.position += 2;
-
-    if (!consume_separator(line, state, ':'))
-    {
-        return false;
-    }
-
-    if (!parse_fixed_digits(line, state.position, 2, parsed.second))
-    {
-        return false;
-    }
-    state.position += 2;
-
-    return is_valid_time(parsed.hour, parsed.minute, parsed.second);
-}
-
-bool parse_fractional_seconds(const std::string& line, ParseState& state, ParsedTimestamp& parsed)
-{
-    if (state.position >= line.size() || line[state.position] != '.')
-    {
-        return true;
-    }
-
-    ++state.position;
-
-    const std::size_t fraction_start = state.position;
-    while (state.position < line.size() && is_digit(line[state.position]))
-    {
-        ++state.position;
-    }
-
-    if (fraction_start == state.position)
-    {
-        return false;
-    }
-
-    const std::size_t fraction_length = std::min<std::size_t>(9, state.position - fraction_start);
-    for (std::size_t index = 0; index < fraction_length; ++index)
-    {
-        parsed.nanoseconds = (parsed.nanoseconds * 10) + (line[fraction_start + index] - '0');
-    }
-
-    for (std::size_t index = fraction_length; index < 9; ++index)
-    {
-        parsed.nanoseconds *= 10;
-    }
-
-    return true;
-}
-
-bool parse_timezone(const std::string& line, ParseState& state, ParsedTimestamp& parsed)
-{
-    if (state.position >= line.size() || (line[state.position] != 'Z' && line[state.position] != '+' && line[state.position] != '-'))
-    {
-        return true;
-    }
-
-    parsed.has_timezone = true;
-    if (line[state.position] == 'Z')
-    {
-        ++state.position;
-        return true;
-    }
-
-    parsed.timezone_sign = line[state.position] == '+' ? 1 : -1;
-    ++state.position;
-
-    if (!parse_fixed_digits(line, state.position, 2, parsed.timezone_hour))
-    {
-        return false;
-    }
-    state.position += 2;
-
-    if (state.position < line.size() && line[state.position] == ':')
-    {
-        ++state.position;
-    }
-
-    if (!parse_fixed_digits(line, state.position, 2, parsed.timezone_minute))
-    {
-        return false;
-    }
-    state.position += 2;
-
-    return parsed.timezone_hour <= 23 && parsed.timezone_minute <= 59;
-}
-
-bool validate_trailing_boundary(const std::string& line, ParseState& state)
-{
-    if (state.bracketed)
-    {
-        if (!consume_separator(line, state, ']'))
+        int index_jump = 0;
+        if (!step(to_parse, index, index_jump, output))
         {
             return false;
         }
-    }
-    else if (state.position < line.size() && !is_boundary_character(line[state.position]))
-    {
-        return false;
+
+        index += index_jump;
     }
 
+    end_index = index;
     return true;
 }
 
-} // namespace
-
-std::optional<LogTimePoint> parse_log_timestamp(const std::string& line)
+std::string format_two_digits(unsigned value)
 {
-    ParseState state;
-    ParsedTimestamp parsed;
+    std::ostringstream output;
+    output << std::setw(2) << std::setfill('0') << value;
+    return output.str();
+}
 
-    consume_leading_whitespace(line, state);
-    parse_optional_brackets(line, state);
+std::string format_nine_digits(unsigned value)
+{
+    std::ostringstream output;
+    output << std::setw(9) << std::setfill('0') << value;
+    return output.str();
+}
 
-    if (!parse_date(line, state, parsed) || !parse_time(line, state, parsed) ||
-        !parse_fractional_seconds(line, state, parsed) || !parse_timezone(line, state, parsed) ||
-        !validate_trailing_boundary(line, state))
+std::string trim_fraction_suffix(std::string text)
+{
+    while (!text.empty() && text.back() == '0')
+    {
+        text.pop_back();
+    }
+
+    return text;
+}
+
+std::string format_display_time(const DateAndTime& parsed)
+{
+    std::ostringstream output;
+    output << std::setw(4) << std::setfill('0') << parsed.year << '-' << std::setw(2) << std::setfill('0') << parsed.month << '-' << std::setw(2) << std::setfill('0') << parsed.day << ' ' << std::setw(2) << std::setfill('0') << parsed.hour
+           << ':' << std::setw(2) << std::setfill('0') << parsed.minute << ':' << std::setw(2) << std::setfill('0') << parsed.second;
+
+    if (parsed.nanosecond != 0)
+    {
+        output << '.' << trim_fraction_suffix(format_nine_digits(parsed.nanosecond));
+    }
+
+    if (parsed.utc_offset_minutes.has_value())
+    {
+        const int total_minutes    = *parsed.utc_offset_minutes;
+        const int absolute_minutes = std::abs(total_minutes);
+        const int hours            = absolute_minutes / 60;
+        const int minutes          = absolute_minutes % 60;
+        output << (total_minutes >= 0 ? '+' : '-') << format_two_digits(static_cast<unsigned>(hours)) << ':' << format_two_digits(static_cast<unsigned>(minutes));
+    }
+
+    return output.str();
+}
+
+std::optional<ParsedLogTimestamp> try_parse_with_format(const eestv::compiledDataAndTimeParser& parser, const std::string& line, int start_index)
+{
+    DateAndTime parsed;
+    int end_index = 0;
+    if (!apply_parser(parser, line, start_index, parsed, end_index))
     {
         return std::nullopt;
     }
 
-    return build_time_point(
-        parsed.year,
-        parsed.month,
-        parsed.day,
-        parsed.hour,
-        parsed.minute,
-        parsed.second,
-        parsed.nanoseconds,
-        parsed.has_timezone,
-        parsed.timezone_sign,
-        parsed.timezone_hour,
-        parsed.timezone_minute);
+    const auto time_point = build_time_point(parsed);
+    if (!time_point.has_value())
+    {
+        return std::nullopt;
+    }
+
+    return ParsedLogTimestamp {
+        *time_point,
+        line.substr(static_cast<std::size_t>(start_index), static_cast<std::size_t>(end_index - start_index)),
+        format_display_time(parsed),
+    };
+}
+
+const eestv::compiledDataAndTimeParser& compiled_parser_from_entry(const TimestampFormatCatalog::Entry& entry)
+{
+    return *static_cast<const eestv::compiledDataAndTimeParser*>(entry.compiled_parser.get());
+}
+
+std::vector<std::string> sanitize_formats(std::vector<std::string> formats)
+{
+    formats.erase(std::remove_if(formats.begin(), formats.end(), [](const std::string& format) { return format.empty(); }), formats.end());
+    if (formats.empty())
+    {
+        return default_timestamp_formats();
+    }
+
+    return formats;
+}
+
+std::shared_ptr<const TimestampFormatCatalog>& mutable_default_catalog()
+{
+    static auto catalog = std::make_shared<const TimestampFormatCatalog>(default_timestamp_formats());
+    return catalog;
+}
+
+} // namespace
+
+TimestampFormatCatalog::TimestampFormatCatalog(std::vector<std::string> formats) : _formats(sanitize_formats(std::move(formats)))
+{
+    TimestampParser parser;
+    _entries.reserve(_formats.size());
+    for (const auto& format : _formats)
+    {
+        _entries.push_back(Entry {format, std::make_shared<eestv::compiledDataAndTimeParser>(parser.CompileFormat(format))});
+    }
+}
+
+TimestampFormatCatalog::~TimestampFormatCatalog() = default;
+
+const std::vector<std::string>& TimestampFormatCatalog::formats() const
+{
+    return _formats;
+}
+
+const std::vector<TimestampFormatCatalog::Entry>& TimestampFormatCatalog::entries() const
+{
+    return _entries;
+}
+
+std::vector<std::string> default_timestamp_formats()
+{
+    return {
+        "YYYY-MM-DDThh:mm:ss.ffffffZZZ", "YYYY-MM-DDThh:mm:ssZZZ", "YYYY-MM-DDThh:mm:ssZZ",   "YYYY-MM-DDThh:mm:ssZ",  "YYYY-MM-DDThh:mm:ss.f",   "YYYY-MM-DDThh:mm:ss.fff",
+        "YYYY-MM-DDThh:mm:ss",           "[YYYY-MM-DDThh:mm:ss]",  "YYYY-MM-DD hh:mm:ss",     "[YYYY-MM-DD hh:mm:ss]", "YYYY-MM-DD hh:mm:ss.fff", "YYYY-MM-DD hh:mm:ss,fff",
+        "DD-MMM-YYYY hh:mm:ss",          "MMM DD hh:mm:ss",        "DD/MMM/YYYY:hh:mm:ss ZZ", "YYYYMMDDThhmmssZ",      "YYYYMMDDThhmmssZZ",
+    };
+}
+
+std::shared_ptr<const TimestampFormatCatalog> default_timestamp_format_catalog()
+{
+    return mutable_default_catalog();
+}
+
+void set_default_timestamp_format_catalog(std::shared_ptr<const TimestampFormatCatalog> catalog)
+{
+    if (catalog == nullptr)
+    {
+        catalog = std::make_shared<const TimestampFormatCatalog>(default_timestamp_formats());
+    }
+
+    mutable_default_catalog() = std::move(catalog);
+}
+
+SourceTimestampParser::SourceTimestampParser(std::shared_ptr<const TimestampFormatCatalog> catalog) : _catalog(std::move(catalog))
+{
+    if (_catalog == nullptr)
+    {
+        _catalog = default_timestamp_format_catalog();
+    }
+}
+
+std::optional<ParsedLogTimestamp> SourceTimestampParser::parse(const std::string& line)
+{
+    const auto start_indices = TimestampParser::possible_parse_start_indices(line);
+    if (start_indices.empty() || _catalog == nullptr)
+    {
+        return std::nullopt;
+    }
+
+    if (_detected_format_index.has_value() && _detected_start_index_slot.has_value())
+    {
+        if (*_detected_format_index >= _catalog->entries().size() || *_detected_start_index_slot >= start_indices.size())
+        {
+            return std::nullopt;
+        }
+
+        return try_parse_with_format(compiled_parser_from_entry(_catalog->entries()[*_detected_format_index]), line, start_indices[*_detected_start_index_slot]);
+    }
+
+    for (std::size_t start_slot = 0; start_slot < start_indices.size(); ++start_slot)
+    {
+        const int start_index = start_indices[start_slot];
+        for (std::size_t format_index = 0; format_index < _catalog->entries().size(); ++format_index)
+        {
+            const auto parsed = try_parse_with_format(compiled_parser_from_entry(_catalog->entries()[format_index]), line, start_index);
+            if (!parsed.has_value())
+            {
+                continue;
+            }
+
+            _detected_format_index     = format_index;
+            _detected_start_index_slot = start_slot;
+            return parsed;
+        }
+    }
+
+    return std::nullopt;
+}
+
+std::optional<ParsedLogTimestamp> parse_log_timestamp_details(const std::string& line)
+{
+    SourceTimestampParser parser;
+    return parser.parse(line);
+}
+
+std::optional<LogTimePoint> parse_log_timestamp(const std::string& line)
+{
+    const auto parsed = parse_log_timestamp_details(line);
+    if (!parsed.has_value())
+    {
+        return std::nullopt;
+    }
+
+    return parsed->time_point;
 }
 
 } // namespace slayerlog

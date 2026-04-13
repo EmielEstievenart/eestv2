@@ -5,6 +5,7 @@
 #include <string>
 
 #include "commands/command_history.hpp"
+#include "log_timestamp.hpp"
 
 namespace slayerlog
 {
@@ -80,6 +81,21 @@ TEST(CommandHistoryTest, MatchesEntriesUsingCaseInsensitiveSubstring)
     const auto matches = history.matching_entries("erR");
     ASSERT_EQ(matches.size(), 1U);
     EXPECT_EQ(matches[0], "find Error");
+
+    remove_temp_settings_file(settings_path);
+}
+
+TEST(CommandHistoryTest, SeedsDefaultTimestampFormatsWhenMissing)
+{
+    const auto settings_path = make_temp_settings_path();
+    SettingsStore settings_store(settings_path);
+    std::string error_message;
+
+    ASSERT_TRUE(settings_store.load(error_message));
+    ASSERT_TRUE(settings_store.ensure_default_values("timestamp_formats", "format", default_timestamp_formats(), error_message));
+
+    const auto formats = settings_store.ini().values("timestamp_formats", "format");
+    EXPECT_EQ(formats, default_timestamp_formats());
 
     remove_temp_settings_file(settings_path);
 }

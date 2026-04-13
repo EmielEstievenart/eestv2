@@ -63,11 +63,12 @@ target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB
 
 target_include_directories(
   slayerlog PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/commands)
+                    ${CMAKE_CURRENT_SOURCE_DIR}/commands
+                    ${CMAKE_SOURCE_DIR}/code)
 
 target_link_libraries(
   slayerlog PRIVATE component ftxui_components Boost::program_options
-                    log4cplus::log4cplus libzstd)
+                    log4cplus::log4cplus libzstd eestv_lib)
 
 add_custom_command(
   TARGET slayerlog

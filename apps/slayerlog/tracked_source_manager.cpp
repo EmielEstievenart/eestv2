@@ -21,7 +21,14 @@ struct TrackedSourceManager::SourceState
     TrackedSource tracked_source;
 };
 
-TrackedSourceManager::TrackedSourceManager()  = default;
+TrackedSourceManager::TrackedSourceManager(std::shared_ptr<const TimestampFormatCatalog> timestamp_formats) : _timestamp_formats(std::move(timestamp_formats))
+{
+    if (_timestamp_formats == nullptr)
+    {
+        _timestamp_formats = default_timestamp_format_catalog();
+    }
+}
+
 TrackedSourceManager::~TrackedSourceManager() = default;
 
 std::optional<std::string> TrackedSourceManager::open_source(std::string_view source_spec)
@@ -46,15 +53,23 @@ std::optional<std::string> TrackedSourceManager::open_source(const LogSource& so
     try
     {
         auto watcher = create_watcher_for_source(source);
-        std::vector<std::string> lines;
-        watcher->poll(lines);
 
         const std::size_t source_index = _sources.size();
         SourceState source_state {
             std::move(watcher),
-            TrackedSource(source, source_display_path(source)),
+            TrackedSource(source, source_display_path(source), _timestamp_formats),
         };
-        source_state.tracked_source.add_entries_from_raw_strings(lines);
+
+        if (auto* folder_watcher = dynamic_cast<FolderWatcher*>(source_state.watcher.get()))
+        {
+            source_state.tracked_source.add_entries(folder_watcher->poll_parsed_lines());
+        }
+        else
+        {
+            std::vector<std::string> lines;
+            source_state.watcher->poll(lines);
+            source_state.tracked_source.add_entries_from_raw_strings(lines);
+        }
 
         _sources.push_back(std::move(source_state));
         rebuild_source_labels();
@@ -92,11 +107,33 @@ LogBatch TrackedSourceManager::poll()
     for (std::size_t source_index = 0; source_index < _sources.size(); ++source_index)
     {
         auto& source_state = _sources[source_index];
-        std::vector<std::string> lines;
 
         try
         {
+            const std::size_t first_new_entry_index = source_state.tracked_source.entries().size();
+
+            if (auto* folder_watcher = dynamic_cast<FolderWatcher*>(source_state.watcher.get()))
+            {
+                auto lines = folder_watcher->poll_parsed_lines();
+                if (lines.empty())
+                {
+                    continue;
+                }
+
+                source_state.tracked_source.add_entries(std::move(lines));
+                append_entries_to_batch(batch, source_state, source_index, first_new_entry_index);
+                continue;
+            }
+
+            std::vector<std::string> lines;
             source_state.watcher->poll(lines);
+            if (lines.empty())
+            {
+                continue;
+            }
+
+            source_state.tracked_source.add_entries_from_raw_strings(lines);
+            append_entries_to_batch(batch, source_state, source_index, first_new_entry_index);
         }
         catch (const std::exception& ex)
         {
@@ -108,15 +145,6 @@ LogBatch TrackedSourceManager::poll()
             SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << source_display_path(source_state.tracked_source.source()) << " error=<unknown>");
             continue;
         }
-
-        if (lines.empty())
-        {
-            continue;
-        }
-
-        const std::size_t first_new_entry_index = source_state.tracked_source.entries().size();
-        source_state.tracked_source.add_entries_from_raw_strings(lines);
-        append_entries_to_batch(batch, source_state, source_index, first_new_entry_index);
     }
 
     return batch;
@@ -155,7 +183,7 @@ std::vector<std::string> TrackedSourceManager::source_labels() const
     return labels;
 }
 
-std::unique_ptr<LogWatcherBase> TrackedSourceManager::create_watcher_for_source(const LogSource& source)
+std::unique_ptr<LogWatcherBase> TrackedSourceManager::create_watcher_for_source(const LogSource& source) const
 {
     if (source.kind == LogSourceKind::SshRemoteFile)
     {
@@ -164,7 +192,7 @@ std::unique_ptr<LogWatcherBase> TrackedSourceManager::create_watcher_for_source(
 
     if (source.kind == LogSourceKind::LocalFolder)
     {
-        return std::make_unique<FolderWatcher>(source.local_folder_path);
+        return std::make_unique<FolderWatcher>(source.local_folder_path, _timestamp_formats);
     }
 
     return std::make_unique<FileWatcher>(source.local_path);
@@ -211,13 +239,14 @@ void TrackedSourceManager::append_entries_to_batch(LogBatch& batch, const Source
     for (std::size_t entry_index = first_entry_index; entry_index < entries.size(); ++entry_index)
     {
         const auto& entry = entries[entry_index];
-        batch.push_back(LogBatchEntry {
-            source_index,
-            source_state.tracked_source.source_label(),
-            entry.raw_text,
-            entry.timestamp,
-            entry.sequence_number,
-        });
+        LogBatchEntry batch_entry;
+        batch_entry.source_index           = source_index;
+        batch_entry.source_label           = source_state.tracked_source.source_label();
+        batch_entry.text                   = entry.raw_text;
+        batch_entry.timestamp              = entry.timestamp;
+        batch_entry.source_sequence_number = entry.sequence_number;
+        batch_entry.parsed_time_text       = entry.parsed_timestamp_text;
+        batch.push_back(std::move(batch_entry));
     }
 }
 

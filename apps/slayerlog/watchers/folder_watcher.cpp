@@ -81,12 +81,33 @@ std::vector<std::filesystem::path> enumerate_regular_files(const std::string& fo
 
 } // namespace
 
-FolderWatcher::FolderWatcher(std::string folder_path) : _folder_path(std::move(folder_path)), _timestamp_parser(&parse_log_timestamp)
+FolderWatcher::FolderWatcher(std::string folder_path) : FolderWatcher(std::move(folder_path), default_timestamp_format_catalog())
+{
+}
+
+FolderWatcher::FolderWatcher(std::string folder_path, std::shared_ptr<const TimestampFormatCatalog> timestamp_formats) : _folder_path(std::move(folder_path)), _timestamp_formats(std::move(timestamp_formats))
 {
     SLAYERLOG_LOG_INFO("Created folder watcher for folder=" << _folder_path);
 }
 
 bool FolderWatcher::poll_locked(std::vector<std::string>& lines)
+{
+    const auto parsed_lines = poll_parsed_lines();
+    if (parsed_lines.empty())
+    {
+        return false;
+    }
+
+    lines.reserve(parsed_lines.size());
+    for (const auto& line : parsed_lines)
+    {
+        lines.push_back(line.text);
+    }
+
+    return true;
+}
+
+std::vector<ParsedLogLine> FolderWatcher::poll_parsed_lines()
 {
     refresh_active_children();
 
@@ -115,13 +136,18 @@ bool FolderWatcher::poll_locked(std::vector<std::string>& lines)
         batch.reserve(batch.size() + child_lines.size());
         for (const auto& line : child_lines)
         {
-            batch.push_back(LogBatchEntry {
-                source_index,
-                {},
-                line,
-                _timestamp_parser(line),
-                child.next_line_sequence++,
-            });
+            const auto parsed_timestamp = child.timestamp_parser.parse(line);
+            LogBatchEntry batch_entry;
+            batch_entry.source_index = source_index;
+            batch_entry.text         = line;
+            if (parsed_timestamp.has_value())
+            {
+                batch_entry.timestamp        = parsed_timestamp->time_point;
+                batch_entry.parsed_time_text = parsed_timestamp->display_text;
+            }
+
+            batch_entry.source_sequence_number = child.next_line_sequence++;
+            batch.push_back(std::move(batch_entry));
         }
 
         if (child.is_zstd)
@@ -133,17 +159,29 @@ bool FolderWatcher::poll_locked(std::vector<std::string>& lines)
 
     if (batch.empty())
     {
-        return false;
+        return {};
     }
 
     const auto merged = merge_log_batch(batch);
+    std::vector<ParsedLogLine> lines;
     lines.reserve(merged.size());
     for (const auto& line : merged)
     {
-        lines.push_back(line.text);
+        ParsedLogLine parsed_line;
+        parsed_line.text = line.text;
+        if (line.timestamp.has_value())
+        {
+            parsed_line.timestamp = ParsedLogTimestamp {
+                *line.timestamp,
+                {},
+                line.parsed_time_text,
+            };
+        }
+
+        lines.push_back(std::move(parsed_line));
     }
 
-    return true;
+    return lines;
 }
 
 void FolderWatcher::refresh_active_children()
@@ -169,7 +207,8 @@ void FolderWatcher::refresh_active_children()
         }
 
         ChildWatcher child;
-        child.is_zstd = is_zstd;
+        child.is_zstd          = is_zstd;
+        child.timestamp_parser = SourceTimestampParser(_timestamp_formats);
         if (is_zstd)
         {
             child.watcher = std::make_unique<ZstdFileWatcher>(file_path.string());
