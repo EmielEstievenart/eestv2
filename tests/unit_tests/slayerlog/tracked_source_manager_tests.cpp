@@ -5,8 +5,11 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+
+#include <zstd.h>
 
 #include "log_batch.hpp"
 #include "log_source.hpp"
@@ -22,6 +25,20 @@ std::filesystem::path make_unique_test_path(const std::string& suffix = ".log")
 {
     const auto unique_suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     return std::filesystem::temp_directory_path() / ("slayerlog_tracked_source_manager_" + unique_suffix + suffix);
+}
+
+std::vector<unsigned char> compress_zstd_text(std::string_view text)
+{
+    const std::size_t bound = ZSTD_compressBound(text.size());
+    std::vector<unsigned char> compressed(bound);
+    const std::size_t written = ZSTD_compress(compressed.data(), compressed.size(), text.data(), text.size(), 1);
+    if (ZSTD_isError(written) != 0)
+    {
+        throw std::runtime_error("Failed to compress zstd test payload");
+    }
+
+    compressed.resize(written);
+    return compressed;
 }
 
 class ScopedTestFile
@@ -59,6 +76,15 @@ public:
         std::ofstream output(_path, std::ios::binary | std::ios::app);
         ASSERT_TRUE(output.is_open());
         output << content;
+        output.close();
+        ASSERT_TRUE(output.good());
+    }
+
+    void write_bytes(const std::vector<unsigned char>& bytes) const
+    {
+        std::ofstream output(_path, std::ios::binary | std::ios::trunc);
+        ASSERT_TRUE(output.is_open());
+        output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         output.close();
         ASSERT_TRUE(output.good());
     }
@@ -149,6 +175,33 @@ TEST(TrackedSourceManagerTest, OpenFolderLoadsInitialContentsAsSingleTrackedSour
                                                     "2026-04-01T10:01:00 beta first",
                                                     "2026-04-01T10:02:00 alpha second",
                                                 }));
+    EXPECT_TRUE(manager.poll().empty());
+}
+
+TEST(TrackedSourceManagerTest, FolderSourceContinuesProducingIncrementalUpdatesAfterOpen)
+{
+    const auto root       = make_unique_test_path("");
+    const auto folder     = root / "archive";
+    const auto plain_file = folder / "alpha.log";
+    const auto zstd_file  = folder / "beta.log.zst";
+    ScopedTestFile first_file(plain_file);
+    ScopedTestFile compressed_file(zstd_file);
+    first_file.write("2026-04-01T10:02:00 alpha second\n");
+    compressed_file.write_bytes(compress_zstd_text("2026-04-01T10:01:00 beta first\n"));
+
+    TrackedSourceManager manager;
+    ASSERT_FALSE(manager.open_source(make_local_folder_source(folder.string())).has_value());
+
+    EXPECT_EQ(merged_texts(manager.snapshot()), (std::vector<std::string> {
+                                                    "2026-04-01T10:01:00 beta first",
+                                                    "2026-04-01T10:02:00 alpha second",
+                                                }));
+
+    first_file.append("2026-04-01T10:03:00 alpha third\n");
+    EXPECT_EQ(merged_texts(manager.poll()), (std::vector<std::string> {
+                                                "2026-04-01T10:03:00 alpha third",
+                                            }));
+
     EXPECT_TRUE(manager.poll().empty());
 }
 

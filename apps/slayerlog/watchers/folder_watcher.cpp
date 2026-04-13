@@ -1,24 +1,19 @@
 #include "folder_watcher.hpp"
 
 #include <algorithm>
-#include <array>
-#include <cstddef>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <memory>
-#include <optional>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
-#include <zstd.h>
-
 #include "debug_log.hpp"
+#include "file_watcher.hpp"
 #include "log_batch.hpp"
-#include "log_timestamp.hpp"
+#include "zstd_file_watcher.hpp"
 
 namespace slayerlog
 {
@@ -26,15 +21,36 @@ namespace slayerlog
 namespace
 {
 
-std::string to_lower_copy(std::string text)
+std::string normalize_file_path_for_key(const std::filesystem::path& path)
 {
-    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
-    return text;
+    std::error_code error_code;
+    std::filesystem::path normalized_path = std::filesystem::weakly_canonical(path, error_code);
+    if (error_code)
+    {
+        error_code.clear();
+        normalized_path = std::filesystem::absolute(path, error_code);
+        if (error_code)
+        {
+            normalized_path = path.lexically_normal();
+        }
+        else
+        {
+            normalized_path = normalized_path.lexically_normal();
+        }
+    }
+
+    std::string normalized_text = normalized_path.make_preferred().string();
+#ifdef _WIN32
+    std::transform(normalized_text.begin(), normalized_text.end(), normalized_text.begin(), [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+#endif
+    return normalized_text;
 }
 
 bool has_zstd_extension(const std::filesystem::path& path)
 {
-    return to_lower_copy(path.extension().string()) == ".zst";
+    std::string extension = path.extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+    return extension == ".zst";
 }
 
 std::vector<std::filesystem::path> enumerate_regular_files(const std::string& folder_path)
@@ -63,167 +79,124 @@ std::vector<std::filesystem::path> enumerate_regular_files(const std::string& fo
     return files;
 }
 
-std::string read_binary_file(const std::filesystem::path& path)
-{
-    std::ifstream input(path, std::ios::binary);
-    if (!input.is_open())
-    {
-        throw std::runtime_error("Failed to open file: " + path.string());
-    }
-
-    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
-}
-
-std::string decompress_zstd_bytes(std::string_view compressed_bytes, const std::filesystem::path& path)
-{
-    struct DStreamDeleter
-    {
-        void operator()(ZSTD_DStream* stream) const { ZSTD_freeDStream(stream); }
-    };
-
-    std::unique_ptr<ZSTD_DStream, DStreamDeleter> stream(ZSTD_createDStream());
-    if (stream == nullptr)
-    {
-        throw std::runtime_error("Failed to create zstd stream for file: " + path.string());
-    }
-
-    std::size_t result = ZSTD_initDStream(stream.get());
-    if (ZSTD_isError(result) != 0)
-    {
-        throw std::runtime_error("Failed to initialize zstd stream for file: " + path.string());
-    }
-
-    ZSTD_inBuffer input {compressed_bytes.data(), compressed_bytes.size(), 0};
-    std::array<char, 1 << 15> buffer {};
-    std::string output;
-
-    while (input.pos < input.size)
-    {
-        ZSTD_outBuffer out {buffer.data(), buffer.size(), 0};
-        result = ZSTD_decompressStream(stream.get(), &out, &input);
-        if (ZSTD_isError(result) != 0)
-        {
-            throw std::runtime_error("Failed to decompress zstd file: " + path.string());
-        }
-
-        output.append(buffer.data(), out.pos);
-
-        if (result == 0 && input.pos < input.size)
-        {
-            result = ZSTD_initDStream(stream.get());
-            if (ZSTD_isError(result) != 0)
-            {
-                throw std::runtime_error("Failed to continue zstd decompression for file: " + path.string());
-            }
-        }
-    }
-
-    if (result != 0)
-    {
-        throw std::runtime_error("Incomplete zstd data in file: " + path.string());
-    }
-
-    return output;
-}
-
-std::string read_log_file_contents(const std::filesystem::path& path)
-{
-    const std::string bytes = read_binary_file(path);
-    if (has_zstd_extension(path))
-    {
-        return decompress_zstd_bytes(bytes, path);
-    }
-
-    return bytes;
-}
-
-std::vector<std::string> split_lines(std::string text)
-{
-    std::vector<std::string> lines;
-    std::size_t start = 0;
-    while (start < text.size())
-    {
-        const auto newline = text.find('\n', start);
-        if (newline == std::string::npos)
-        {
-            std::string line = text.substr(start);
-            if (!line.empty() && line.back() == '\r')
-            {
-                line.pop_back();
-            }
-
-            // Folder loads are snapshot-only for now, so keep a final unterminated line.
-            lines.push_back(std::move(line));
-            break;
-        }
-
-        std::string line = text.substr(start, newline - start);
-        if (!line.empty() && line.back() == '\r')
-        {
-            line.pop_back();
-        }
-
-        lines.push_back(std::move(line));
-        start = newline + 1;
-    }
-
-    return lines;
-}
-
-std::vector<std::string> merge_file_lines(const std::vector<std::filesystem::path>& files)
-{
-    LogBatch batch;
-
-    for (std::size_t file_index = 0; file_index < files.size(); ++file_index)
-    {
-        const auto lines = split_lines(read_log_file_contents(files[file_index]));
-        batch.reserve(batch.size() + lines.size());
-        for (std::size_t line_index = 0; line_index < lines.size(); ++line_index)
-        {
-            const std::string& line = lines[line_index];
-            batch.push_back(LogBatchEntry {
-                file_index,
-                {},
-                line,
-                parse_log_timestamp(line),
-                static_cast<std::uint64_t>(line_index),
-            });
-        }
-    }
-
-    const auto merged = merge_log_batch(batch);
-    std::vector<std::string> lines;
-    lines.reserve(merged.size());
-    for (const auto& line : merged)
-    {
-        lines.push_back(line.text);
-    }
-
-    return lines;
-}
-
 } // namespace
 
-FolderWatcher::FolderWatcher(std::string folder_path) : _folder_path(std::move(folder_path))
+FolderWatcher::FolderWatcher(std::string folder_path) : _folder_path(std::move(folder_path)), _timestamp_parser(&parse_log_timestamp)
 {
     SLAYERLOG_LOG_INFO("Created folder watcher for folder=" << _folder_path);
 }
 
 bool FolderWatcher::poll_locked(std::vector<std::string>& lines)
 {
-    if (_loaded)
+    refresh_active_children();
+
+    LogBatch batch;
+    for (std::size_t source_index = 0; source_index < _active_file_order.size(); ++source_index)
+    {
+        const std::string& path_key = _active_file_order[source_index];
+        auto child_it               = _children.find(path_key);
+        if (child_it == _children.end())
+        {
+            continue;
+        }
+
+        auto& child = child_it->second;
+        std::vector<std::string> child_lines;
+        if (!child.watcher->poll(child_lines) || child_lines.empty())
+        {
+            if (child.is_zstd)
+            {
+                _consumed_zstd_paths.insert(path_key);
+                _children.erase(child_it);
+            }
+            continue;
+        }
+
+        batch.reserve(batch.size() + child_lines.size());
+        for (const auto& line : child_lines)
+        {
+            batch.push_back(LogBatchEntry {
+                source_index,
+                {},
+                line,
+                _timestamp_parser(line),
+                child.next_line_sequence++,
+            });
+        }
+
+        if (child.is_zstd)
+        {
+            _consumed_zstd_paths.insert(path_key);
+            _children.erase(child_it);
+        }
+    }
+
+    if (batch.empty())
     {
         return false;
     }
 
-    lines   = load_sorted_folder_lines(_folder_path);
-    _loaded = true;
-    return !lines.empty();
+    const auto merged = merge_log_batch(batch);
+    lines.reserve(merged.size());
+    for (const auto& line : merged)
+    {
+        lines.push_back(line.text);
+    }
+
+    return true;
 }
 
-std::vector<std::string> FolderWatcher::load_sorted_folder_lines(const std::string& folder_path)
+void FolderWatcher::refresh_active_children()
 {
-    return merge_file_lines(enumerate_regular_files(folder_path));
+    _active_file_order.clear();
+    _active_file_paths.clear();
+
+    for (const auto& file_path : enumerate_regular_files(_folder_path))
+    {
+        const std::string path_key = normalize_file_path_for_key(file_path);
+        _active_file_order.push_back(path_key);
+        _active_file_paths.insert(path_key);
+
+        if (_children.find(path_key) != _children.end())
+        {
+            continue;
+        }
+
+        const bool is_zstd = has_zstd_extension(file_path);
+        if (is_zstd && _consumed_zstd_paths.find(path_key) != _consumed_zstd_paths.end())
+        {
+            continue;
+        }
+
+        ChildWatcher child;
+        child.is_zstd = is_zstd;
+        if (is_zstd)
+        {
+            child.watcher = std::make_unique<ZstdFileWatcher>(file_path.string());
+        }
+        else
+        {
+            child.watcher = std::make_unique<FileWatcher>(file_path.string());
+        }
+
+        _children.emplace(path_key, std::move(child));
+    }
+
+    remove_inactive_children();
+}
+
+void FolderWatcher::remove_inactive_children()
+{
+    for (auto child_it = _children.begin(); child_it != _children.end();)
+    {
+        if (_active_file_paths.find(child_it->first) != _active_file_paths.end())
+        {
+            ++child_it;
+            continue;
+        }
+
+        child_it = _children.erase(child_it);
+    }
 }
 
 } // namespace slayerlog

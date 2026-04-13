@@ -18,6 +18,7 @@ add_executable(
   flags/flags_tests.cpp
   slayerlog/file_watcher_tests.cpp
   slayerlog/folder_watcher_tests.cpp
+  slayerlog/zstd_file_watcher_tests.cpp
   slayerlog/log_source_tests.cpp
   slayerlog/tracked_source_tests.cpp
   slayerlog/tracked_source_manager_tests.cpp
@@ -45,6 +46,7 @@ add_executable(
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_manager.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/debug_log.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/file_watcher.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/zstd_file_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_source.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_source.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_source_manager.cpp

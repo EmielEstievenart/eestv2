@@ -54,7 +54,9 @@ add_executable(
   watchers/folder_watcher.cpp
   watchers/folder_watcher.hpp
   watchers/file_watcher.cpp
-  watchers/file_watcher.hpp)
+  watchers/file_watcher.hpp
+  watchers/zstd_file_watcher.cpp
+  watchers/zstd_file_watcher.hpp)
 
 target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB
                                              BOOST_USE_WINAPI_VERSION=0x0602)
