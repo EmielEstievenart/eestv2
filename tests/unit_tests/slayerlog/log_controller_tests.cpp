@@ -92,6 +92,11 @@ TEST(LogControllerTest, FindNavigationUsesVisibleMatchesAndWraps)
     ASSERT_TRUE(controller.set_find_query(model, "error"));
     ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
     EXPECT_EQ(controller.active_find_visible_index(model)->value, 0);
+    EXPECT_TRUE(controller.find_active());
+    EXPECT_EQ(controller.total_find_match_count(), 2);
+    EXPECT_EQ(controller.visible_find_match_count(model), 2);
+    EXPECT_TRUE(controller.visible_line_matches_find(model, 0));
+    EXPECT_FALSE(controller.visible_line_matches_find(model, 2));
     EXPECT_EQ(controller.text_view_controller().first_visible_line(), 0);
 
     EXPECT_TRUE(controller.go_to_next_find_match(model));
@@ -150,9 +155,9 @@ TEST(LogControllerTest, InvalidRegexFindKeepsExistingFindState)
 
     EXPECT_THROW(controller.set_find_query(model, "re:["), std::invalid_argument);
 
-    EXPECT_TRUE(model.find_active());
-    EXPECT_EQ(model.find_query(), "error");
-    EXPECT_EQ(model.total_find_match_count(), 2);
+    EXPECT_TRUE(controller.find_active());
+    EXPECT_EQ(controller.find_query(), "error");
+    EXPECT_EQ(controller.total_find_match_count(), 2);
     EXPECT_EQ(controller.active_find_visible_index(model), active_before);
 }
 
@@ -168,14 +173,14 @@ TEST(LogControllerTest, HandleEventEscapeClearsFindBeforeRequestingExit)
     controller.text_view_controller().update_viewport_line_count(1);
 
     ASSERT_TRUE(controller.set_find_query(model, "error"));
-    ASSERT_TRUE(model.find_active());
+    ASSERT_TRUE(controller.find_active());
 
     const auto result = controller.handle_event(model, ftxui::Event::Escape, {});
 
     EXPECT_TRUE(result.handled);
     EXPECT_FALSE(result.request_exit);
-    EXPECT_FALSE(model.find_active());
-    EXPECT_EQ(model.total_find_match_count(), 0);
+    EXPECT_FALSE(controller.find_active());
+    EXPECT_EQ(controller.total_find_match_count(), 0);
 }
 
 TEST(LogControllerTest, HandleEventLeftAndRightArrowNavigateFindResults)
@@ -265,9 +270,68 @@ TEST(LogControllerTest, ResetClearsControllerState)
     EXPECT_EQ(controller.text_view_controller().first_visible_line(), 0);
     EXPECT_TRUE(controller.text_view_controller().follow_bottom());
     EXPECT_FALSE(controller.active_find_visible_index(model).has_value());
+    EXPECT_FALSE(controller.find_active());
+    EXPECT_EQ(controller.total_find_match_count(), 0);
     EXPECT_FALSE(controller.text_view_controller().selection_in_progress());
     EXPECT_FALSE(controller.text_view_controller().selection_bounds().has_value());
     EXPECT_TRUE(controller.text_view_controller().selection_text().empty());
+}
+
+TEST(LogControllerTest, FindCountsAllMatchesWhileVisibleCountRespectsFilters)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "error first"},
+        ObservedLogLine {"alpha.log", "error hidden"},
+        ObservedLogLine {"alpha.log", "error third"},
+    });
+    model.add_exclude_filter("hidden");
+    controller.rebuild_view(model);
+
+    EXPECT_TRUE(controller.set_find_query(model, "error"));
+    EXPECT_EQ(controller.total_find_match_count(), 3);
+    EXPECT_EQ(controller.visible_find_match_count(model), 2);
+    EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
+}
+
+TEST(LogControllerTest, FindSupportsRegexWithRePrefix)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "request id=12"},
+        ObservedLogLine {"alpha.log", "request id=AB"},
+        ObservedLogLine {"alpha.log", "request id=77"},
+    });
+    controller.rebuild_view(model);
+
+    EXPECT_TRUE(controller.set_find_query(model, "re:id=\\d+"));
+    EXPECT_EQ(controller.find_query(), "re:id=\\d+");
+    EXPECT_EQ(controller.total_find_match_count(), 2);
+    EXPECT_EQ(controller.visible_find_match_count(model), 2);
+    EXPECT_TRUE(controller.visible_line_matches_find(model, 0));
+    EXPECT_FALSE(controller.visible_line_matches_find(model, 1));
+    EXPECT_TRUE(controller.visible_line_matches_find(model, 2));
+}
+
+TEST(LogControllerTest, ClearingFindRemovesAllFindState)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        ObservedLogLine {"alpha.log", "needle"},
+    });
+    controller.rebuild_view(model);
+
+    ASSERT_TRUE(controller.set_find_query(model, "needle"));
+    ASSERT_TRUE(controller.find_active());
+
+    controller.clear_find(model);
+
+    EXPECT_FALSE(controller.find_active());
+    EXPECT_EQ(controller.total_find_match_count(), 0);
+    EXPECT_EQ(controller.visible_find_match_count(model), 0);
 }
 
 } // namespace slayerlog

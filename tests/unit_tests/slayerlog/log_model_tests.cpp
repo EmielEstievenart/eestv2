@@ -101,7 +101,6 @@ TEST(LogModelTest, ReplaceBatchPreservesSessionState)
     model.add_include_filter("error");
     model.hide_before_line_number(2);
     model.hide_columns(2, 4);
-    ASSERT_TRUE(model.set_find_query("error"));
     model.toggle_pause();
 
     model.replace_batch({
@@ -113,10 +112,6 @@ TEST(LogModelTest, ReplaceBatchPreservesSessionState)
     EXPECT_EQ(model.hidden_before_line_number(), 2);
     ASSERT_TRUE(model.hidden_columns().has_value());
     EXPECT_EQ(*model.hidden_columns(), (HiddenColumnRange {2, 4}));
-    EXPECT_TRUE(model.find_active());
-    EXPECT_EQ(model.find_query(), "error");
-    EXPECT_EQ(model.total_find_match_count(), 1);
-    EXPECT_EQ(model.visible_find_match_count(), 1);
     EXPECT_EQ(model.line_count(), 1);
 
     model.append_batch({
@@ -141,7 +136,6 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     model.add_exclude_filter("ignore");
     model.hide_before_line_number(2);
     model.hide_columns(2, 5);
-    ASSERT_TRUE(model.set_find_query("error"));
     model.toggle_pause();
     model.append_lines({
         ObservedLogLine {"alpha.log", "queued while paused"},
@@ -155,9 +149,6 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     EXPECT_TRUE(model.exclude_filters().empty());
     EXPECT_FALSE(model.hidden_before_line_number().has_value());
     EXPECT_FALSE(model.hidden_columns().has_value());
-    EXPECT_FALSE(model.find_active());
-    EXPECT_EQ(model.total_find_match_count(), 0);
-    EXPECT_EQ(model.visible_find_match_count(), 0);
     EXPECT_FALSE(model.updates_paused());
 
     model.append_lines({
@@ -299,54 +290,6 @@ TEST(LogModelTest, ParseHiddenColumnRangeUsesHalfOpenZeroBasedSyntax)
     EXPECT_FALSE(parse_hidden_column_range("4-ten").has_value());
 }
 
-TEST(LogModelTest, FindQueryBuildsMatchIndexesAndLookupHelpers)
-{
-    LogModel model;
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "error first"},
-        ObservedLogLine {"alpha.log", "info second"},
-        ObservedLogLine {"alpha.log", "error third"},
-    });
-
-    EXPECT_TRUE(model.set_find_query("error"));
-    EXPECT_TRUE(model.find_active());
-    EXPECT_EQ(model.total_find_match_count(), 2);
-    EXPECT_EQ(model.visible_find_match_count(), 2);
-
-    ASSERT_TRUE(model.find_match_entry_index(FindResultIndex {0}).has_value());
-    EXPECT_EQ(*model.find_match_entry_index(FindResultIndex {0}), (AllLineIndex {0}));
-    ASSERT_TRUE(model.find_match_entry_index(FindResultIndex {1}).has_value());
-    EXPECT_EQ(*model.find_match_entry_index(FindResultIndex {1}), (AllLineIndex {2}));
-
-    ASSERT_TRUE(model.find_match_position_for_entry_index(AllLineIndex {2}).has_value());
-    EXPECT_EQ(model.find_match_position_for_entry_index(AllLineIndex {2})->value, 1);
-
-    ASSERT_TRUE(model.visible_line_index_for_entry(AllLineIndex {2}).has_value());
-    EXPECT_EQ(model.visible_line_index_for_entry(AllLineIndex {2})->value, 2);
-    ASSERT_TRUE(model.visible_line_index_for_line_number(1).has_value());
-    EXPECT_EQ(model.visible_line_index_for_line_number(1)->value, 0);
-
-    EXPECT_TRUE(model.visible_line_matches_find(0));
-    EXPECT_FALSE(model.visible_line_matches_find(1));
-    EXPECT_TRUE(model.visible_line_matches_find(2));
-}
-
-TEST(LogModelTest, FindCountsAllMatchesWhileVisibleCountRespectsFilters)
-{
-    LogModel model;
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "error first"},
-        ObservedLogLine {"alpha.log", "error hidden"},
-        ObservedLogLine {"alpha.log", "error third"},
-    });
-    model.add_exclude_filter("hidden");
-
-    EXPECT_TRUE(model.set_find_query("error"));
-    EXPECT_EQ(model.total_find_match_count(), 3);
-    EXPECT_EQ(model.visible_find_match_count(), 2);
-    EXPECT_FALSE(model.visible_line_index_for_line_number(2).has_value());
-}
-
 TEST(LogModelTest, FiltersSupportRegexWithRePrefix)
 {
     LogModel model;
@@ -362,24 +305,6 @@ TEST(LogModelTest, FiltersSupportRegexWithRePrefix)
     EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
                                          "status=500 error",
                                      }));
-}
-
-TEST(LogModelTest, FindSupportsRegexWithRePrefix)
-{
-    LogModel model;
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "request id=12"},
-        ObservedLogLine {"alpha.log", "request id=AB"},
-        ObservedLogLine {"alpha.log", "request id=77"},
-    });
-
-    EXPECT_TRUE(model.set_find_query("re:id=\\d+"));
-    EXPECT_EQ(model.find_query(), "re:id=\\d+");
-    EXPECT_EQ(model.total_find_match_count(), 2);
-    EXPECT_EQ(model.visible_find_match_count(), 2);
-    EXPECT_TRUE(model.visible_line_matches_find(0));
-    EXPECT_FALSE(model.visible_line_matches_find(1));
-    EXPECT_TRUE(model.visible_line_matches_find(2));
 }
 
 TEST(LogModelTest, InvalidRegexFilterIsRejectedAndKeepsExistingFilters)
@@ -403,44 +328,6 @@ TEST(LogModelTest, InvalidRegexFilterIsRejectedAndKeepsExistingFilters)
     EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
                                          "error first",
                                      }));
-}
-
-TEST(LogModelTest, InvalidRegexFindIsRejectedAndKeepsExistingFindState)
-{
-    LogModel model;
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "error first"},
-        ObservedLogLine {"alpha.log", "error second"},
-        ObservedLogLine {"alpha.log", "info third"},
-    });
-
-    ASSERT_TRUE(model.set_find_query("error"));
-    ASSERT_TRUE(model.find_active());
-    ASSERT_EQ(model.total_find_match_count(), 2);
-
-    EXPECT_THROW(model.set_find_query("re:["), std::invalid_argument);
-    EXPECT_THROW(model.set_find_query("re:"), std::invalid_argument);
-
-    EXPECT_TRUE(model.find_active());
-    EXPECT_EQ(model.find_query(), "error");
-    EXPECT_EQ(model.total_find_match_count(), 2);
-}
-
-TEST(LogModelTest, ClearingFindQueryRemovesAllFindState)
-{
-    LogModel model;
-    model.append_lines({
-        ObservedLogLine {"alpha.log", "needle"},
-    });
-
-    ASSERT_TRUE(model.set_find_query("needle"));
-    ASSERT_TRUE(model.find_active());
-
-    model.clear_find_query();
-
-    EXPECT_FALSE(model.find_active());
-    EXPECT_EQ(model.total_find_match_count(), 0);
-    EXPECT_EQ(model.visible_find_match_count(), 0);
 }
 
 } // namespace slayerlog

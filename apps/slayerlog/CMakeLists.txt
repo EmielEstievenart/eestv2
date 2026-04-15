@@ -32,6 +32,8 @@ add_executable(
   settings_store.hpp
   processed_sources.cpp
   processed_sources.hpp
+  search_pattern.cpp
+  search_pattern.hpp
   log4cplus.ini
   view_theme.hpp
   commands/command_palette_controller.cpp

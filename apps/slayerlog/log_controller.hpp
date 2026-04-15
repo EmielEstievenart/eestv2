@@ -12,6 +12,7 @@
 #include <ftxui_components/text_view_model.hpp>
 
 #include "processed_sources.hpp"
+#include "search_pattern.hpp"
 
 namespace slayerlog
 {
@@ -47,6 +48,11 @@ public:
 
     bool set_find_query(ProcessedSources& processed_sources, std::string query);
     void clear_find(ProcessedSources& processed_sources);
+    bool find_active() const;
+    const std::string& find_query() const;
+    int total_find_match_count() const;
+    int visible_find_match_count(const ProcessedSources& processed_sources) const;
+    bool visible_line_matches_find(const ProcessedSources& processed_sources, int visible_index) const;
     bool go_to_next_find_match(const ProcessedSources& processed_sources);
     bool go_to_previous_find_match(const ProcessedSources& processed_sources);
     std::optional<VisibleLineIndex> active_find_visible_index(const ProcessedSources& processed_sources) const;
@@ -64,6 +70,9 @@ public:
 private:
     std::vector<std::string>& active_buffer();
     std::vector<std::string>& inactive_buffer();
+    void rebuild_find_matches(const ProcessedSources& processed_sources);
+    void expand_find_matches(const ProcessedSources& processed_sources, AllLineIndex first_new_entry_index);
+    bool entry_matches_find_query(const ObservedLogLine& entry) const;
 
     TextViewModel _text_view_model;
     TextViewController _text_view_controller;
@@ -73,6 +82,9 @@ private:
     bool _active_buffer_is_a = true;
     int _synced_line_count   = 0;
 
+    std::string _find_query;
+    std::optional<SearchPattern> _find_pattern;
+    IndexedVector<AllLineIndex, FindResultIndex> _find_match_entry_indices;
     std::optional<AllLineIndex> _active_find_entry_index;
 };
 

@@ -1,6 +1,8 @@
 #include "log_controller.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <iterator>
 #include <string>
 #include <utility>
 
@@ -17,6 +19,9 @@ void LogController::reset()
     _buffer_b.clear();
     _active_buffer_is_a = true;
     _synced_line_count  = 0;
+    _find_query.clear();
+    _find_pattern.reset();
+    _find_match_entry_indices.clear();
     _active_find_entry_index.reset();
     _text_view_controller.swap_lines(active_buffer());
     _text_view_controller.scroll_to_bottom();
@@ -36,6 +41,7 @@ void LogController::rebuild_view(const ProcessedSources& processed_sources)
         target.push_back(processed_sources.rendered_line(i));
     }
 
+    rebuild_find_matches(processed_sources);
     _active_buffer_is_a = !_active_buffer_is_a;
     _synced_line_count  = count;
     _text_view_controller.swap_lines(active_buffer());
@@ -62,6 +68,8 @@ void LogController::sync_view(const ProcessedSources& processed_sources)
     {
         buffer.push_back(processed_sources.rendered_line(i));
     }
+
+    expand_find_matches(processed_sources, AllLineIndex {_synced_line_count});
     _synced_line_count = current_count;
     _text_view_controller.notify_lines_appended();
 }
@@ -84,8 +92,20 @@ bool LogController::go_to_line(const ProcessedSources& processed_sources, int li
 
 bool LogController::set_find_query(ProcessedSources& processed_sources, std::string query)
 {
-    const bool has_matches = processed_sources.set_find_query(std::move(query));
+    query = trim_search_text(query);
+    if (query.empty())
+    {
+        clear_find(processed_sources);
+        return false;
+    }
+
+    const SearchPattern pattern = compile_search_pattern(query);
+
+    _find_query   = pattern.raw_text;
+    _find_pattern = pattern;
+    rebuild_find_matches(processed_sources);
     _active_find_entry_index.reset();
+    const bool has_matches = !_find_match_entry_indices.empty();
     if (!has_matches)
     {
         return false;
@@ -96,13 +116,52 @@ bool LogController::set_find_query(ProcessedSources& processed_sources, std::str
 
 void LogController::clear_find(ProcessedSources& processed_sources)
 {
-    processed_sources.clear_find_query();
+    (void)processed_sources;
+    _find_query.clear();
+    _find_pattern.reset();
+    _find_match_entry_indices.clear();
     _active_find_entry_index.reset();
+}
+
+bool LogController::find_active() const
+{
+    return !_find_query.empty();
+}
+
+const std::string& LogController::find_query() const
+{
+    return _find_query;
+}
+
+int LogController::total_find_match_count() const
+{
+    return static_cast<int>(_find_match_entry_indices.size());
+}
+
+int LogController::visible_find_match_count(const ProcessedSources& processed_sources) const
+{
+    return static_cast<int>(std::count_if(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), [&](AllLineIndex entry_index) { return processed_sources.entry_index_is_visible(entry_index); }));
+}
+
+bool LogController::visible_line_matches_find(const ProcessedSources& processed_sources, int visible_index) const
+{
+    if (visible_index < 0)
+    {
+        return false;
+    }
+
+    const auto entry_index = processed_sources.entry_index_for_visible_line(VisibleLineIndex {visible_index});
+    if (!entry_index.has_value())
+    {
+        return false;
+    }
+
+    return std::binary_search(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), *entry_index);
 }
 
 bool LogController::go_to_next_find_match(const ProcessedSources& processed_sources)
 {
-    if (!processed_sources.find_active() || processed_sources.total_find_match_count() == 0)
+    if (!find_active() || total_find_match_count() == 0)
     {
         return false;
     }
@@ -110,24 +169,24 @@ bool LogController::go_to_next_find_match(const ProcessedSources& processed_sour
     int current_position = -1;
     if (_active_find_entry_index.has_value())
     {
-        const auto position = processed_sources.find_match_position_for_entry_index(*_active_find_entry_index);
-        if (position.has_value())
+        const auto position = std::find(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), *_active_find_entry_index);
+        if (position != _find_match_entry_indices.end())
         {
-            current_position = position->value;
+            current_position = static_cast<int>(std::distance(_find_match_entry_indices.begin(), position));
         }
     }
 
-    for (int offset = 1; offset <= processed_sources.total_find_match_count(); ++offset)
+    for (int offset = 1; offset <= total_find_match_count(); ++offset)
     {
-        const int next_position = (current_position + offset) % processed_sources.total_find_match_count();
-        const auto entry_index  = processed_sources.find_match_entry_index(FindResultIndex {next_position});
-        if (!entry_index.has_value() || !processed_sources.entry_index_is_visible(*entry_index))
+        const int next_position        = (current_position + offset) % total_find_match_count();
+        const AllLineIndex entry_index = _find_match_entry_indices[FindResultIndex {next_position}];
+        if (!processed_sources.entry_index_is_visible(entry_index))
         {
             continue;
         }
 
-        _active_find_entry_index = *entry_index;
-        const auto visible_index = processed_sources.visible_line_index_for_entry(*entry_index);
+        _active_find_entry_index = entry_index;
+        const auto visible_index = processed_sources.visible_line_index_for_entry(entry_index);
         if (!visible_index.has_value())
         {
             return false;
@@ -142,7 +201,7 @@ bool LogController::go_to_next_find_match(const ProcessedSources& processed_sour
 
 bool LogController::go_to_previous_find_match(const ProcessedSources& processed_sources)
 {
-    if (!processed_sources.find_active() || processed_sources.total_find_match_count() == 0)
+    if (!find_active() || total_find_match_count() == 0)
     {
         return false;
     }
@@ -150,24 +209,24 @@ bool LogController::go_to_previous_find_match(const ProcessedSources& processed_
     int current_position = 0;
     if (_active_find_entry_index.has_value())
     {
-        const auto position = processed_sources.find_match_position_for_entry_index(*_active_find_entry_index);
-        if (position.has_value())
+        const auto position = std::find(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), *_active_find_entry_index);
+        if (position != _find_match_entry_indices.end())
         {
-            current_position = position->value;
+            current_position = static_cast<int>(std::distance(_find_match_entry_indices.begin(), position));
         }
     }
 
-    for (int offset = 1; offset <= processed_sources.total_find_match_count(); ++offset)
+    for (int offset = 1; offset <= total_find_match_count(); ++offset)
     {
-        const int previous_position = (current_position - offset + processed_sources.total_find_match_count()) % processed_sources.total_find_match_count();
-        const auto entry_index      = processed_sources.find_match_entry_index(FindResultIndex {previous_position});
-        if (!entry_index.has_value() || !processed_sources.entry_index_is_visible(*entry_index))
+        const int previous_position    = (current_position - offset + total_find_match_count()) % total_find_match_count();
+        const AllLineIndex entry_index = _find_match_entry_indices[FindResultIndex {previous_position}];
+        if (!processed_sources.entry_index_is_visible(entry_index))
         {
             continue;
         }
 
-        _active_find_entry_index = *entry_index;
-        const auto visible_index = processed_sources.visible_line_index_for_entry(*entry_index);
+        _active_find_entry_index = entry_index;
+        const auto visible_index = processed_sources.visible_line_index_for_entry(entry_index);
         if (!visible_index.has_value())
         {
             return false;
@@ -195,7 +254,7 @@ std::optional<VisibleLineIndex> LogController::active_find_visible_index(const P
 LogEventResult LogController::handle_event(ProcessedSources& processed_sources, ftxui::Event event, const std::function<std::optional<TextViewPosition>(const ftxui::Mouse&)>& mouse_to_text_position)
 {
     // Escape: clear find if active, otherwise delegate (TextViewController handles exit)
-    if (event == ftxui::Event::Escape && processed_sources.find_active())
+    if (event == ftxui::Event::Escape && find_active())
     {
         clear_find(processed_sources);
         return {true, false};
@@ -220,12 +279,12 @@ LogEventResult LogController::handle_event(ProcessedSources& processed_sources, 
     }
 
     // Find navigation: intercept arrow keys when find is active
-    if (processed_sources.find_active() && event == ftxui::Event::ArrowRight)
+    if (find_active() && event == ftxui::Event::ArrowRight)
     {
         return {go_to_next_find_match(processed_sources), false};
     }
 
-    if (processed_sources.find_active() && event == ftxui::Event::ArrowLeft)
+    if (find_active() && event == ftxui::Event::ArrowLeft)
     {
         return {go_to_previous_find_match(processed_sources), false};
     }
@@ -262,6 +321,47 @@ std::vector<std::string>& LogController::active_buffer()
 std::vector<std::string>& LogController::inactive_buffer()
 {
     return _active_buffer_is_a ? _buffer_b : _buffer_a;
+}
+
+void LogController::rebuild_find_matches(const ProcessedSources& processed_sources)
+{
+    _find_match_entry_indices.clear();
+    if (!find_active())
+    {
+        return;
+    }
+
+    _find_match_entry_indices.reserve(static_cast<std::size_t>(processed_sources.total_line_count()));
+    for (int index = 0; index < processed_sources.total_line_count(); ++index)
+    {
+        const AllLineIndex entry_index {index};
+        if (entry_matches_find_query(processed_sources.entry_at(entry_index)))
+        {
+            _find_match_entry_indices.push_back(entry_index);
+        }
+    }
+}
+
+void LogController::expand_find_matches(const ProcessedSources& processed_sources, AllLineIndex first_new_entry_index)
+{
+    if (!find_active())
+    {
+        return;
+    }
+
+    for (int index = first_new_entry_index.value; index < processed_sources.total_line_count(); ++index)
+    {
+        const AllLineIndex entry_index {index};
+        if (entry_matches_find_query(processed_sources.entry_at(entry_index)))
+        {
+            _find_match_entry_indices.push_back(entry_index);
+        }
+    }
+}
+
+bool LogController::entry_matches_find_query(const ObservedLogLine& entry) const
+{
+    return _find_pattern.has_value() && matches_pattern(entry.text, *_find_pattern);
 }
 
 } // namespace slayerlog

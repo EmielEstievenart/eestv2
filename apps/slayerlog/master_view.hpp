@@ -18,7 +18,7 @@ class MasterView
 public:
     MasterView(LogView& log_view, CommandPaletteView& command_palette_view);
 
-    ftxui::Element render(const ProcessedSources& processed_sources, LogController& controller, const std::string& header_text, int screen_height, const CommandPaletteModel& command_palette) const;
+    ftxui::Element render(const ProcessedSources& processed_sources, LogController& controller, const std::string& header_text, int screen_height, const CommandPaletteModel& command_palette);
 
 private:
     LogView& _log_view;

@@ -83,14 +83,14 @@ ftxui::Element build_find_status(const ProcessedSources& processed_sources, cons
     ftxui::Elements parts;
     parts.push_back(theme::badge("FIND", theme::label_find_fg));
 
-    if (!processed_sources.find_active())
+    if (!controller.find_active())
     {
         parts.push_back(ftxui::text(" off") | ftxui::color(theme::muted));
         return ftxui::hbox(std::move(parts));
     }
 
-    parts.push_back(ftxui::text(" \"" + processed_sources.find_query() + "\""));
-    parts.push_back(ftxui::text(" " + std::to_string(processed_sources.visible_find_match_count()) + "/" + std::to_string(processed_sources.total_find_match_count()) + " matches") | ftxui::color(theme::muted));
+    parts.push_back(ftxui::text(" \"" + controller.find_query() + "\""));
+    parts.push_back(ftxui::text(" " + std::to_string(controller.visible_find_match_count(processed_sources)) + "/" + std::to_string(controller.total_find_match_count()) + " matches") | ftxui::color(theme::muted));
 
     const auto active_visible_index = controller.active_find_visible_index(processed_sources);
     if (active_visible_index.has_value())
@@ -162,7 +162,7 @@ ftxui::Element LogView::render(const ProcessedSources& processed_sources, LogCon
         for (std::size_t offset = 0; offset < data.visible_lines.size(); ++offset)
         {
             const int line_index      = data.first_visible_line + static_cast<int>(offset);
-            const bool is_find_match  = processed_sources.find_active() && processed_sources.visible_line_matches_find(line_index);
+            const bool is_find_match  = controller.find_active() && controller.visible_line_matches_find(processed_sources, line_index);
             const bool is_active_find = active_find_index.has_value() && active_find_index->value == line_index;
 
             if (is_find_match)

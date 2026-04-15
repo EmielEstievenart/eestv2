@@ -4,14 +4,11 @@
 #include <charconv>
 #include <cctype>
 #include <cstddef>
-#include <iterator>
-#include <regex>
 #include <sstream>
-#include <stdexcept>
 #include <system_error>
-#include <utility>
 
 #include "all_tracked_sources.hpp"
+#include "search_pattern.hpp"
 
 namespace slayerlog
 {
@@ -86,10 +83,6 @@ void ProcessedSources::reset()
     _include_filter_patterns.clear();
     _exclude_filter_patterns.clear();
 
-    _find_query.clear();
-    _find_match_entry_indices.clear();
-    _find_pattern.reset();
-
     _hidden_before_line_number.reset();
     _hidden_columns.reset();
 
@@ -121,7 +114,6 @@ void ProcessedSources::replace_batch(const LogBatch& batch)
     _all_entries.clear();
     _visible_entry_indices.clear();
     _paused_updates.clear();
-    _find_match_entry_indices.clear();
 
     _all_entries.reserve(merged_lines.size());
     for (const auto& line : merged_lines)
@@ -130,7 +122,6 @@ void ProcessedSources::replace_batch(const LogBatch& batch)
     }
 
     rebuild_visible_entries();
-    rebuild_find_matches();
 }
 
 void ProcessedSources::append_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_new_entry_index)
@@ -156,7 +147,6 @@ void ProcessedSources::rebuild_from_sources(const AllTrackedSources& tracked_sou
     _all_entries.clear();
     _visible_entry_indices.clear();
     _paused_updates.clear();
-    _find_match_entry_indices.clear();
 
     const auto& lines = tracked_sources.all_lines();
     _all_entries.reserve(lines.size());
@@ -166,7 +156,6 @@ void ProcessedSources::rebuild_from_sources(const AllTrackedSources& tracked_sou
     }
 
     rebuild_visible_entries();
-    rebuild_find_matches();
 }
 
 void ProcessedSources::toggle_pause()
@@ -190,7 +179,7 @@ void ProcessedSources::set_show_source_labels(bool show_source_labels)
 
 void ProcessedSources::add_include_filter(std::string filter_text)
 {
-    filter_text = trim_filter_text(filter_text);
+    filter_text = trim_search_text(filter_text);
     if (filter_text.empty())
     {
         return;
@@ -201,12 +190,11 @@ void ProcessedSources::add_include_filter(std::string filter_text)
     _include_filters.push_back(pattern.raw_text);
     _include_filter_patterns.push_back(pattern);
     rebuild_visible_entries();
-    rebuild_find_matches();
 }
 
 void ProcessedSources::add_exclude_filter(std::string filter_text)
 {
-    filter_text = trim_filter_text(filter_text);
+    filter_text = trim_search_text(filter_text);
     if (filter_text.empty())
     {
         return;
@@ -217,7 +205,6 @@ void ProcessedSources::add_exclude_filter(std::string filter_text)
     _exclude_filters.push_back(pattern.raw_text);
     _exclude_filter_patterns.push_back(pattern);
     rebuild_visible_entries();
-    rebuild_find_matches();
 }
 
 void ProcessedSources::reset_filters()
@@ -227,7 +214,6 @@ void ProcessedSources::reset_filters()
     _include_filter_patterns.clear();
     _exclude_filter_patterns.clear();
     rebuild_visible_entries();
-    rebuild_find_matches();
 }
 
 const std::vector<std::string>& ProcessedSources::include_filters() const
@@ -244,7 +230,6 @@ void ProcessedSources::hide_before_line_number(int line_number)
 {
     _hidden_before_line_number = line_number > 1 ? std::optional<int>(line_number) : std::nullopt;
     rebuild_visible_entries();
-    rebuild_find_matches();
 }
 
 std::optional<int> ProcessedSources::hidden_before_line_number() const
@@ -273,69 +258,19 @@ std::optional<HiddenColumnRange> ProcessedSources::hidden_columns() const
     return _hidden_columns;
 }
 
-bool ProcessedSources::set_find_query(std::string query)
+const ObservedLogLine& ProcessedSources::entry_at(AllLineIndex entry_index) const
 {
-    query = trim_filter_text(query);
-    if (query.empty())
-    {
-        clear_find_query();
-        return false;
-    }
-
-    const SearchPattern pattern = compile_search_pattern(query);
-
-    _find_query   = pattern.raw_text;
-    _find_pattern = pattern;
-    rebuild_find_matches();
-    return !_find_match_entry_indices.empty();
+    return _all_entries[entry_index];
 }
 
-void ProcessedSources::clear_find_query()
+std::optional<AllLineIndex> ProcessedSources::entry_index_for_visible_line(VisibleLineIndex visible_line_index) const
 {
-    _find_query.clear();
-    _find_pattern.reset();
-    _find_match_entry_indices.clear();
-}
-
-bool ProcessedSources::find_active() const
-{
-    return !_find_query.empty();
-}
-
-const std::string& ProcessedSources::find_query() const
-{
-    return _find_query;
-}
-
-int ProcessedSources::total_find_match_count() const
-{
-    return static_cast<int>(_find_match_entry_indices.size());
-}
-
-int ProcessedSources::visible_find_match_count() const
-{
-    return static_cast<int>(std::count_if(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), [this](AllLineIndex entry_index) { return entry_index_is_visible(entry_index); }));
-}
-
-std::optional<AllLineIndex> ProcessedSources::find_match_entry_index(FindResultIndex find_result_index) const
-{
-    if (find_result_index.value < 0 || find_result_index.value >= static_cast<int>(_find_match_entry_indices.size()))
+    if (visible_line_index.value < 0 || visible_line_index.value >= static_cast<int>(_visible_entry_indices.size()))
     {
         return std::nullopt;
     }
 
-    return _find_match_entry_indices[find_result_index];
-}
-
-std::optional<FindResultIndex> ProcessedSources::find_match_position_for_entry_index(AllLineIndex entry_index) const
-{
-    const auto position = std::find(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), entry_index);
-    if (position == _find_match_entry_indices.end())
-    {
-        return std::nullopt;
-    }
-
-    return FindResultIndex {static_cast<int>(std::distance(_find_match_entry_indices.begin(), position))};
+    return _visible_entry_indices[visible_line_index];
 }
 
 std::optional<VisibleLineIndex> ProcessedSources::visible_line_index_for_entry(AllLineIndex entry_index) const
@@ -367,18 +302,6 @@ std::optional<VisibleLineIndex> ProcessedSources::visible_line_index_for_line_nu
     }
 
     return visible_line_index_for_entry(AllLineIndex {line_number - 1});
-}
-
-bool ProcessedSources::visible_line_matches_find(int visible_index) const
-{
-    if (visible_index < 0 || visible_index >= static_cast<int>(_visible_entry_indices.size()))
-    {
-        return false;
-    }
-
-    const VisibleLineIndex visible_line_index {visible_index};
-    const AllLineIndex entry_index = _visible_entry_indices[visible_line_index];
-    return std::binary_search(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), entry_index);
 }
 
 bool ProcessedSources::entry_index_is_visible(AllLineIndex entry_index) const
@@ -468,7 +391,6 @@ void ProcessedSources::append_lines_immediately(const std::vector<ObservedLogLin
     }
 
     expand_visible_entries(first_new_entry_index);
-    expand_find_matches(first_new_entry_index);
 }
 
 void ProcessedSources::flush_paused_updates()
@@ -515,111 +437,12 @@ void ProcessedSources::expand_visible_entries(AllLineIndex first_new_entry_index
     }
 }
 
-void ProcessedSources::rebuild_find_matches()
-{
-    _find_match_entry_indices.clear();
-    if (_find_query.empty())
-    {
-        return;
-    }
-
-    _find_match_entry_indices.reserve(_all_entries.size());
-    for (std::size_t index = 0; index < _all_entries.size(); ++index)
-    {
-        const AllLineIndex entry_index {static_cast<int>(index)};
-        if (entry_matches_find_query(_all_entries[entry_index]))
-        {
-            _find_match_entry_indices.push_back(entry_index);
-        }
-    }
-}
-
-void ProcessedSources::expand_find_matches(AllLineIndex first_new_entry_index)
-{
-    if (_find_query.empty())
-    {
-        return;
-    }
-
-    for (int index = first_new_entry_index.value; index < static_cast<int>(_all_entries.size()); ++index)
-    {
-        const AllLineIndex entry_index {index};
-        if (entry_matches_find_query(_all_entries[entry_index]))
-        {
-            _find_match_entry_indices.push_back(entry_index);
-        }
-    }
-}
-
-bool ProcessedSources::entry_matches_find_query(const ObservedLogLine& entry) const
-{
-    return _find_pattern.has_value() && matches_pattern(entry.text, *_find_pattern);
-}
-
 bool ProcessedSources::entry_matches_filters(const ObservedLogLine& entry) const
 {
     const std::string searchable_text = entry.source_label + "\n" + entry.text;
     const bool matches_include        = _include_filter_patterns.empty() || matches_any_pattern(searchable_text, _include_filter_patterns);
     const bool matches_exclude        = matches_any_pattern(searchable_text, _exclude_filter_patterns);
     return matches_include && !matches_exclude;
-}
-
-ProcessedSources::SearchPattern ProcessedSources::compile_search_pattern(std::string_view text)
-{
-    const std::string trimmed_text = trim_filter_text(text);
-    if (trimmed_text.empty())
-    {
-        throw std::invalid_argument("Search text must not be empty");
-    }
-
-    constexpr std::string_view regex_prefix {"re:"};
-    if (trimmed_text.rfind(regex_prefix.data(), 0) != 0)
-    {
-        return SearchPattern {
-            trimmed_text,
-            trimmed_text,
-            std::nullopt,
-        };
-    }
-
-    std::string regex_text = trimmed_text.substr(regex_prefix.size());
-    if (regex_text.empty())
-    {
-        throw std::invalid_argument("Regex pattern after re: must not be empty");
-    }
-
-    try
-    {
-        return SearchPattern {
-            trimmed_text,
-            regex_text,
-            std::regex(regex_text),
-        };
-    }
-    catch (const std::regex_error& error)
-    {
-        throw std::invalid_argument("Invalid regex: " + std::string(error.what()));
-    }
-}
-
-bool ProcessedSources::matches_pattern(std::string_view haystack, const SearchPattern& pattern) const
-{
-    if (!pattern.regex.has_value())
-    {
-        return haystack.find(pattern.needle) != std::string_view::npos;
-    }
-
-    return std::regex_search(haystack.begin(), haystack.end(), *pattern.regex);
-}
-
-bool ProcessedSources::matches_any_pattern(std::string_view haystack, const std::vector<SearchPattern>& patterns) const
-{
-    return std::any_of(patterns.begin(), patterns.end(), [&](const SearchPattern& pattern) { return matches_pattern(haystack, pattern); });
-}
-
-std::string ProcessedSources::trim_filter_text(std::string_view text)
-{
-    return trim_text(text);
 }
 
 std::string ProcessedSources::apply_hidden_columns(std::string text) const

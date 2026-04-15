@@ -413,19 +413,19 @@ void register_commands(CommandManager& command_manager, ProcessedSources& proces
                                              return CommandResult {false, "Invalid find pattern: " + std::string(error.what())};
                                          }
 
-                                         const int visible_matches = processed_sources.visible_find_match_count();
-                                         const int total_matches   = processed_sources.total_find_match_count();
+                                         const int visible_matches = controller.visible_find_match_count(processed_sources);
+                                         const int total_matches   = controller.total_find_match_count();
                                          if (focused_visible_match)
                                          {
                                              return CommandResult {
                                                  true,
-                                                 "Find active: " + processed_sources.find_query() + " (" + std::to_string(visible_matches) + " visible / " + std::to_string(total_matches) + " total)",
+                                                 "Find active: " + controller.find_query() + " (" + std::to_string(visible_matches) + " visible / " + std::to_string(total_matches) + " total)",
                                              };
                                          }
 
                                          return CommandResult {
                                              true,
-                                             "Find active: " + processed_sources.find_query() + " (0 visible / " + std::to_string(total_matches) + " total)",
+                                             "Find active: " + controller.find_query() + " (0 visible / " + std::to_string(total_matches) + " total)",
                                          };
                                      });
 }

@@ -66,7 +66,8 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/ssh_tail_watcher.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/stream_line_buffer.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/processed_sources.cpp)
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/processed_sources.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/search_pattern.cpp)
 
 # Link libraries (assuming eestv_lib provides sources and Boost)
 target_link_libraries(
