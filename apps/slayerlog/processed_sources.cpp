@@ -1,4 +1,4 @@
-#include "log_model.hpp"
+#include "processed_sources.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <system_error>
 #include <utility>
+
+#include "all_tracked_sources.hpp"
 
 namespace slayerlog
 {
@@ -73,7 +75,7 @@ std::optional<HiddenColumnRange> parse_hidden_column_range(std::string_view text
     return HiddenColumnRange {*start, *end};
 }
 
-void LogModel::reset()
+void ProcessedSources::reset()
 {
     _all_entries.clear();
     _visible_entry_indices.clear();
@@ -95,7 +97,7 @@ void LogModel::reset()
     _show_source_labels = false;
 }
 
-void LogModel::append_lines(const std::vector<ObservedLogLine>& lines)
+void ProcessedSources::append_lines(const std::vector<ObservedLogLine>& lines)
 {
     if (_updates_paused)
     {
@@ -107,12 +109,12 @@ void LogModel::append_lines(const std::vector<ObservedLogLine>& lines)
     }
 }
 
-void LogModel::append_batch(const LogBatch& batch)
+void ProcessedSources::append_batch(const LogBatch& batch)
 {
     append_lines(merge_log_batch(batch));
 }
 
-void LogModel::replace_batch(const LogBatch& batch)
+void ProcessedSources::replace_batch(const LogBatch& batch)
 {
     const auto merged_lines = merge_log_batch(batch);
 
@@ -131,7 +133,43 @@ void LogModel::replace_batch(const LogBatch& batch)
     rebuild_find_matches();
 }
 
-void LogModel::toggle_pause()
+void ProcessedSources::append_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_new_entry_index)
+{
+    const auto& lines = tracked_sources.all_lines();
+    if (first_new_entry_index.value < 0 || first_new_entry_index.value >= static_cast<int>(lines.size()))
+    {
+        return;
+    }
+
+    std::vector<ObservedLogLine> appended_lines;
+    appended_lines.reserve(lines.size() - static_cast<std::size_t>(first_new_entry_index.value));
+    for (int index = first_new_entry_index.value; index < static_cast<int>(lines.size()); ++index)
+    {
+        appended_lines.push_back(lines[AllLineIndex {index}]);
+    }
+
+    append_lines(appended_lines);
+}
+
+void ProcessedSources::rebuild_from_sources(const AllTrackedSources& tracked_sources)
+{
+    _all_entries.clear();
+    _visible_entry_indices.clear();
+    _paused_updates.clear();
+    _find_match_entry_indices.clear();
+
+    const auto& lines = tracked_sources.all_lines();
+    _all_entries.reserve(lines.size());
+    for (const auto& line : lines)
+    {
+        _all_entries.push_back(line);
+    }
+
+    rebuild_visible_entries();
+    rebuild_find_matches();
+}
+
+void ProcessedSources::toggle_pause()
 {
     _updates_paused = !_updates_paused;
     if (!_updates_paused)
@@ -140,17 +178,17 @@ void LogModel::toggle_pause()
     }
 }
 
-bool LogModel::updates_paused() const
+bool ProcessedSources::updates_paused() const
 {
     return _updates_paused;
 }
 
-void LogModel::set_show_source_labels(bool show_source_labels)
+void ProcessedSources::set_show_source_labels(bool show_source_labels)
 {
     _show_source_labels = show_source_labels;
 }
 
-void LogModel::add_include_filter(std::string filter_text)
+void ProcessedSources::add_include_filter(std::string filter_text)
 {
     filter_text = trim_filter_text(filter_text);
     if (filter_text.empty())
@@ -166,7 +204,7 @@ void LogModel::add_include_filter(std::string filter_text)
     rebuild_find_matches();
 }
 
-void LogModel::add_exclude_filter(std::string filter_text)
+void ProcessedSources::add_exclude_filter(std::string filter_text)
 {
     filter_text = trim_filter_text(filter_text);
     if (filter_text.empty())
@@ -182,7 +220,7 @@ void LogModel::add_exclude_filter(std::string filter_text)
     rebuild_find_matches();
 }
 
-void LogModel::reset_filters()
+void ProcessedSources::reset_filters()
 {
     _include_filters.clear();
     _exclude_filters.clear();
@@ -192,29 +230,29 @@ void LogModel::reset_filters()
     rebuild_find_matches();
 }
 
-const std::vector<std::string>& LogModel::include_filters() const
+const std::vector<std::string>& ProcessedSources::include_filters() const
 {
     return _include_filters;
 }
 
-const std::vector<std::string>& LogModel::exclude_filters() const
+const std::vector<std::string>& ProcessedSources::exclude_filters() const
 {
     return _exclude_filters;
 }
 
-void LogModel::hide_before_line_number(int line_number)
+void ProcessedSources::hide_before_line_number(int line_number)
 {
     _hidden_before_line_number = line_number > 1 ? std::optional<int>(line_number) : std::nullopt;
     rebuild_visible_entries();
     rebuild_find_matches();
 }
 
-std::optional<int> LogModel::hidden_before_line_number() const
+std::optional<int> ProcessedSources::hidden_before_line_number() const
 {
     return _hidden_before_line_number;
 }
 
-void LogModel::hide_columns(int start_column, int end_column)
+void ProcessedSources::hide_columns(int start_column, int end_column)
 {
     if (start_column < 0 || end_column <= start_column)
     {
@@ -225,17 +263,17 @@ void LogModel::hide_columns(int start_column, int end_column)
     _hidden_columns = HiddenColumnRange {start_column, end_column};
 }
 
-void LogModel::reset_hidden_columns()
+void ProcessedSources::reset_hidden_columns()
 {
     _hidden_columns.reset();
 }
 
-std::optional<HiddenColumnRange> LogModel::hidden_columns() const
+std::optional<HiddenColumnRange> ProcessedSources::hidden_columns() const
 {
     return _hidden_columns;
 }
 
-bool LogModel::set_find_query(std::string query)
+bool ProcessedSources::set_find_query(std::string query)
 {
     query = trim_filter_text(query);
     if (query.empty())
@@ -252,34 +290,34 @@ bool LogModel::set_find_query(std::string query)
     return !_find_match_entry_indices.empty();
 }
 
-void LogModel::clear_find_query()
+void ProcessedSources::clear_find_query()
 {
     _find_query.clear();
     _find_pattern.reset();
     _find_match_entry_indices.clear();
 }
 
-bool LogModel::find_active() const
+bool ProcessedSources::find_active() const
 {
     return !_find_query.empty();
 }
 
-const std::string& LogModel::find_query() const
+const std::string& ProcessedSources::find_query() const
 {
     return _find_query;
 }
 
-int LogModel::total_find_match_count() const
+int ProcessedSources::total_find_match_count() const
 {
     return static_cast<int>(_find_match_entry_indices.size());
 }
 
-int LogModel::visible_find_match_count() const
+int ProcessedSources::visible_find_match_count() const
 {
     return static_cast<int>(std::count_if(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), [this](AllLineIndex entry_index) { return entry_index_is_visible(entry_index); }));
 }
 
-std::optional<AllLineIndex> LogModel::find_match_entry_index(FindResultIndex find_result_index) const
+std::optional<AllLineIndex> ProcessedSources::find_match_entry_index(FindResultIndex find_result_index) const
 {
     if (find_result_index.value < 0 || find_result_index.value >= static_cast<int>(_find_match_entry_indices.size()))
     {
@@ -289,7 +327,7 @@ std::optional<AllLineIndex> LogModel::find_match_entry_index(FindResultIndex fin
     return _find_match_entry_indices[find_result_index];
 }
 
-std::optional<FindResultIndex> LogModel::find_match_position_for_entry_index(AllLineIndex entry_index) const
+std::optional<FindResultIndex> ProcessedSources::find_match_position_for_entry_index(AllLineIndex entry_index) const
 {
     const auto position = std::find(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), entry_index);
     if (position == _find_match_entry_indices.end())
@@ -300,7 +338,7 @@ std::optional<FindResultIndex> LogModel::find_match_position_for_entry_index(All
     return FindResultIndex {static_cast<int>(std::distance(_find_match_entry_indices.begin(), position))};
 }
 
-std::optional<VisibleLineIndex> LogModel::visible_line_index_for_entry(AllLineIndex entry_index) const
+std::optional<VisibleLineIndex> ProcessedSources::visible_line_index_for_entry(AllLineIndex entry_index) const
 {
     const auto visible_line = std::find(_visible_entry_indices.begin(), _visible_entry_indices.end(), entry_index);
     if (visible_line == _visible_entry_indices.end())
@@ -311,7 +349,7 @@ std::optional<VisibleLineIndex> LogModel::visible_line_index_for_entry(AllLineIn
     return VisibleLineIndex {static_cast<int>(std::distance(_visible_entry_indices.begin(), visible_line))};
 }
 
-std::optional<int> LogModel::line_number_for_visible_line(VisibleLineIndex visible_line_index) const
+std::optional<int> ProcessedSources::line_number_for_visible_line(VisibleLineIndex visible_line_index) const
 {
     if (visible_line_index.value < 0 || visible_line_index.value >= static_cast<int>(_visible_entry_indices.size()))
     {
@@ -321,7 +359,7 @@ std::optional<int> LogModel::line_number_for_visible_line(VisibleLineIndex visib
     return _visible_entry_indices[visible_line_index].value + 1;
 }
 
-std::optional<VisibleLineIndex> LogModel::visible_line_index_for_line_number(int line_number) const
+std::optional<VisibleLineIndex> ProcessedSources::visible_line_index_for_line_number(int line_number) const
 {
     if (line_number <= 0)
     {
@@ -331,7 +369,7 @@ std::optional<VisibleLineIndex> LogModel::visible_line_index_for_line_number(int
     return visible_line_index_for_entry(AllLineIndex {line_number - 1});
 }
 
-bool LogModel::visible_line_matches_find(int visible_index) const
+bool ProcessedSources::visible_line_matches_find(int visible_index) const
 {
     if (visible_index < 0 || visible_index >= static_cast<int>(_visible_entry_indices.size()))
     {
@@ -343,29 +381,29 @@ bool LogModel::visible_line_matches_find(int visible_index) const
     return std::binary_search(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), entry_index);
 }
 
-bool LogModel::entry_index_is_visible(AllLineIndex entry_index) const
+bool ProcessedSources::entry_index_is_visible(AllLineIndex entry_index) const
 {
     return std::binary_search(_visible_entry_indices.begin(), _visible_entry_indices.end(), entry_index);
 }
 
-int LogModel::line_count() const
+int ProcessedSources::line_count() const
 {
     return static_cast<int>(_visible_entry_indices.size());
 }
 
-int LogModel::total_line_count() const
+int ProcessedSources::total_line_count() const
 {
     return static_cast<int>(_all_entries.size());
 }
 
-std::string LogModel::rendered_line(int index) const
+std::string ProcessedSources::rendered_line(int index) const
 {
     const VisibleLineIndex visible_line_index {index};
     const AllLineIndex entry_index = _visible_entry_indices[visible_line_index];
     return render_entry(entry_index);
 }
 
-std::vector<std::string> LogModel::rendered_lines(int first_index, int count) const
+std::vector<std::string> ProcessedSources::rendered_lines(int first_index, int count) const
 {
     if (count <= 0)
     {
@@ -390,7 +428,7 @@ std::vector<std::string> LogModel::rendered_lines(int first_index, int count) co
     return lines;
 }
 
-int LogModel::max_rendered_line_width() const
+int ProcessedSources::max_rendered_line_width() const
 {
     int width = 0;
     for (const auto entry_index : _visible_entry_indices)
@@ -401,7 +439,7 @@ int LogModel::max_rendered_line_width() const
     return width;
 }
 
-std::string LogModel::render_entry(AllLineIndex entry_index) const
+std::string ProcessedSources::render_entry(AllLineIndex entry_index) const
 {
     std::ostringstream output;
     const auto& entry = _all_entries[entry_index];
@@ -420,7 +458,7 @@ std::string LogModel::render_entry(AllLineIndex entry_index) const
     return apply_hidden_columns(output.str());
 }
 
-void LogModel::append_lines_immediately(const std::vector<ObservedLogLine>& lines)
+void ProcessedSources::append_lines_immediately(const std::vector<ObservedLogLine>& lines)
 {
     const AllLineIndex first_new_entry_index {static_cast<int>(_all_entries.size())};
 
@@ -433,13 +471,13 @@ void LogModel::append_lines_immediately(const std::vector<ObservedLogLine>& line
     expand_find_matches(first_new_entry_index);
 }
 
-void LogModel::flush_paused_updates()
+void ProcessedSources::flush_paused_updates()
 {
     append_lines_immediately(_paused_updates);
     _paused_updates.clear();
 }
 
-void LogModel::rebuild_visible_entries()
+void ProcessedSources::rebuild_visible_entries()
 {
     _visible_entry_indices.clear();
     _visible_entry_indices.reserve(_all_entries.size());
@@ -448,6 +486,7 @@ void LogModel::rebuild_visible_entries()
     {
         index = static_cast<std::size_t>(std::max(0, *_hidden_before_line_number - 1));
     }
+
     for (; index < _all_entries.size(); ++index)
     {
         const AllLineIndex entry_index {static_cast<int>(index)};
@@ -458,7 +497,7 @@ void LogModel::rebuild_visible_entries()
     }
 }
 
-void LogModel::expand_visible_entries(AllLineIndex first_new_entry_index)
+void ProcessedSources::expand_visible_entries(AllLineIndex first_new_entry_index)
 {
     int index = first_new_entry_index.value;
     if (_hidden_before_line_number.has_value())
@@ -476,7 +515,7 @@ void LogModel::expand_visible_entries(AllLineIndex first_new_entry_index)
     }
 }
 
-void LogModel::rebuild_find_matches()
+void ProcessedSources::rebuild_find_matches()
 {
     _find_match_entry_indices.clear();
     if (_find_query.empty())
@@ -495,7 +534,7 @@ void LogModel::rebuild_find_matches()
     }
 }
 
-void LogModel::expand_find_matches(AllLineIndex first_new_entry_index)
+void ProcessedSources::expand_find_matches(AllLineIndex first_new_entry_index)
 {
     if (_find_query.empty())
     {
@@ -512,12 +551,12 @@ void LogModel::expand_find_matches(AllLineIndex first_new_entry_index)
     }
 }
 
-bool LogModel::entry_matches_find_query(const ObservedLogLine& entry) const
+bool ProcessedSources::entry_matches_find_query(const ObservedLogLine& entry) const
 {
     return _find_pattern.has_value() && matches_pattern(entry.text, *_find_pattern);
 }
 
-bool LogModel::entry_matches_filters(const ObservedLogLine& entry) const
+bool ProcessedSources::entry_matches_filters(const ObservedLogLine& entry) const
 {
     const std::string searchable_text = entry.source_label + "\n" + entry.text;
     const bool matches_include        = _include_filter_patterns.empty() || matches_any_pattern(searchable_text, _include_filter_patterns);
@@ -525,7 +564,7 @@ bool LogModel::entry_matches_filters(const ObservedLogLine& entry) const
     return matches_include && !matches_exclude;
 }
 
-LogModel::SearchPattern LogModel::compile_search_pattern(std::string_view text)
+ProcessedSources::SearchPattern ProcessedSources::compile_search_pattern(std::string_view text)
 {
     const std::string trimmed_text = trim_filter_text(text);
     if (trimmed_text.empty())
@@ -563,7 +602,7 @@ LogModel::SearchPattern LogModel::compile_search_pattern(std::string_view text)
     }
 }
 
-bool LogModel::matches_pattern(std::string_view haystack, const SearchPattern& pattern) const
+bool ProcessedSources::matches_pattern(std::string_view haystack, const SearchPattern& pattern) const
 {
     if (!pattern.regex.has_value())
     {
@@ -573,17 +612,17 @@ bool LogModel::matches_pattern(std::string_view haystack, const SearchPattern& p
     return std::regex_search(haystack.begin(), haystack.end(), *pattern.regex);
 }
 
-bool LogModel::matches_any_pattern(std::string_view haystack, const std::vector<SearchPattern>& patterns) const
+bool ProcessedSources::matches_any_pattern(std::string_view haystack, const std::vector<SearchPattern>& patterns) const
 {
     return std::any_of(patterns.begin(), patterns.end(), [&](const SearchPattern& pattern) { return matches_pattern(haystack, pattern); });
 }
 
-std::string LogModel::trim_filter_text(std::string_view text)
+std::string ProcessedSources::trim_filter_text(std::string_view text)
 {
     return trim_text(text);
 }
 
-std::string LogModel::apply_hidden_columns(std::string text) const
+std::string ProcessedSources::apply_hidden_columns(std::string text) const
 {
     if (!_hidden_columns.has_value())
     {

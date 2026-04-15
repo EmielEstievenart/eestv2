@@ -8,15 +8,15 @@
 namespace slayerlog
 {
 
+class AllTrackedSources;
 class CommandManager;
 class CommandPaletteController;
 class LogController;
-class LogModel;
-class TrackedSourceManager;
+class ProcessedSources;
 
 std::string build_header_text(const std::vector<std::string>& labels);
-void reload_model_from_manager(const TrackedSourceManager& tracked_source_manager, std::string& header_text, LogModel& model, LogController& controller, ftxui::ScreenInteractive& screen);
-void register_commands(CommandManager& command_manager, LogModel& model, LogController& controller, CommandPaletteController& command_palette_controller, std::string& header_text, ftxui::ScreenInteractive& screen,
-                       TrackedSourceManager& tracked_source_manager);
+void reload_processed_sources(const AllTrackedSources& tracked_sources, std::string& header_text, ProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen);
+void register_commands(CommandManager& command_manager, ProcessedSources& processed_sources, LogController& controller, CommandPaletteController& command_palette_controller, std::string& header_text, ftxui::ScreenInteractive& screen,
+                       AllTrackedSources& tracked_sources);
 
 } // namespace slayerlog

@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "command_manager.hpp"
-#include "log_model.hpp"
+#include "log_types.hpp"
 
 namespace slayerlog
 {

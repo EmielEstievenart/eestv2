@@ -11,13 +11,15 @@
 #include "command_palette_controller.hpp"
 #include "command_palette_model.hpp"
 #include "log_controller.hpp"
-#include "log_model.hpp"
 #include "log_view.hpp"
 #include "master_controller.hpp"
+#include "processed_sources.hpp"
 #include "settings_store.hpp"
 
 namespace slayerlog
 {
+
+using LogModel = ProcessedSources;
 
 namespace
 {

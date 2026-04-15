@@ -7,10 +7,12 @@
 #include <ftxui/component/event.hpp>
 
 #include "log_controller.hpp"
-#include "log_model.hpp"
+#include "processed_sources.hpp"
 
 namespace slayerlog
 {
+
+using LogModel = ProcessedSources;
 
 namespace
 {

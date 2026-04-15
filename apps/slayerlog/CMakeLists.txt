@@ -3,8 +3,8 @@ project(slayerlog)
 add_executable(
   slayerlog
   main.cpp
-  tracked_source_manager.cpp
-  tracked_source_manager.hpp
+  all_tracked_sources.cpp
+  all_tracked_sources.hpp
   tracked_source.cpp
   tracked_source.hpp
   command_line_parser.cpp
@@ -25,12 +25,13 @@ add_executable(
   master_view.hpp
   log_timestamp.cpp
   log_timestamp.hpp
+  log_types.hpp
   settings_ini.cpp
   settings_ini.hpp
   settings_store.cpp
   settings_store.hpp
-  log_model.cpp
-  log_model.hpp
+  processed_sources.cpp
+  processed_sources.hpp
   log4cplus.ini
   view_theme.hpp
   commands/command_palette_controller.cpp

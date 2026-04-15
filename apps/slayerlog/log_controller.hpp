@@ -11,7 +11,7 @@
 #include <ftxui_components/text_view_controller.hpp>
 #include <ftxui_components/text_view_model.hpp>
 
-#include "log_model.hpp"
+#include "processed_sources.hpp"
 
 namespace slayerlog
 {
@@ -33,27 +33,27 @@ public:
 
     // Full rebuild: renders all visible lines into inactive buffer, swaps to active.
     // Call after filter changes, model resets, replace_batch, hide_columns, etc.
-    void rebuild_view(const LogModel& model);
+    void rebuild_view(const ProcessedSources& processed_sources);
 
     // Incremental update: appends new rendered lines to active buffer.
     // Call after append_batch / append_lines for streaming.
-    void sync_view(const LogModel& model);
+    void sync_view(const ProcessedSources& processed_sources);
 
     // --- Domain-specific navigation ---
 
-    bool go_to_line(const LogModel& model, int line_number);
+    bool go_to_line(const ProcessedSources& processed_sources, int line_number);
 
     // --- Find ---
 
-    bool set_find_query(LogModel& model, std::string query);
-    void clear_find(LogModel& model);
-    bool go_to_next_find_match(const LogModel& model);
-    bool go_to_previous_find_match(const LogModel& model);
-    std::optional<VisibleLineIndex> active_find_visible_index(const LogModel& model) const;
+    bool set_find_query(ProcessedSources& processed_sources, std::string query);
+    void clear_find(ProcessedSources& processed_sources);
+    bool go_to_next_find_match(const ProcessedSources& processed_sources);
+    bool go_to_previous_find_match(const ProcessedSources& processed_sources);
+    std::optional<VisibleLineIndex> active_find_visible_index(const ProcessedSources& processed_sources) const;
 
     // --- Event handling ---
 
-    LogEventResult handle_event(LogModel& model, ftxui::Event event, const std::function<std::optional<TextViewPosition>(const ftxui::Mouse&)>& mouse_to_text_position);
+    LogEventResult handle_event(ProcessedSources& processed_sources, ftxui::Event event, const std::function<std::optional<TextViewPosition>(const ftxui::Mouse&)>& mouse_to_text_position);
 
     // --- Access to underlying text view ---
 

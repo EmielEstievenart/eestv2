@@ -3,8 +3,8 @@
 namespace slayerlog
 {
 
-MasterController::MasterController(LogModel& model, LogController& log_controller, LogView& log_view, ftxui::ScreenInteractive& screen, CommandPaletteController& command_palette_controller)
-    : _model(model), _log_controller(log_controller), _log_view(log_view), _screen(screen), _command_palette_controller(command_palette_controller)
+MasterController::MasterController(ProcessedSources& processed_sources, LogController& log_controller, LogView& log_view, ftxui::ScreenInteractive& screen, CommandPaletteController& command_palette_controller)
+    : _processed_sources(processed_sources), _log_controller(log_controller), _log_view(log_view), _screen(screen), _command_palette_controller(command_palette_controller)
 {
 }
 
@@ -29,7 +29,7 @@ bool MasterController::handle_event(const ftxui::Event& event)
         return true;
     }
 
-    const auto result = _log_controller.handle_event(_model, event, [this](const ftxui::Mouse& mouse) { return _log_view.mouse_to_text_position(_log_controller, mouse); });
+    const auto result = _log_controller.handle_event(_processed_sources, event, [this](const ftxui::Mouse& mouse) { return _log_view.mouse_to_text_position(_log_controller, mouse); });
 
     if (result.request_exit)
     {

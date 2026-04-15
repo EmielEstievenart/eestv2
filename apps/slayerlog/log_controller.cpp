@@ -24,16 +24,16 @@ void LogController::reset()
 
 // --- Content management ---
 
-void LogController::rebuild_view(const LogModel& model)
+void LogController::rebuild_view(const ProcessedSources& processed_sources)
 {
     auto& target = inactive_buffer();
     target.clear();
 
-    const int count = model.line_count();
+    const int count = processed_sources.line_count();
     target.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i)
     {
-        target.push_back(model.rendered_line(i));
+        target.push_back(processed_sources.rendered_line(i));
     }
 
     _active_buffer_is_a = !_active_buffer_is_a;
@@ -41,13 +41,13 @@ void LogController::rebuild_view(const LogModel& model)
     _text_view_controller.swap_lines(active_buffer());
 }
 
-void LogController::sync_view(const LogModel& model)
+void LogController::sync_view(const ProcessedSources& processed_sources)
 {
-    const int current_count = model.line_count();
+    const int current_count = processed_sources.line_count();
     if (current_count < _synced_line_count)
     {
         // Line count decreased (shouldn't happen for streaming, but handle safely)
-        rebuild_view(model);
+        rebuild_view(processed_sources);
         return;
     }
 
@@ -60,7 +60,7 @@ void LogController::sync_view(const LogModel& model)
     buffer.reserve(static_cast<std::size_t>(current_count));
     for (int i = _synced_line_count; i < current_count; ++i)
     {
-        buffer.push_back(model.rendered_line(i));
+        buffer.push_back(processed_sources.rendered_line(i));
     }
     _synced_line_count = current_count;
     _text_view_controller.notify_lines_appended();
@@ -68,9 +68,9 @@ void LogController::sync_view(const LogModel& model)
 
 // --- Domain-specific navigation ---
 
-bool LogController::go_to_line(const LogModel& model, int line_number)
+bool LogController::go_to_line(const ProcessedSources& processed_sources, int line_number)
 {
-    const auto target_visible_index = model.visible_line_index_for_line_number(line_number);
+    const auto target_visible_index = processed_sources.visible_line_index_for_line_number(line_number);
     if (!target_visible_index.has_value())
     {
         return false;
@@ -82,27 +82,27 @@ bool LogController::go_to_line(const LogModel& model, int line_number)
 
 // --- Find ---
 
-bool LogController::set_find_query(LogModel& model, std::string query)
+bool LogController::set_find_query(ProcessedSources& processed_sources, std::string query)
 {
-    const bool has_matches = model.set_find_query(std::move(query));
+    const bool has_matches = processed_sources.set_find_query(std::move(query));
     _active_find_entry_index.reset();
     if (!has_matches)
     {
         return false;
     }
 
-    return go_to_next_find_match(model);
+    return go_to_next_find_match(processed_sources);
 }
 
-void LogController::clear_find(LogModel& model)
+void LogController::clear_find(ProcessedSources& processed_sources)
 {
-    model.clear_find_query();
+    processed_sources.clear_find_query();
     _active_find_entry_index.reset();
 }
 
-bool LogController::go_to_next_find_match(const LogModel& model)
+bool LogController::go_to_next_find_match(const ProcessedSources& processed_sources)
 {
-    if (!model.find_active() || model.total_find_match_count() == 0)
+    if (!processed_sources.find_active() || processed_sources.total_find_match_count() == 0)
     {
         return false;
     }
@@ -110,24 +110,24 @@ bool LogController::go_to_next_find_match(const LogModel& model)
     int current_position = -1;
     if (_active_find_entry_index.has_value())
     {
-        const auto position = model.find_match_position_for_entry_index(*_active_find_entry_index);
+        const auto position = processed_sources.find_match_position_for_entry_index(*_active_find_entry_index);
         if (position.has_value())
         {
             current_position = position->value;
         }
     }
 
-    for (int offset = 1; offset <= model.total_find_match_count(); ++offset)
+    for (int offset = 1; offset <= processed_sources.total_find_match_count(); ++offset)
     {
-        const int next_position = (current_position + offset) % model.total_find_match_count();
-        const auto entry_index  = model.find_match_entry_index(FindResultIndex {next_position});
-        if (!entry_index.has_value() || !model.entry_index_is_visible(*entry_index))
+        const int next_position = (current_position + offset) % processed_sources.total_find_match_count();
+        const auto entry_index  = processed_sources.find_match_entry_index(FindResultIndex {next_position});
+        if (!entry_index.has_value() || !processed_sources.entry_index_is_visible(*entry_index))
         {
             continue;
         }
 
         _active_find_entry_index = *entry_index;
-        const auto visible_index = model.visible_line_index_for_entry(*entry_index);
+        const auto visible_index = processed_sources.visible_line_index_for_entry(*entry_index);
         if (!visible_index.has_value())
         {
             return false;
@@ -140,9 +140,9 @@ bool LogController::go_to_next_find_match(const LogModel& model)
     return false;
 }
 
-bool LogController::go_to_previous_find_match(const LogModel& model)
+bool LogController::go_to_previous_find_match(const ProcessedSources& processed_sources)
 {
-    if (!model.find_active() || model.total_find_match_count() == 0)
+    if (!processed_sources.find_active() || processed_sources.total_find_match_count() == 0)
     {
         return false;
     }
@@ -150,24 +150,24 @@ bool LogController::go_to_previous_find_match(const LogModel& model)
     int current_position = 0;
     if (_active_find_entry_index.has_value())
     {
-        const auto position = model.find_match_position_for_entry_index(*_active_find_entry_index);
+        const auto position = processed_sources.find_match_position_for_entry_index(*_active_find_entry_index);
         if (position.has_value())
         {
             current_position = position->value;
         }
     }
 
-    for (int offset = 1; offset <= model.total_find_match_count(); ++offset)
+    for (int offset = 1; offset <= processed_sources.total_find_match_count(); ++offset)
     {
-        const int previous_position = (current_position - offset + model.total_find_match_count()) % model.total_find_match_count();
-        const auto entry_index      = model.find_match_entry_index(FindResultIndex {previous_position});
-        if (!entry_index.has_value() || !model.entry_index_is_visible(*entry_index))
+        const int previous_position = (current_position - offset + processed_sources.total_find_match_count()) % processed_sources.total_find_match_count();
+        const auto entry_index      = processed_sources.find_match_entry_index(FindResultIndex {previous_position});
+        if (!entry_index.has_value() || !processed_sources.entry_index_is_visible(*entry_index))
         {
             continue;
         }
 
         _active_find_entry_index = *entry_index;
-        const auto visible_index = model.visible_line_index_for_entry(*entry_index);
+        const auto visible_index = processed_sources.visible_line_index_for_entry(*entry_index);
         if (!visible_index.has_value())
         {
             return false;
@@ -180,24 +180,24 @@ bool LogController::go_to_previous_find_match(const LogModel& model)
     return false;
 }
 
-std::optional<VisibleLineIndex> LogController::active_find_visible_index(const LogModel& model) const
+std::optional<VisibleLineIndex> LogController::active_find_visible_index(const ProcessedSources& processed_sources) const
 {
     if (!_active_find_entry_index.has_value())
     {
         return std::nullopt;
     }
 
-    return model.visible_line_index_for_entry(*_active_find_entry_index);
+    return processed_sources.visible_line_index_for_entry(*_active_find_entry_index);
 }
 
 // --- Event handling ---
 
-LogEventResult LogController::handle_event(LogModel& model, ftxui::Event event, const std::function<std::optional<TextViewPosition>(const ftxui::Mouse&)>& mouse_to_text_position)
+LogEventResult LogController::handle_event(ProcessedSources& processed_sources, ftxui::Event event, const std::function<std::optional<TextViewPosition>(const ftxui::Mouse&)>& mouse_to_text_position)
 {
     // Escape: clear find if active, otherwise delegate (TextViewController handles exit)
-    if (event == ftxui::Event::Escape && model.find_active())
+    if (event == ftxui::Event::Escape && processed_sources.find_active())
     {
-        clear_find(model);
+        clear_find(processed_sources);
         return {true, false};
     }
 
@@ -210,24 +210,24 @@ LogEventResult LogController::handle_event(LogModel& model, ftxui::Event event, 
     // Pause toggle
     if (event == ftxui::Event::Character('p'))
     {
-        model.toggle_pause();
-        if (!model.updates_paused())
+        processed_sources.toggle_pause();
+        if (!processed_sources.updates_paused())
         {
             // Unpausing flushes buffered updates
-            sync_view(model);
+            sync_view(processed_sources);
         }
         return {true, false};
     }
 
     // Find navigation: intercept arrow keys when find is active
-    if (model.find_active() && event == ftxui::Event::ArrowRight)
+    if (processed_sources.find_active() && event == ftxui::Event::ArrowRight)
     {
-        return {go_to_next_find_match(model), false};
+        return {go_to_next_find_match(processed_sources), false};
     }
 
-    if (model.find_active() && event == ftxui::Event::ArrowLeft)
+    if (processed_sources.find_active() && event == ftxui::Event::ArrowLeft)
     {
-        return {go_to_previous_find_match(model), false};
+        return {go_to_previous_find_match(processed_sources), false};
     }
 
     // Delegate everything else to the generic text view controller

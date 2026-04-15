@@ -13,10 +13,10 @@
 #include "command_manager.hpp"
 #include "command_palette_controller.hpp"
 #include "debug_log.hpp"
+#include "all_tracked_sources.hpp"
 #include "log_controller.hpp"
-#include "log_model.hpp"
 #include "log_source.hpp"
-#include "tracked_source_manager.hpp"
+#include "processed_sources.hpp"
 
 namespace slayerlog
 {
@@ -42,12 +42,12 @@ std::string build_header_text(const std::vector<std::string>& labels)
     return output.str();
 }
 
-void reload_model_from_manager(const TrackedSourceManager& tracked_source_manager, std::string& header_text, LogModel& model, LogController& controller, ftxui::ScreenInteractive& screen)
+void reload_processed_sources(const AllTrackedSources& tracked_sources, std::string& header_text, ProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
 {
-    header_text = build_header_text(tracked_source_manager.source_labels());
-    model.set_show_source_labels(tracked_source_manager.source_count() > 1);
-    model.replace_batch(tracked_source_manager.snapshot());
-    controller.rebuild_view(model);
+    header_text = build_header_text(tracked_sources.source_labels());
+    processed_sources.set_show_source_labels(tracked_sources.source_count() > 1);
+    processed_sources.rebuild_from_sources(tracked_sources);
+    controller.rebuild_view(processed_sources);
     screen.PostEvent(ftxui::Event::Custom);
 }
 
@@ -98,33 +98,33 @@ std::string trim_text(std::string_view text)
     return std::string(text.substr(start, end - start));
 }
 
-std::optional<int> highest_shown_line_number(const LogModel& model, const LogController& controller)
+std::optional<int> highest_shown_line_number(const ProcessedSources& processed_sources, const LogController& controller)
 {
-    if (model.line_count() == 0)
+    if (processed_sources.line_count() == 0)
     {
         return std::nullopt;
     }
 
     const int viewport_line_count = std::max(1, controller.text_view_controller().viewport_line_count());
     const int first_visible_line  = controller.text_view_controller().first_visible_line();
-    const int last_visible_line   = std::min(model.line_count() - 1, first_visible_line + viewport_line_count - 1);
-    return model.line_number_for_visible_line(VisibleLineIndex {last_visible_line});
+    const int last_visible_line   = std::min(processed_sources.line_count() - 1, first_visible_line + viewport_line_count - 1);
+    return processed_sources.line_number_for_visible_line(VisibleLineIndex {last_visible_line});
 }
 
-CommandResult open_file_command(std::string_view file_path, TrackedSourceManager& tracked_source_manager, std::string& header_text, LogModel& model, LogController& controller, ftxui::ScreenInteractive& screen)
+CommandResult open_file_command(std::string_view file_path, AllTrackedSources& tracked_sources, std::string& header_text, ProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
 {
-    const auto error = tracked_source_manager.open_source(file_path);
+    const auto error = tracked_sources.open_source(file_path);
     if (error.has_value())
     {
         SLAYERLOG_LOG_ERROR("open-file failed file=" << file_path << " error=" << *error);
         return CommandResult {false, *error};
     }
 
-    reload_model_from_manager(tracked_source_manager, header_text, model, controller, screen);
+    reload_processed_sources(tracked_sources, header_text, processed_sources, controller, screen);
     return CommandResult {true, "Opened file: " + std::string(file_path)};
 }
 
-CommandResult open_folder_command(std::string_view folder_path, TrackedSourceManager& tracked_source_manager, std::string& header_text, LogModel& model, LogController& controller, ftxui::ScreenInteractive& screen)
+CommandResult open_folder_command(std::string_view folder_path, AllTrackedSources& tracked_sources, std::string& header_text, ProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
 {
     LogSource source;
     try
@@ -136,21 +136,21 @@ CommandResult open_folder_command(std::string_view folder_path, TrackedSourceMan
         return CommandResult {false, ex.what()};
     }
 
-    const auto error = tracked_source_manager.open_source(source);
+    const auto error = tracked_sources.open_source(source);
     if (error.has_value())
     {
         SLAYERLOG_LOG_ERROR("open-folder failed folder=" << source_display_path(source) << " error=" << *error);
         return CommandResult {false, *error};
     }
 
-    reload_model_from_manager(tracked_source_manager, header_text, model, controller, screen);
+    reload_processed_sources(tracked_sources, header_text, processed_sources, controller, screen);
     return CommandResult {true, "Opened folder: " + source_display_path(source)};
 }
 
-CommandResult close_open_file_command(CommandPaletteController& command_palette_controller, TrackedSourceManager& tracked_source_manager, std::string& header_text, LogModel& model, LogController& controller,
+CommandResult close_open_file_command(CommandPaletteController& command_palette_controller, AllTrackedSources& tracked_sources, std::string& header_text, ProcessedSources& processed_sources, LogController& controller,
                                       ftxui::ScreenInteractive& screen)
 {
-    const auto labels = tracked_source_manager.source_labels();
+    const auto labels = tracked_sources.source_labels();
     if (labels.empty())
     {
         return CommandResult {false, "No open files to close"};
@@ -160,14 +160,14 @@ CommandResult close_open_file_command(CommandPaletteController& command_palette_
                                                            [&](std::size_t selected_index) -> CommandResult
                                                            {
                                                                std::string closed_label;
-                                                               const auto error = tracked_source_manager.close_source(selected_index, &closed_label);
+                                                               const auto error = tracked_sources.close_source(selected_index, &closed_label);
                                                                if (error.has_value())
                                                                {
                                                                    SLAYERLOG_LOG_ERROR("close-open-file failed selected_index=" << selected_index << " error=" << *error);
                                                                    return CommandResult {false, *error};
                                                                }
 
-                                                               reload_model_from_manager(tracked_source_manager, header_text, model, controller, screen);
+                                                               reload_processed_sources(tracked_sources, header_text, processed_sources, controller, screen);
                                                                return CommandResult {true, "Closed file: " + closed_label};
                                                            });
 
@@ -176,8 +176,8 @@ CommandResult close_open_file_command(CommandPaletteController& command_palette_
 
 } // namespace
 
-void register_commands(CommandManager& command_manager, LogModel& model, LogController& controller, CommandPaletteController& command_palette_controller, std::string& header_text, ftxui::ScreenInteractive& screen,
-                       TrackedSourceManager& tracked_source_manager)
+void register_commands(CommandManager& command_manager, ProcessedSources& processed_sources, LogController& controller, CommandPaletteController& command_palette_controller, std::string& header_text, ftxui::ScreenInteractive& screen,
+                       AllTrackedSources& tracked_sources)
 {
     command_manager.register_command({"filter-in", "Show lines matching text or regex", "filter-in <text|re:regex>"},
                                      [&](std::string_view arguments)
@@ -189,14 +189,14 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
 
                                          try
                                          {
-                                             model.add_include_filter(std::string(arguments));
+                                             processed_sources.add_include_filter(std::string(arguments));
                                          }
                                          catch (const std::invalid_argument& error)
                                          {
                                              return CommandResult {false, "Invalid filter-in pattern: " + std::string(error.what())};
                                          }
 
-                                         controller.rebuild_view(model);
+                                         controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Added include filter: " + std::string(arguments)};
                                      });
 
@@ -210,14 +210,14 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
 
                                          try
                                          {
-                                             model.add_exclude_filter(std::string(arguments));
+                                             processed_sources.add_exclude_filter(std::string(arguments));
                                          }
                                          catch (const std::invalid_argument& error)
                                          {
                                              return CommandResult {false, "Invalid filter-out pattern: " + std::string(error.what())};
                                          }
 
-                                         controller.rebuild_view(model);
+                                         controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Added exclude filter: " + std::string(arguments)};
                                      });
 
@@ -229,8 +229,8 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: reset-filters"};
                                          }
 
-                                         model.reset_filters();
-                                         controller.rebuild_view(model);
+                                         processed_sources.reset_filters();
+                                         controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Cleared all filters"};
                                      });
 
@@ -242,8 +242,8 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: clear-filters"};
                                          }
 
-                                         model.reset_filters();
-                                         controller.rebuild_view(model);
+                                         processed_sources.reset_filters();
+                                         controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Cleared all filters"};
                                      });
 
@@ -256,8 +256,8 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: hide-columns <xx-yy>"};
                                          }
 
-                                         model.hide_columns(hidden_columns->start, hidden_columns->end);
-                                         controller.rebuild_view(model);
+                                         processed_sources.hide_columns(hidden_columns->start, hidden_columns->end);
+                                         controller.rebuild_view(processed_sources);
                                          return CommandResult {
                                              true,
                                              "Hidden columns " + std::to_string(hidden_columns->start) + "-" + std::to_string(hidden_columns->end),
@@ -272,8 +272,8 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: reset-column-filter"};
                                          }
 
-                                         model.reset_hidden_columns();
-                                         controller.rebuild_view(model);
+                                         processed_sources.reset_hidden_columns();
+                                         controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Cleared hidden column filter"};
                                      });
 
@@ -285,8 +285,8 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: clear-column-filters"};
                                          }
 
-                                         model.reset_hidden_columns();
-                                         controller.rebuild_view(model);
+                                         processed_sources.reset_hidden_columns();
+                                         controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Cleared hidden column filter"};
                                      });
 
@@ -299,7 +299,7 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: open-file <path>"};
                                          }
 
-                                         return open_file_command(file_path, tracked_source_manager, header_text, model, controller, screen);
+                                         return open_file_command(file_path, tracked_sources, header_text, processed_sources, controller, screen);
                                      });
 
     command_manager.register_command({"open-folder", "Open folder and reload all tracked logs", "open-folder <path>"},
@@ -311,7 +311,7 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: open-folder <path>"};
                                          }
 
-                                         return open_folder_command(folder_path, tracked_source_manager, header_text, model, controller, screen);
+                                         return open_folder_command(folder_path, tracked_sources, header_text, processed_sources, controller, screen);
                                      });
 
     command_manager.register_command({"close-open-file", "Close one currently open file", "close-open-file"},
@@ -322,7 +322,7 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: close-open-file"};
                                          }
 
-                                         return close_open_file_command(command_palette_controller, tracked_source_manager, header_text, model, controller, screen);
+                                         return close_open_file_command(command_palette_controller, tracked_sources, header_text, processed_sources, controller, screen);
                                      });
 
     command_manager.register_command({"go-to-line", "Center the view on a line number", "go-to-line <line-number>"},
@@ -334,12 +334,12 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: go-to-line <line-number>"};
                                          }
 
-                                         if (*line_number > model.total_line_count())
+                                         if (*line_number > processed_sources.total_line_count())
                                          {
                                              return CommandResult {false, "Line " + std::to_string(*line_number) + " is out of range"};
                                          }
 
-                                         if (!controller.go_to_line(model, *line_number))
+                                         if (!controller.go_to_line(processed_sources, *line_number))
                                          {
                                              return CommandResult {
                                                  false,
@@ -362,8 +362,8 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: hide-before-line <line-number>"};
                                          }
 
-                                         model.hide_before_line_number(*line_number);
-                                         controller.rebuild_view(model);
+                                         processed_sources.hide_before_line_number(*line_number);
+                                         controller.rebuild_view(processed_sources);
                                          if (*line_number == 1)
                                          {
                                              return CommandResult {true, "Showing all lines"};
@@ -383,14 +383,14 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                              return CommandResult {false, "Usage: hide-shown-lines"};
                                          }
 
-                                         const auto line_number = highest_shown_line_number(model, controller);
+                                         const auto line_number = highest_shown_line_number(processed_sources, controller);
                                          if (!line_number.has_value())
                                          {
                                              return CommandResult {false, "No lines are currently shown"};
                                          }
 
-                                         model.hide_before_line_number(*line_number + 1);
-                                         controller.rebuild_view(model);
+                                         processed_sources.hide_before_line_number(*line_number + 1);
+                                         controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Hidden all currently shown lines"};
                                      });
 
@@ -406,26 +406,26 @@ void register_commands(CommandManager& command_manager, LogModel& model, LogCont
                                          bool focused_visible_match = false;
                                          try
                                          {
-                                             focused_visible_match = controller.set_find_query(model, query);
+                                             focused_visible_match = controller.set_find_query(processed_sources, query);
                                          }
                                          catch (const std::invalid_argument& error)
                                          {
                                              return CommandResult {false, "Invalid find pattern: " + std::string(error.what())};
                                          }
 
-                                         const int visible_matches = model.visible_find_match_count();
-                                         const int total_matches   = model.total_find_match_count();
+                                         const int visible_matches = processed_sources.visible_find_match_count();
+                                         const int total_matches   = processed_sources.total_find_match_count();
                                          if (focused_visible_match)
                                          {
                                              return CommandResult {
                                                  true,
-                                                 "Find active: " + model.find_query() + " (" + std::to_string(visible_matches) + " visible / " + std::to_string(total_matches) + " total)",
+                                                 "Find active: " + processed_sources.find_query() + " (" + std::to_string(visible_matches) + " visible / " + std::to_string(total_matches) + " total)",
                                              };
                                          }
 
                                          return CommandResult {
                                              true,
-                                             "Find active: " + model.find_query() + " (0 visible / " + std::to_string(total_matches) + " total)",
+                                             "Find active: " + processed_sources.find_query() + " (0 visible / " + std::to_string(total_matches) + " total)",
                                          };
                                      });
 }

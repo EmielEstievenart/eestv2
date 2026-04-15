@@ -10,7 +10,7 @@
 #include <ftxui_components/text_view_view.hpp>
 
 #include "log_controller.hpp"
-#include "log_model.hpp"
+#include "processed_sources.hpp"
 
 namespace slayerlog
 {
@@ -18,7 +18,7 @@ namespace slayerlog
 class LogView
 {
 public:
-    ftxui::Element render(const LogModel& model, LogController& controller, const std::string& header_text, int screen_height, std::optional<HiddenColumnRange> hidden_column_preview = std::nullopt);
+    ftxui::Element render(const ProcessedSources& processed_sources, LogController& controller, const std::string& header_text, int screen_height, std::optional<HiddenColumnRange> hidden_column_preview = std::nullopt);
 
     std::optional<TextViewPosition> mouse_to_text_position(const LogController& controller, const ftxui::Mouse& mouse) const;
 
