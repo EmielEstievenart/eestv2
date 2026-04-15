@@ -82,7 +82,7 @@ void apply_style(ftxui::Canvas& canvas, int row, int col_start, int col_end, con
     }
 }
 
-ftxui::Element build_filter_status(const ProcessedSources& processed_sources)
+ftxui::Element build_filter_status(const AllProcessedSources& processed_sources)
 {
     ftxui::Elements parts;
     parts.push_back(theme::badge("FILTER", theme::label_filter_fg));
@@ -119,7 +119,7 @@ ftxui::Element build_filter_status(const ProcessedSources& processed_sources)
     return ftxui::hbox(std::move(parts));
 }
 
-ftxui::Element build_find_status(const ProcessedSources& processed_sources, const LogController& controller)
+ftxui::Element build_find_status(const AllProcessedSources& processed_sources, const LogController& controller)
 {
     ftxui::Elements parts;
     parts.push_back(theme::badge("FIND", theme::label_find_fg));
@@ -162,7 +162,7 @@ ftxui::Element build_key_hints()
 
 } // namespace
 
-ftxui::Element LogView::render(const ProcessedSources& processed_sources, LogController& controller, const std::string& header_text, int screen_height, std::optional<HiddenColumnRange> hidden_column_preview)
+ftxui::Element LogView::render(const AllProcessedSources& processed_sources, LogController& controller, const std::string& header_text, int screen_height, std::optional<HiddenColumnRange> hidden_column_preview)
 {
     // Update viewport dimensions on the text view controller
     const int effective_height = estimate_viewport_line_count(_text_view.viewport_line_count(), screen_height);

@@ -4,12 +4,12 @@
 #include <string>
 #include <vector>
 
-#include "processed_sources.hpp"
+#include "tracked_sources/all_processed_sources.hpp"
 
 namespace slayerlog
 {
 
-using LogModel = ProcessedSources;
+using LogModel = AllProcessedSources;
 
 namespace
 {

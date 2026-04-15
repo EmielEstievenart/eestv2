@@ -48,8 +48,8 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/file_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/zstd_file_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_source.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_source.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/all_tracked_sources.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/tracked_source.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/all_tracked_sources.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_batch.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_view.cpp
@@ -66,7 +66,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/ssh_tail_watcher.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/stream_line_buffer.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/processed_sources.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/all_processed_sources.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/search_pattern.cpp)
 
 # Link libraries (assuming eestv_lib provides sources and Boost)
@@ -85,7 +85,7 @@ target_link_libraries(
           libzstd)
 
 target_compile_definitions(unit_tests PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
-target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands ${CMAKE_SOURCE_DIR}/code)
+target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources ${CMAKE_SOURCE_DIR}/code)
 
 # Conditionally discover tests (disabled for TSAN where it doesn't work well)
 if(ENABLE_CTEST)

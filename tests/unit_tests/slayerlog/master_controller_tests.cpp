@@ -13,13 +13,13 @@
 #include "log_controller.hpp"
 #include "log_view.hpp"
 #include "master_controller.hpp"
-#include "processed_sources.hpp"
+#include "tracked_sources/all_processed_sources.hpp"
 #include "settings_store.hpp"
 
 namespace slayerlog
 {
 
-using LogModel = ProcessedSources;
+using LogModel = AllProcessedSources;
 
 namespace
 {

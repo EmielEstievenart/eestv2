@@ -3,7 +3,7 @@
 namespace slayerlog
 {
 
-MasterController::MasterController(ProcessedSources& processed_sources, LogController& log_controller, LogView& log_view, ftxui::ScreenInteractive& screen, CommandPaletteController& command_palette_controller)
+MasterController::MasterController(AllProcessedSources& processed_sources, LogController& log_controller, LogView& log_view, ftxui::ScreenInteractive& screen, CommandPaletteController& command_palette_controller)
     : _processed_sources(processed_sources), _log_controller(log_controller), _log_view(log_view), _screen(screen), _command_palette_controller(command_palette_controller)
 {
 }

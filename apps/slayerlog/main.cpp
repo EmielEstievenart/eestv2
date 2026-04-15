@@ -16,13 +16,13 @@
 #include "command_manager.hpp"
 #include "commands/command_history.hpp"
 #include "debug_log.hpp"
-#include "all_tracked_sources.hpp"
+#include "tracked_sources/all_tracked_sources.hpp"
 #include "log_controller.hpp"
 #include "log_timestamp.hpp"
 #include "log_view.hpp"
 #include "master_controller.hpp"
 #include "master_view.hpp"
-#include "processed_sources.hpp"
+#include "tracked_sources/all_processed_sources.hpp"
 #include "settings_store.hpp"
 
 namespace
@@ -31,7 +31,7 @@ namespace
 constexpr std::string_view timestamp_formats_section = "timestamp_formats";
 constexpr std::string_view timestamp_format_key      = "format";
 
-void append_sources_delta_to_processed_sources(const slayerlog::AllTrackedSources& tracked_sources, slayerlog::AllLineIndex first_new_line_index, slayerlog::ProcessedSources& processed_sources, slayerlog::LogController& controller,
+void append_sources_delta_to_processed_sources(const slayerlog::AllTrackedSources& tracked_sources, slayerlog::AllLineIndex first_new_line_index, slayerlog::AllProcessedSources& processed_sources, slayerlog::LogController& controller,
                                                ftxui::ScreenInteractive& screen)
 {
     processed_sources.append_from_sources(tracked_sources, first_new_line_index);
@@ -39,7 +39,7 @@ void append_sources_delta_to_processed_sources(const slayerlog::AllTrackedSource
     screen.PostEvent(ftxui::Event::Custom);
 }
 
-std::thread start_watcher_thread(int poll_interval_ms, slayerlog::AllTrackedSources& tracked_sources, std::mutex& model_mutex, slayerlog::ProcessedSources& processed_sources, slayerlog::LogController& controller,
+std::thread start_watcher_thread(int poll_interval_ms, slayerlog::AllTrackedSources& tracked_sources, std::mutex& model_mutex, slayerlog::AllProcessedSources& processed_sources, slayerlog::LogController& controller,
                                  ftxui::ScreenInteractive& screen, std::atomic<bool>& keep_running)
 {
     return std::thread(
@@ -107,7 +107,7 @@ int main(int argc, char** argv)
     screen.TrackMouse();
 
     std::mutex model_mutex;
-    slayerlog::ProcessedSources processed_sources;
+    slayerlog::AllProcessedSources processed_sources;
     processed_sources.set_show_source_labels(tracked_sources.source_count() > 1);
 
     slayerlog::CommandHistory command_history(settings_store);

@@ -15,7 +15,7 @@ namespace slayerlog
 
 class AllTrackedSources;
 
-class ProcessedSources
+class AllProcessedSources
 {
 public:
     void reset();

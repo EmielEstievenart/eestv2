@@ -28,7 +28,7 @@ void LogController::reset()
 
 // --- Content management ---
 
-void LogController::rebuild_view(const ProcessedSources& processed_sources)
+void LogController::rebuild_view(const AllProcessedSources& processed_sources)
 {
     auto& target = inactive_buffer();
     target.clear();
@@ -53,7 +53,7 @@ void LogController::rebuild_view(const ProcessedSources& processed_sources)
     _text_view_controller.set_content(count, _max_line_width, [this](int index) -> const std::string& { return active_buffer()[static_cast<std::size_t>(index)]; });
 }
 
-void LogController::sync_view(const ProcessedSources& processed_sources)
+void LogController::sync_view(const AllProcessedSources& processed_sources)
 {
     const int current_count = processed_sources.line_count();
     if (current_count < _synced_line_count)
@@ -83,7 +83,7 @@ void LogController::sync_view(const ProcessedSources& processed_sources)
 
 // --- Domain-specific navigation ---
 
-bool LogController::go_to_line(const ProcessedSources& processed_sources, int line_number)
+bool LogController::go_to_line(const AllProcessedSources& processed_sources, int line_number)
 {
     const auto target_visible_index = processed_sources.visible_line_index_for_line_number(line_number);
     if (!target_visible_index.has_value())
@@ -97,7 +97,7 @@ bool LogController::go_to_line(const ProcessedSources& processed_sources, int li
 
 // --- Find ---
 
-bool LogController::set_find_query(ProcessedSources& processed_sources, std::string query)
+bool LogController::set_find_query(AllProcessedSources& processed_sources, std::string query)
 {
     query = trim_search_text(query);
     if (query.empty())
@@ -121,7 +121,7 @@ bool LogController::set_find_query(ProcessedSources& processed_sources, std::str
     return go_to_next_find_match(processed_sources);
 }
 
-void LogController::clear_find(ProcessedSources& processed_sources)
+void LogController::clear_find(AllProcessedSources& processed_sources)
 {
     (void)processed_sources;
     _find_query.clear();
@@ -145,12 +145,12 @@ int LogController::total_find_match_count() const
     return static_cast<int>(_find_match_entry_indices.size());
 }
 
-int LogController::visible_find_match_count(const ProcessedSources& processed_sources) const
+int LogController::visible_find_match_count(const AllProcessedSources& processed_sources) const
 {
     return static_cast<int>(std::count_if(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), [&](AllLineIndex entry_index) { return processed_sources.entry_index_is_visible(entry_index); }));
 }
 
-bool LogController::visible_line_matches_find(const ProcessedSources& processed_sources, int visible_index) const
+bool LogController::visible_line_matches_find(const AllProcessedSources& processed_sources, int visible_index) const
 {
     if (visible_index < 0)
     {
@@ -166,7 +166,7 @@ bool LogController::visible_line_matches_find(const ProcessedSources& processed_
     return std::binary_search(_find_match_entry_indices.begin(), _find_match_entry_indices.end(), *entry_index);
 }
 
-bool LogController::go_to_next_find_match(const ProcessedSources& processed_sources)
+bool LogController::go_to_next_find_match(const AllProcessedSources& processed_sources)
 {
     if (!find_active() || total_find_match_count() == 0)
     {
@@ -206,7 +206,7 @@ bool LogController::go_to_next_find_match(const ProcessedSources& processed_sour
     return false;
 }
 
-bool LogController::go_to_previous_find_match(const ProcessedSources& processed_sources)
+bool LogController::go_to_previous_find_match(const AllProcessedSources& processed_sources)
 {
     if (!find_active() || total_find_match_count() == 0)
     {
@@ -246,7 +246,7 @@ bool LogController::go_to_previous_find_match(const ProcessedSources& processed_
     return false;
 }
 
-std::optional<VisibleLineIndex> LogController::active_find_visible_index(const ProcessedSources& processed_sources) const
+std::optional<VisibleLineIndex> LogController::active_find_visible_index(const AllProcessedSources& processed_sources) const
 {
     if (!_active_find_entry_index.has_value())
     {
@@ -258,7 +258,7 @@ std::optional<VisibleLineIndex> LogController::active_find_visible_index(const P
 
 // --- Event handling ---
 
-LogEventResult LogController::handle_event(ProcessedSources& processed_sources, ftxui::Event event, const std::function<std::optional<TextViewPosition>(const ftxui::Mouse&)>& mouse_to_text_position)
+LogEventResult LogController::handle_event(AllProcessedSources& processed_sources, ftxui::Event event, const std::function<std::optional<TextViewPosition>(const ftxui::Mouse&)>& mouse_to_text_position)
 {
     // Escape: clear find if active, otherwise delegate (TextViewController handles exit)
     if (event == ftxui::Event::Escape && find_active())
@@ -335,7 +335,7 @@ std::vector<std::string>& LogController::inactive_buffer()
     return _active_buffer_is_a ? _buffer_b : _buffer_a;
 }
 
-void LogController::rebuild_find_matches(const ProcessedSources& processed_sources)
+void LogController::rebuild_find_matches(const AllProcessedSources& processed_sources)
 {
     _find_match_entry_indices.clear();
     if (!find_active())
@@ -354,7 +354,7 @@ void LogController::rebuild_find_matches(const ProcessedSources& processed_sourc
     }
 }
 
-void LogController::expand_find_matches(const ProcessedSources& processed_sources, AllLineIndex first_new_entry_index)
+void LogController::expand_find_matches(const AllProcessedSources& processed_sources, AllLineIndex first_new_entry_index)
 {
     if (!find_active())
     {

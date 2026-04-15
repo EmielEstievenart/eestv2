@@ -1,4 +1,4 @@
-#include "processed_sources.hpp"
+#include "all_processed_sources.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -72,7 +72,7 @@ std::optional<HiddenColumnRange> parse_hidden_column_range(std::string_view text
     return HiddenColumnRange {*start, *end};
 }
 
-void ProcessedSources::reset()
+void AllProcessedSources::reset()
 {
     _all_entries.clear();
     _visible_entry_indices.clear();
@@ -90,7 +90,7 @@ void ProcessedSources::reset()
     _show_source_labels = false;
 }
 
-void ProcessedSources::append_lines(const std::vector<ObservedLogLine>& lines)
+void AllProcessedSources::append_lines(const std::vector<ObservedLogLine>& lines)
 {
     if (_updates_paused)
     {
@@ -102,12 +102,12 @@ void ProcessedSources::append_lines(const std::vector<ObservedLogLine>& lines)
     }
 }
 
-void ProcessedSources::append_batch(const LogBatch& batch)
+void AllProcessedSources::append_batch(const LogBatch& batch)
 {
     append_lines(merge_log_batch(batch));
 }
 
-void ProcessedSources::replace_batch(const LogBatch& batch)
+void AllProcessedSources::replace_batch(const LogBatch& batch)
 {
     const auto merged_lines = merge_log_batch(batch);
 
@@ -124,7 +124,7 @@ void ProcessedSources::replace_batch(const LogBatch& batch)
     rebuild_visible_entries();
 }
 
-void ProcessedSources::append_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_new_entry_index)
+void AllProcessedSources::append_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_new_entry_index)
 {
     const auto& lines = tracked_sources.all_lines();
     if (first_new_entry_index.value < 0 || first_new_entry_index.value >= static_cast<int>(lines.size()))
@@ -142,7 +142,7 @@ void ProcessedSources::append_from_sources(const AllTrackedSources& tracked_sour
     append_lines(appended_lines);
 }
 
-void ProcessedSources::rebuild_from_sources(const AllTrackedSources& tracked_sources)
+void AllProcessedSources::rebuild_from_sources(const AllTrackedSources& tracked_sources)
 {
     _all_entries.clear();
     _visible_entry_indices.clear();
@@ -158,7 +158,7 @@ void ProcessedSources::rebuild_from_sources(const AllTrackedSources& tracked_sou
     rebuild_visible_entries();
 }
 
-void ProcessedSources::toggle_pause()
+void AllProcessedSources::toggle_pause()
 {
     _updates_paused = !_updates_paused;
     if (!_updates_paused)
@@ -167,17 +167,17 @@ void ProcessedSources::toggle_pause()
     }
 }
 
-bool ProcessedSources::updates_paused() const
+bool AllProcessedSources::updates_paused() const
 {
     return _updates_paused;
 }
 
-void ProcessedSources::set_show_source_labels(bool show_source_labels)
+void AllProcessedSources::set_show_source_labels(bool show_source_labels)
 {
     _show_source_labels = show_source_labels;
 }
 
-void ProcessedSources::add_include_filter(std::string filter_text)
+void AllProcessedSources::add_include_filter(std::string filter_text)
 {
     filter_text = trim_search_text(filter_text);
     if (filter_text.empty())
@@ -192,7 +192,7 @@ void ProcessedSources::add_include_filter(std::string filter_text)
     rebuild_visible_entries();
 }
 
-void ProcessedSources::add_exclude_filter(std::string filter_text)
+void AllProcessedSources::add_exclude_filter(std::string filter_text)
 {
     filter_text = trim_search_text(filter_text);
     if (filter_text.empty())
@@ -207,7 +207,7 @@ void ProcessedSources::add_exclude_filter(std::string filter_text)
     rebuild_visible_entries();
 }
 
-void ProcessedSources::reset_filters()
+void AllProcessedSources::reset_filters()
 {
     _include_filters.clear();
     _exclude_filters.clear();
@@ -216,28 +216,28 @@ void ProcessedSources::reset_filters()
     rebuild_visible_entries();
 }
 
-const std::vector<std::string>& ProcessedSources::include_filters() const
+const std::vector<std::string>& AllProcessedSources::include_filters() const
 {
     return _include_filters;
 }
 
-const std::vector<std::string>& ProcessedSources::exclude_filters() const
+const std::vector<std::string>& AllProcessedSources::exclude_filters() const
 {
     return _exclude_filters;
 }
 
-void ProcessedSources::hide_before_line_number(int line_number)
+void AllProcessedSources::hide_before_line_number(int line_number)
 {
     _hidden_before_line_number = line_number > 1 ? std::optional<int>(line_number) : std::nullopt;
     rebuild_visible_entries();
 }
 
-std::optional<int> ProcessedSources::hidden_before_line_number() const
+std::optional<int> AllProcessedSources::hidden_before_line_number() const
 {
     return _hidden_before_line_number;
 }
 
-void ProcessedSources::hide_columns(int start_column, int end_column)
+void AllProcessedSources::hide_columns(int start_column, int end_column)
 {
     if (start_column < 0 || end_column <= start_column)
     {
@@ -248,22 +248,22 @@ void ProcessedSources::hide_columns(int start_column, int end_column)
     _hidden_columns = HiddenColumnRange {start_column, end_column};
 }
 
-void ProcessedSources::reset_hidden_columns()
+void AllProcessedSources::reset_hidden_columns()
 {
     _hidden_columns.reset();
 }
 
-std::optional<HiddenColumnRange> ProcessedSources::hidden_columns() const
+std::optional<HiddenColumnRange> AllProcessedSources::hidden_columns() const
 {
     return _hidden_columns;
 }
 
-const ObservedLogLine& ProcessedSources::entry_at(AllLineIndex entry_index) const
+const ObservedLogLine& AllProcessedSources::entry_at(AllLineIndex entry_index) const
 {
     return _all_entries[entry_index];
 }
 
-std::optional<AllLineIndex> ProcessedSources::entry_index_for_visible_line(VisibleLineIndex visible_line_index) const
+std::optional<AllLineIndex> AllProcessedSources::entry_index_for_visible_line(VisibleLineIndex visible_line_index) const
 {
     if (visible_line_index.value < 0 || visible_line_index.value >= static_cast<int>(_visible_entry_indices.size()))
     {
@@ -273,7 +273,7 @@ std::optional<AllLineIndex> ProcessedSources::entry_index_for_visible_line(Visib
     return _visible_entry_indices[visible_line_index];
 }
 
-std::optional<VisibleLineIndex> ProcessedSources::visible_line_index_for_entry(AllLineIndex entry_index) const
+std::optional<VisibleLineIndex> AllProcessedSources::visible_line_index_for_entry(AllLineIndex entry_index) const
 {
     const auto visible_line = std::find(_visible_entry_indices.begin(), _visible_entry_indices.end(), entry_index);
     if (visible_line == _visible_entry_indices.end())
@@ -284,7 +284,7 @@ std::optional<VisibleLineIndex> ProcessedSources::visible_line_index_for_entry(A
     return VisibleLineIndex {static_cast<int>(std::distance(_visible_entry_indices.begin(), visible_line))};
 }
 
-std::optional<int> ProcessedSources::line_number_for_visible_line(VisibleLineIndex visible_line_index) const
+std::optional<int> AllProcessedSources::line_number_for_visible_line(VisibleLineIndex visible_line_index) const
 {
     if (visible_line_index.value < 0 || visible_line_index.value >= static_cast<int>(_visible_entry_indices.size()))
     {
@@ -294,7 +294,7 @@ std::optional<int> ProcessedSources::line_number_for_visible_line(VisibleLineInd
     return _visible_entry_indices[visible_line_index].value + 1;
 }
 
-std::optional<VisibleLineIndex> ProcessedSources::visible_line_index_for_line_number(int line_number) const
+std::optional<VisibleLineIndex> AllProcessedSources::visible_line_index_for_line_number(int line_number) const
 {
     if (line_number <= 0)
     {
@@ -304,29 +304,29 @@ std::optional<VisibleLineIndex> ProcessedSources::visible_line_index_for_line_nu
     return visible_line_index_for_entry(AllLineIndex {line_number - 1});
 }
 
-bool ProcessedSources::entry_index_is_visible(AllLineIndex entry_index) const
+bool AllProcessedSources::entry_index_is_visible(AllLineIndex entry_index) const
 {
     return std::binary_search(_visible_entry_indices.begin(), _visible_entry_indices.end(), entry_index);
 }
 
-int ProcessedSources::line_count() const
+int AllProcessedSources::line_count() const
 {
     return static_cast<int>(_visible_entry_indices.size());
 }
 
-int ProcessedSources::total_line_count() const
+int AllProcessedSources::total_line_count() const
 {
     return static_cast<int>(_all_entries.size());
 }
 
-std::string ProcessedSources::rendered_line(int index) const
+std::string AllProcessedSources::rendered_line(int index) const
 {
     const VisibleLineIndex visible_line_index {index};
     const AllLineIndex entry_index = _visible_entry_indices[visible_line_index];
     return render_entry(entry_index);
 }
 
-std::vector<std::string> ProcessedSources::rendered_lines(int first_index, int count) const
+std::vector<std::string> AllProcessedSources::rendered_lines(int first_index, int count) const
 {
     if (count <= 0)
     {
@@ -351,7 +351,7 @@ std::vector<std::string> ProcessedSources::rendered_lines(int first_index, int c
     return lines;
 }
 
-int ProcessedSources::max_rendered_line_width() const
+int AllProcessedSources::max_rendered_line_width() const
 {
     int width = 0;
     for (const auto entry_index : _visible_entry_indices)
@@ -362,7 +362,7 @@ int ProcessedSources::max_rendered_line_width() const
     return width;
 }
 
-std::string ProcessedSources::render_entry(AllLineIndex entry_index) const
+std::string AllProcessedSources::render_entry(AllLineIndex entry_index) const
 {
     std::ostringstream output;
     const auto& entry = _all_entries[entry_index];
@@ -381,7 +381,7 @@ std::string ProcessedSources::render_entry(AllLineIndex entry_index) const
     return apply_hidden_columns(output.str());
 }
 
-void ProcessedSources::append_lines_immediately(const std::vector<ObservedLogLine>& lines)
+void AllProcessedSources::append_lines_immediately(const std::vector<ObservedLogLine>& lines)
 {
     const AllLineIndex first_new_entry_index {static_cast<int>(_all_entries.size())};
 
@@ -393,13 +393,13 @@ void ProcessedSources::append_lines_immediately(const std::vector<ObservedLogLin
     expand_visible_entries(first_new_entry_index);
 }
 
-void ProcessedSources::flush_paused_updates()
+void AllProcessedSources::flush_paused_updates()
 {
     append_lines_immediately(_paused_updates);
     _paused_updates.clear();
 }
 
-void ProcessedSources::rebuild_visible_entries()
+void AllProcessedSources::rebuild_visible_entries()
 {
     _visible_entry_indices.clear();
     _visible_entry_indices.reserve(_all_entries.size());
@@ -419,7 +419,7 @@ void ProcessedSources::rebuild_visible_entries()
     }
 }
 
-void ProcessedSources::expand_visible_entries(AllLineIndex first_new_entry_index)
+void AllProcessedSources::expand_visible_entries(AllLineIndex first_new_entry_index)
 {
     int index = first_new_entry_index.value;
     if (_hidden_before_line_number.has_value())
@@ -437,7 +437,7 @@ void ProcessedSources::expand_visible_entries(AllLineIndex first_new_entry_index
     }
 }
 
-bool ProcessedSources::entry_matches_filters(const ObservedLogLine& entry) const
+bool AllProcessedSources::entry_matches_filters(const ObservedLogLine& entry) const
 {
     const std::string searchable_text = entry.source_label + "\n" + entry.text;
     const bool matches_include        = _include_filter_patterns.empty() || matches_any_pattern(searchable_text, _include_filter_patterns);
@@ -445,7 +445,7 @@ bool ProcessedSources::entry_matches_filters(const ObservedLogLine& entry) const
     return matches_include && !matches_exclude;
 }
 
-std::string ProcessedSources::apply_hidden_columns(std::string text) const
+std::string AllProcessedSources::apply_hidden_columns(std::string text) const
 {
     if (!_hidden_columns.has_value())
     {

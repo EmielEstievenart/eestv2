@@ -13,10 +13,10 @@
 #include "command_manager.hpp"
 #include "command_palette_controller.hpp"
 #include "debug_log.hpp"
-#include "all_tracked_sources.hpp"
+#include "tracked_sources/all_tracked_sources.hpp"
 #include "log_controller.hpp"
 #include "log_source.hpp"
-#include "processed_sources.hpp"
+#include "tracked_sources/all_processed_sources.hpp"
 
 namespace slayerlog
 {
@@ -42,7 +42,7 @@ std::string build_header_text(const std::vector<std::string>& labels)
     return output.str();
 }
 
-void reload_processed_sources(const AllTrackedSources& tracked_sources, std::string& header_text, ProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
+void reload_processed_sources(const AllTrackedSources& tracked_sources, std::string& header_text, AllProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
 {
     header_text = build_header_text(tracked_sources.source_labels());
     processed_sources.set_show_source_labels(tracked_sources.source_count() > 1);
@@ -98,7 +98,7 @@ std::string trim_text(std::string_view text)
     return std::string(text.substr(start, end - start));
 }
 
-std::optional<int> highest_shown_line_number(const ProcessedSources& processed_sources, const LogController& controller)
+std::optional<int> highest_shown_line_number(const AllProcessedSources& processed_sources, const LogController& controller)
 {
     if (processed_sources.line_count() == 0)
     {
@@ -111,7 +111,7 @@ std::optional<int> highest_shown_line_number(const ProcessedSources& processed_s
     return processed_sources.line_number_for_visible_line(VisibleLineIndex {last_visible_line});
 }
 
-CommandResult open_file_command(std::string_view file_path, AllTrackedSources& tracked_sources, std::string& header_text, ProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
+CommandResult open_file_command(std::string_view file_path, AllTrackedSources& tracked_sources, std::string& header_text, AllProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
 {
     const auto error = tracked_sources.open_source(file_path);
     if (error.has_value())
@@ -124,7 +124,7 @@ CommandResult open_file_command(std::string_view file_path, AllTrackedSources& t
     return CommandResult {true, "Opened file: " + std::string(file_path)};
 }
 
-CommandResult open_folder_command(std::string_view folder_path, AllTrackedSources& tracked_sources, std::string& header_text, ProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
+CommandResult open_folder_command(std::string_view folder_path, AllTrackedSources& tracked_sources, std::string& header_text, AllProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
 {
     LogSource source;
     try
@@ -147,7 +147,7 @@ CommandResult open_folder_command(std::string_view folder_path, AllTrackedSource
     return CommandResult {true, "Opened folder: " + source_display_path(source)};
 }
 
-CommandResult close_open_file_command(CommandPaletteController& command_palette_controller, AllTrackedSources& tracked_sources, std::string& header_text, ProcessedSources& processed_sources, LogController& controller,
+CommandResult close_open_file_command(CommandPaletteController& command_palette_controller, AllTrackedSources& tracked_sources, std::string& header_text, AllProcessedSources& processed_sources, LogController& controller,
                                       ftxui::ScreenInteractive& screen)
 {
     const auto labels = tracked_sources.source_labels();
@@ -176,7 +176,7 @@ CommandResult close_open_file_command(CommandPaletteController& command_palette_
 
 } // namespace
 
-void register_commands(CommandManager& command_manager, ProcessedSources& processed_sources, LogController& controller, CommandPaletteController& command_palette_controller, std::string& header_text, ftxui::ScreenInteractive& screen,
+void register_commands(CommandManager& command_manager, AllProcessedSources& processed_sources, LogController& controller, CommandPaletteController& command_palette_controller, std::string& header_text, ftxui::ScreenInteractive& screen,
                        AllTrackedSources& tracked_sources)
 {
     command_manager.register_command({"filter-in", "Show lines matching text or regex", "filter-in <text|re:regex>"},

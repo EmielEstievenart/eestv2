@@ -11,7 +11,7 @@
 
 #include <zstd.h>
 
-#include "all_tracked_sources.hpp"
+#include "tracked_sources/all_tracked_sources.hpp"
 #include "log_source.hpp"
 
 namespace slayerlog

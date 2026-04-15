@@ -3,10 +3,10 @@ project(slayerlog)
 add_executable(
   slayerlog
   main.cpp
-  all_tracked_sources.cpp
-  all_tracked_sources.hpp
-  tracked_source.cpp
-  tracked_source.hpp
+  tracked_sources/all_tracked_sources.cpp
+  tracked_sources/all_tracked_sources.hpp
+  tracked_sources/tracked_source.cpp
+  tracked_sources/tracked_source.hpp
   command_line_parser.cpp
   command_line_parser.hpp
   debug_log.hpp
@@ -30,8 +30,8 @@ add_executable(
   settings_ini.hpp
   settings_store.cpp
   settings_store.hpp
-  processed_sources.cpp
-  processed_sources.hpp
+  tracked_sources/all_processed_sources.cpp
+  tracked_sources/all_processed_sources.hpp
   search_pattern.cpp
   search_pattern.hpp
   log4cplus.ini
@@ -67,6 +67,7 @@ target_compile_definitions(slayerlog PRIVATE BOOST_ALL_NO_LIB
 target_include_directories(
   slayerlog PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
                     ${CMAKE_CURRENT_SOURCE_DIR}/commands
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tracked_sources
                     ${CMAKE_SOURCE_DIR}/code)
 
 target_link_libraries(

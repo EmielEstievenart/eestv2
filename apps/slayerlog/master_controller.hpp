@@ -5,7 +5,7 @@
 
 #include "command_palette_controller.hpp"
 #include "log_controller.hpp"
-#include "processed_sources.hpp"
+#include "tracked_sources/all_processed_sources.hpp"
 #include "log_view.hpp"
 
 namespace slayerlog
@@ -14,13 +14,13 @@ namespace slayerlog
 class MasterController
 {
 public:
-    MasterController(ProcessedSources& processed_sources, LogController& log_controller, LogView& log_view, ftxui::ScreenInteractive& screen, CommandPaletteController& command_palette_controller);
+    MasterController(AllProcessedSources& processed_sources, LogController& log_controller, LogView& log_view, ftxui::ScreenInteractive& screen, CommandPaletteController& command_palette_controller);
 
     bool handle_event(const ftxui::Event& event);
     bool exit_requested() const;
 
 private:
-    ProcessedSources& _processed_sources;
+    AllProcessedSources& _processed_sources;
     LogController& _log_controller;
     LogView& _log_view;
     ftxui::ScreenInteractive& _screen;
