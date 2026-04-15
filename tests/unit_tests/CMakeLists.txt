@@ -24,6 +24,7 @@ add_executable(
   slayerlog/tracked_source_manager_tests.cpp
   slayerlog/stream_line_buffer_tests.cpp
   slayerlog/command_palette_controller_tests.cpp
+  slayerlog/command_registrar_tests.cpp
   slayerlog/command_line_parser_tests.cpp
   slayerlog/command_history_tests.cpp
   slayerlog/command_manager_tests.cpp
@@ -36,8 +37,10 @@ add_executable(
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_controller.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_controller.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_model.hpp
-   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_view.cpp
-   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_view.hpp
+    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_view.cpp
+    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_view.hpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_registrar.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_registrar.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/command_line_parser.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_history.cpp

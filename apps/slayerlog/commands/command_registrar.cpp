@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <exception>
+#include <filesystem>
+#include <fstream>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -145,6 +147,55 @@ CommandResult open_folder_command(std::string_view folder_path, AllTrackedSource
 
     reload_processed_sources(tracked_sources, header_text, processed_sources, controller, screen);
     return CommandResult {true, "Opened folder: " + source_display_path(source)};
+}
+
+CommandResult export_visible_text_command(std::string_view file_path, const AllProcessedSources& processed_sources)
+{
+    const std::string trimmed_path = trim_text(file_path);
+    if (trimmed_path.empty())
+    {
+        return CommandResult {false, "Usage: export-visible-text <path>"};
+    }
+
+    const std::filesystem::path output_path(trimmed_path);
+    std::error_code error_code;
+    if (output_path.has_parent_path() && !std::filesystem::exists(output_path.parent_path(), error_code))
+    {
+        if (error_code)
+        {
+            return CommandResult {false, "Could not access parent folder: " + output_path.parent_path().string()};
+        }
+
+        return CommandResult {false, "Parent folder does not exist: " + output_path.parent_path().string()};
+    }
+
+    std::ofstream output(output_path, std::ios::binary | std::ios::trunc);
+    if (!output.is_open())
+    {
+        return CommandResult {false, "Could not open file for writing: " + trimmed_path};
+    }
+
+    for (int line_index = 0; line_index < processed_sources.line_count(); ++line_index)
+    {
+        if (line_index > 0)
+        {
+            output << '\n';
+        }
+
+        output << processed_sources.rendered_line(line_index);
+        if (!output)
+        {
+            return CommandResult {false, "Failed while writing file: " + trimmed_path};
+        }
+    }
+
+    output.close();
+    if (!output)
+    {
+        return CommandResult {false, "Failed while writing file: " + trimmed_path};
+    }
+
+    return CommandResult {true, "Exported " + std::to_string(processed_sources.line_count()) + " visible lines to " + trimmed_path};
 }
 
 CommandResult close_open_file_command(CommandPaletteController& command_palette_controller, AllTrackedSources& tracked_sources, std::string& header_text, AllProcessedSources& processed_sources, LogController& controller,
@@ -449,6 +500,16 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Hidden all currently shown lines"};
                                      });
+
+    command_manager.register_command({"export-visible-text",
+                                      "Write visible rendered lines to a file",
+                                      "export-visible-text <path>",
+                                      {
+                                          "Exports the currently visible rendered lines after filters and hidden columns are applied.",
+                                          "This writes all visible lines in the model, not just the current viewport.",
+                                          "Example: export-visible-text filtered.log",
+                                      }},
+                                     [&](std::string_view arguments) { return export_visible_text_command(arguments, processed_sources); });
 
     command_manager.register_command({"find",
                                       "Find lines matching text or regex",
