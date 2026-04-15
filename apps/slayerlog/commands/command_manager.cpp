@@ -55,6 +55,19 @@ void CommandManager::register_command(CommandDescriptor descriptor, CommandHandl
     });
 }
 
+std::vector<CommandDescriptor> CommandManager::commands() const
+{
+    std::vector<CommandDescriptor> descriptors;
+    descriptors.reserve(_commands.size());
+
+    for (const auto& command : _commands)
+    {
+        descriptors.push_back(command.descriptor);
+    }
+
+    return descriptors;
+}
+
 std::vector<CommandDescriptor> CommandManager::matching_commands(std::string_view query) const
 {
     const std::string normalized_query = normalize_command_name(typed_command_name(query));
@@ -130,8 +143,7 @@ std::string CommandManager::typed_command_name(std::string_view query)
 const CommandManager::RegisteredCommand* CommandManager::find_command(std::string_view name) const
 {
     const std::string normalized_name = normalize_command_name(name);
-    const auto match                  = std::find_if(_commands.begin(), _commands.end(),
-                                                     [&](const RegisteredCommand& command) { return command.normalized_name == normalized_name; });
+    const auto match                  = std::find_if(_commands.begin(), _commands.end(), [&](const RegisteredCommand& command) { return command.normalized_name == normalized_name; });
 
     return match == _commands.end() ? nullptr : &*match;
 }

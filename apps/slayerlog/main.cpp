@@ -127,6 +127,12 @@ int main(int argc, char** argv)
 
     slayerlog::register_commands(command_manager, processed_sources, controller, command_palette_controller, header_text, screen, tracked_sources);
 
+    if (config.show_help)
+    {
+        std::cout << slayerlog::build_help_text(command_manager);
+        return 0;
+    }
+
     slayerlog::MasterController master_controller(processed_sources, controller, view, screen, command_palette_controller);
 
     {

@@ -14,6 +14,7 @@ struct CommandDescriptor
     std::string name;
     std::string summary;
     std::string usage;
+    std::vector<std::string> help_lines;
 };
 
 struct CommandResult
@@ -24,10 +25,7 @@ struct CommandResult
 
     CommandResult() = default;
 
-    CommandResult(bool success_value, std::string message_value, bool close_palette_on_success_value = true)
-        : success(success_value), message(std::move(message_value)), close_palette_on_success(close_palette_on_success_value)
-    {
-    }
+    CommandResult(bool success_value, std::string message_value, bool close_palette_on_success_value = true) : success(success_value), message(std::move(message_value)), close_palette_on_success(close_palette_on_success_value) { }
 };
 
 using CommandHandler = std::function<CommandResult(std::string_view arguments)>;
@@ -37,6 +35,7 @@ class CommandManager
 public:
     void register_command(CommandDescriptor descriptor, CommandHandler handler);
 
+    std::vector<CommandDescriptor> commands() const;
     std::vector<CommandDescriptor> matching_commands(std::string_view query) const;
     CommandResult execute(std::string_view command_line) const;
 

@@ -179,7 +179,15 @@ CommandResult close_open_file_command(CommandPaletteController& command_palette_
 void register_commands(CommandManager& command_manager, AllProcessedSources& processed_sources, LogController& controller, CommandPaletteController& command_palette_controller, std::string& header_text, ftxui::ScreenInteractive& screen,
                        AllTrackedSources& tracked_sources)
 {
-    command_manager.register_command({"filter-in", "Show lines matching text or regex", "filter-in <text|re:regex>"},
+    command_manager.register_command({"filter-in",
+                                      "Show lines matching text or regex",
+                                      "filter-in <text|re:regex>",
+                                      {
+                                          "Keep only matching lines visible.",
+                                          "Use plain text for substring matching or prefix with re: for a regular expression.",
+                                          "Example: filter-in auth",
+                                          "Example: filter-in re:^(ERROR|WARN)",
+                                      }},
                                      [&](std::string_view arguments)
                                      {
                                          if (arguments.empty())
@@ -200,7 +208,15 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          return CommandResult {true, "Added include filter: " + std::string(arguments)};
                                      });
 
-    command_manager.register_command({"filter-out", "Hide lines matching text or regex", "filter-out <text|re:regex>"},
+    command_manager.register_command({"filter-out",
+                                      "Hide lines matching text or regex",
+                                      "filter-out <text|re:regex>",
+                                      {
+                                          "Hide matching lines while keeping everything else visible.",
+                                          "Use plain text for substring matching or prefix with re: for a regular expression.",
+                                          "Example: filter-out heartbeat",
+                                          "Example: filter-out re:^DEBUG",
+                                      }},
                                      [&](std::string_view arguments)
                                      {
                                          if (arguments.empty())
@@ -247,7 +263,13 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          return CommandResult {true, "Cleared all filters"};
                                      });
 
-    command_manager.register_command({"hide-columns", "Hide displayed columns in a range", "hide-columns <xx-yy>"},
+    command_manager.register_command({"hide-columns",
+                                      "Hide displayed columns in a range",
+                                      "hide-columns <xx-yy>",
+                                      {
+                                          "Hide character columns inclusively across every rendered line.",
+                                          "Example: hide-columns 25-80",
+                                      }},
                                      [&](std::string_view arguments)
                                      {
                                          const auto hidden_columns = parse_hidden_column_range(arguments);
@@ -290,7 +312,15 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          return CommandResult {true, "Cleared hidden column filter"};
                                      });
 
-    command_manager.register_command({"open-file", "Open file and reload all tracked logs", "open-file <path>"},
+    command_manager.register_command({"open-file",
+                                      "Open file and reload all tracked logs",
+                                      "open-file <path>",
+                                      {
+                                          "Open a local file or an SSH-backed remote file and start tailing it.",
+                                          "SSH sources must use ssh://user@host/absolute/path.log.",
+                                          "Example: open-file logs/app.log",
+                                          "Example: open-file ssh://user@example.com/var/log/app.log",
+                                      }},
                                      [&](std::string_view arguments)
                                      {
                                          const std::string file_path = trim_text(arguments);
@@ -302,7 +332,15 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          return open_file_command(file_path, tracked_sources, header_text, processed_sources, controller, screen);
                                      });
 
-    command_manager.register_command({"open-folder", "Open folder and reload all tracked logs", "open-folder <path>"},
+    command_manager.register_command({"open-folder",
+                                      "Open folder and reload all tracked logs",
+                                      "open-folder <path>",
+                                      {
+                                          "Watch every regular file in a local folder and include new files as they appear.",
+                                          "Folder watching also opens .zst files and reads them through the zstd watcher.",
+                                          "Use this for log directories; SSH folders are not supported.",
+                                          "Example: open-folder logs/archive",
+                                      }},
                                      [&](std::string_view arguments)
                                      {
                                          const std::string folder_path = trim_text(arguments);
@@ -314,7 +352,13 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          return open_folder_command(folder_path, tracked_sources, header_text, processed_sources, controller, screen);
                                      });
 
-    command_manager.register_command({"close-open-file", "Close one currently open file", "close-open-file"},
+    command_manager.register_command({"close-open-file",
+                                      "Close one currently open file",
+                                      "close-open-file",
+                                      {
+                                          "Opens a picker containing the currently tracked sources.",
+                                          "Use Up/Down to select a source and Enter to close it.",
+                                      }},
                                      [&](std::string_view arguments)
                                      {
                                          if (!trim_text(arguments).empty())
@@ -325,7 +369,13 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          return close_open_file_command(command_palette_controller, tracked_sources, header_text, processed_sources, controller, screen);
                                      });
 
-    command_manager.register_command({"go-to-line", "Center the view on a line number", "go-to-line <line-number>"},
+    command_manager.register_command({"go-to-line",
+                                      "Center the view on a line number",
+                                      "go-to-line <line-number>",
+                                      {
+                                          "Jumps to a raw line number after all currently loaded sources are merged.",
+                                          "The target line must still be visible after filters and cutoffs are applied.",
+                                      }},
                                      [&](std::string_view arguments)
                                      {
                                          const auto line_number = parse_positive_line_number(arguments);
@@ -353,7 +403,13 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          };
                                      });
 
-    command_manager.register_command({"hide-before-line", "Hide all raw lines before a line number", "hide-before-line <line-number>"},
+    command_manager.register_command({"hide-before-line",
+                                      "Hide all raw lines before a line number",
+                                      "hide-before-line <line-number>",
+                                      {
+                                          "Use 1 to show everything again.",
+                                          "Example: hide-before-line 5000",
+                                      }},
                                      [&](std::string_view arguments)
                                      {
                                          const auto line_number = parse_positive_line_number(arguments);
@@ -394,7 +450,16 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          return CommandResult {true, "Hidden all currently shown lines"};
                                      });
 
-    command_manager.register_command({"find", "Find lines matching text or regex", "find <text|re:regex>"},
+    command_manager.register_command({"find",
+                                      "Find lines matching text or regex",
+                                      "find <text|re:regex>",
+                                      {
+                                          "Highlights matching lines and focuses the first visible match when possible.",
+                                          "Use plain text for substring matching or prefix with re: for a regular expression.",
+                                          "After find is active, use Right/Left to move between matches and Esc to clear it.",
+                                          "Example: find timeout",
+                                          "Example: find re:request_id=[0-9]+",
+                                      }},
                                      [&](std::string_view arguments)
                                      {
                                          const std::string query = trim_text(arguments);
