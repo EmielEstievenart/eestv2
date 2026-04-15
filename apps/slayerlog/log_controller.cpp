@@ -9,9 +9,7 @@
 namespace slayerlog
 {
 
-LogController::LogController() : _text_view_controller(_text_view_model)
-{
-}
+LogController::LogController() = default;
 
 void LogController::reset()
 {
@@ -19,11 +17,12 @@ void LogController::reset()
     _buffer_b.clear();
     _active_buffer_is_a = true;
     _synced_line_count  = 0;
+    _max_line_width     = 0;
     _find_query.clear();
     _find_pattern.reset();
     _find_match_entry_indices.clear();
     _active_find_entry_index.reset();
-    _text_view_controller.swap_lines(active_buffer());
+    _text_view_controller.set_content(0, 0, [this](int index) -> const std::string& { return active_buffer()[static_cast<std::size_t>(index)]; });
     _text_view_controller.scroll_to_bottom();
 }
 
@@ -44,7 +43,14 @@ void LogController::rebuild_view(const ProcessedSources& processed_sources)
     rebuild_find_matches(processed_sources);
     _active_buffer_is_a = !_active_buffer_is_a;
     _synced_line_count  = count;
-    _text_view_controller.swap_lines(active_buffer());
+
+    _max_line_width = 0;
+    for (const auto& line : active_buffer())
+    {
+        _max_line_width = std::max(_max_line_width, static_cast<int>(line.size()));
+    }
+
+    _text_view_controller.set_content(count, _max_line_width, [this](int index) -> const std::string& { return active_buffer()[static_cast<std::size_t>(index)]; });
 }
 
 void LogController::sync_view(const ProcessedSources& processed_sources)
@@ -67,11 +73,12 @@ void LogController::sync_view(const ProcessedSources& processed_sources)
     for (int i = _synced_line_count; i < current_count; ++i)
     {
         buffer.push_back(processed_sources.rendered_line(i));
+        _max_line_width = std::max(_max_line_width, static_cast<int>(buffer.back().size()));
     }
 
     expand_find_matches(processed_sources, AllLineIndex {_synced_line_count});
     _synced_line_count = current_count;
-    _text_view_controller.notify_lines_appended();
+    _text_view_controller.update_content_size(current_count, _max_line_width);
 }
 
 // --- Domain-specific navigation ---
@@ -306,14 +313,19 @@ const TextViewController& LogController::text_view_controller() const
     return _text_view_controller;
 }
 
-const TextViewModel& LogController::text_view_model() const
+const std::string& LogController::line_at(int index) const
 {
-    return _text_view_model;
+    return active_buffer().at(static_cast<std::size_t>(index));
 }
 
 // --- Private ---
 
 std::vector<std::string>& LogController::active_buffer()
+{
+    return _active_buffer_is_a ? _buffer_a : _buffer_b;
+}
+
+const std::vector<std::string>& LogController::active_buffer() const
 {
     return _active_buffer_is_a ? _buffer_a : _buffer_b;
 }

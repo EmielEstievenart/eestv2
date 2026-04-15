@@ -8,8 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include <ftxui_components/text_view_model.hpp>
-
 // Describes an optional background-color highlight over a contiguous column range.
 // col_start is inclusive; col_end is exclusive (model-space column indices).
 struct TextViewColumnHighlight
@@ -58,8 +56,6 @@ struct TextViewRenderData
     int max_line_width      = 0;
     int viewport_col_count  = 1;
     TextViewColumnHighlight col_highlight;
-    std::vector<std::string> visible_lines;
-    std::vector<TextViewLineDecoration> line_decorations;
     std::vector<TextViewRangeDecoration> range_decorations;
 };
 
@@ -73,17 +69,19 @@ struct TextViewEventResult
 class TextViewController
 {
 public:
-    explicit TextViewController(TextViewModel& model);
+    using LineAccessor = std::function<const std::string&(int)>;
+
+    TextViewController() = default;
 
     // --- Content management ---
 
-    // Switch the model to point at a different externally-owned vector.
-    // Clamps scroll position, clears selection. Respects follow-bottom.
-    void swap_lines(const std::vector<std::string>& new_lines);
+    // Replace the content accessor and dimensions.
+    // Clears selection, clamps scroll position. Respects follow-bottom.
+    void set_content(int total_line_count, int max_line_width, LineAccessor line_at);
 
-    // Notify the controller that lines were appended to the current vector.
-    // Handles follow-bottom auto-scroll.
-    void notify_lines_appended();
+    // Update the content dimensions while keeping the existing accessor.
+    // Handles follow-bottom auto-scroll and horizontal clamping.
+    void update_content_size(int total_line_count, int max_line_width);
 
     // --- Viewport ---
 
@@ -149,8 +147,11 @@ private:
     [[nodiscard]] int max_first_visible_col() const;
     void clamp_scroll_position();
     [[nodiscard]] TextViewPosition clamp_selection_position(TextViewPosition position) const;
+    [[nodiscard]] const std::string& line_at(int index) const;
 
-    TextViewModel& _model;
+    int _total_line_count = 0;
+    int _max_line_width   = 0;
+    LineAccessor _line_at;
     int _viewport_line_count = 1;
     int _first_visible_line  = 0;
     bool _follow_bottom      = true;

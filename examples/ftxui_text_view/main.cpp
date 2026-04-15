@@ -1,10 +1,10 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui_components/text_view_controller.hpp>
-#include <ftxui_components/text_view_model.hpp>
 #include <ftxui_components/text_view_view.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -14,7 +14,7 @@ int main()
 {
     auto screen = ScreenInteractive::Fullscreen();
 
-    // The app owns the line data. The model is a non-owning view.
+    // The app owns the line data and exposes it through the controller callback.
     std::vector<std::string> lines;
     lines.reserve(201);
     for (int i = 1; i <= 200; ++i)
@@ -26,22 +26,45 @@ int main()
         "REEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         "AAAAAAAAAAALLLLLLLLLLLYYYY LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOONNNNGGGG");
 
-    TextViewModel model;
-    TextViewController controller(model);
-    controller.swap_lines(lines);
+    int max_line_width = 0;
+    for (const auto& line : lines)
+    {
+        max_line_width = std::max(max_line_width, static_cast<int>(line.size()));
+    }
+
+    TextViewController controller;
+    controller.set_content(static_cast<int>(lines.size()), max_line_width, [&](int index) -> const std::string& { return lines[static_cast<std::size_t>(index)]; });
 
     // Highlight columns 5-9 ("1 - t" on line 1, the digit+separator region) in red.
     // Press 'h' at runtime to toggle the highlight on and off.
     bool highlight_on = true;
     controller.set_background_column_range(5, 9, Color::Red);
 
-    TextViewView view(controller);
+    TextViewView view;
 
     auto renderer = Renderer(
         [&]
         {
+            controller.update_viewport_line_count(std::max(1, view.viewport_line_count()));
+            controller.update_viewport_col_count(std::max(1, view.viewport_col_count()));
+            const auto data = controller.render_data();
+
+            const auto draw_content = [&](Canvas& canvas, int first_line, int line_count, int first_col, int col_count)
+            {
+                for (int row = 0; row < line_count; ++row)
+                {
+                    const std::string& line = lines[static_cast<std::size_t>(first_line + row)];
+                    if (first_col >= static_cast<int>(line.size()))
+                    {
+                        continue;
+                    }
+
+                    canvas.DrawText(0, row * 4, line.substr(static_cast<std::size_t>(first_col), static_cast<std::size_t>(col_count)));
+                }
+            };
+
             return vbox({
-                       text("Hello"), view.component() | yflex | border,
+                       text("Hello"), view.render(data, draw_content) | yflex | border,
                        text("World") // <-- after
                    }) |
                    flex;

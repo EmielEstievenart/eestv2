@@ -9,7 +9,6 @@
 #include <ftxui/component/mouse.hpp>
 
 #include <ftxui_components/text_view_controller.hpp>
-#include <ftxui_components/text_view_model.hpp>
 
 #include "processed_sources.hpp"
 #include "search_pattern.hpp"
@@ -65,22 +64,23 @@ public:
 
     TextViewController& text_view_controller();
     const TextViewController& text_view_controller() const;
-    const TextViewModel& text_view_model() const;
+    const std::string& line_at(int index) const;
 
 private:
     std::vector<std::string>& active_buffer();
+    const std::vector<std::string>& active_buffer() const;
     std::vector<std::string>& inactive_buffer();
     void rebuild_find_matches(const ProcessedSources& processed_sources);
     void expand_find_matches(const ProcessedSources& processed_sources, AllLineIndex first_new_entry_index);
     bool entry_matches_find_query(const ObservedLogLine& entry) const;
 
-    TextViewModel _text_view_model;
     TextViewController _text_view_controller;
 
     std::vector<std::string> _buffer_a;
     std::vector<std::string> _buffer_b;
     bool _active_buffer_is_a = true;
     int _synced_line_count   = 0;
+    int _max_line_width      = 0;
 
     std::string _find_query;
     std::optional<SearchPattern> _find_pattern;

@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -219,17 +220,13 @@ bool copy_text_to_clipboard(const std::string& text)
 
 } // namespace
 
-// --- Constructor ---
-
-TextViewController::TextViewController(TextViewModel& model) : _model(model)
-{
-}
-
 // --- Content management ---
 
-void TextViewController::swap_lines(const std::vector<std::string>& new_lines)
+void TextViewController::set_content(int total_line_count, int max_line_width, TextViewController::LineAccessor line_at)
 {
-    _model.set_lines(new_lines);
+    _total_line_count = std::max(0, total_line_count);
+    _max_line_width   = std::max(0, max_line_width);
+    _line_at          = std::move(line_at);
     clear_selection();
     if (_follow_bottom)
     {
@@ -242,8 +239,11 @@ void TextViewController::swap_lines(const std::vector<std::string>& new_lines)
     _first_visible_col = std::min(_first_visible_col, max_first_visible_col());
 }
 
-void TextViewController::notify_lines_appended()
+void TextViewController::update_content_size(int total_line_count, int max_line_width)
 {
+    _total_line_count = std::max(0, total_line_count);
+    _max_line_width   = std::max(0, max_line_width);
+
     if (_follow_bottom)
     {
         _first_visible_line = max_first_visible_line();
@@ -252,6 +252,8 @@ void TextViewController::notify_lines_appended()
     {
         clamp_scroll_position();
     }
+
+    _first_visible_col = std::min(_first_visible_col, max_first_visible_col());
 }
 
 // --- Viewport ---
@@ -385,7 +387,7 @@ bool TextViewController::selection_in_progress() const
 
 std::optional<std::pair<TextViewPosition, TextViewPosition>> TextViewController::selection_bounds() const
 {
-    if (!_selection_anchor.has_value() || !_selection_focus.has_value() || _model.line_count() == 0)
+    if (!_selection_anchor.has_value() || !_selection_focus.has_value() || _total_line_count == 0)
     {
         return std::nullopt;
     }
@@ -411,7 +413,7 @@ std::string TextViewController::selection_text() const
     std::ostringstream output;
     for (int line_index = start.line_index; line_index <= end.line_index; ++line_index)
     {
-        const auto& line           = _model.line_at(line_index);
+        const auto& line           = line_at(line_index);
         const int line_start       = (line_index == start.line_index) ? start.column : 0;
         const int line_end         = (line_index == end.line_index) ? end.column : static_cast<int>(line.size());
         const int clamped_start    = std::clamp(line_start, 0, static_cast<int>(line.size()));
@@ -573,7 +575,7 @@ TextViewEventResult TextViewController::parse_event(ftxui::Event event, const st
 TextViewRenderData TextViewController::render_data() const
 {
     const int safe_viewport = normalize_viewport_line_count();
-    const int total         = _model.line_count();
+    const int total         = _total_line_count;
     const int max_first     = std::max(0, total - safe_viewport);
     const int first         = std::clamp(_first_visible_line, 0, max_first);
 
@@ -585,26 +587,11 @@ TextViewRenderData TextViewController::render_data() const
     data.first_visible_line  = first;
     data.viewport_line_count = safe_viewport;
     data.first_visible_col   = first_col;
-    data.max_line_width      = _model.max_line_width();
+    data.max_line_width      = _max_line_width;
     data.viewport_col_count  = safe_col_viewport;
     data.col_highlight       = _col_highlight;
 
     const int end = std::min(total, first + safe_viewport);
-    data.visible_lines.reserve(static_cast<std::size_t>(std::max(0, end - first)));
-    for (int index = first; index < end; ++index)
-    {
-        const std::string& line = _model.line_at(index);
-        const int line_len      = static_cast<int>(line.size());
-        if (first_col >= line_len)
-        {
-            data.visible_lines.emplace_back();
-        }
-        else
-        {
-            const int visible = std::min(line_len - first_col, safe_col_viewport);
-            data.visible_lines.push_back(line.substr(static_cast<std::size_t>(first_col), static_cast<std::size_t>(visible)));
-        }
-    }
 
     // Selection decorations
     const auto selected_range = selection_bounds();
@@ -617,7 +604,7 @@ TextViewRenderData TextViewController::render_data() const
                 continue;
             }
 
-            const auto& line          = _model.line_at(line_index);
+            const auto& line          = line_at(line_index);
             const int selection_start = (line_index == selected_range->first.line_index) ? selected_range->first.column : 0;
             const int selection_end   = (line_index == selected_range->second.line_index) ? selected_range->second.column : static_cast<int>(line.size());
             const int clamped_start   = std::clamp(selection_start, 0, static_cast<int>(line.size()));
@@ -678,12 +665,12 @@ int TextViewController::normalize_viewport_line_count() const
 
 int TextViewController::max_first_visible_line() const
 {
-    return std::max(0, _model.line_count() - normalize_viewport_line_count());
+    return std::max(0, _total_line_count - normalize_viewport_line_count());
 }
 
 int TextViewController::max_first_visible_col() const
 {
-    return std::max(0, _model.max_line_width() - _viewport_col_count);
+    return std::max(0, _max_line_width - _viewport_col_count);
 }
 
 void TextViewController::clamp_scroll_position()
@@ -693,13 +680,23 @@ void TextViewController::clamp_scroll_position()
 
 TextViewPosition TextViewController::clamp_selection_position(TextViewPosition position) const
 {
-    if (_model.line_count() == 0)
+    if (_total_line_count == 0)
     {
         return TextViewPosition {0, 0};
     }
 
-    position.line_index    = std::clamp(position.line_index, 0, _model.line_count() - 1);
-    const auto line_length = static_cast<int>(_model.line_at(position.line_index).size());
+    position.line_index    = std::clamp(position.line_index, 0, _total_line_count - 1);
+    const auto line_length = static_cast<int>(line_at(position.line_index).size());
     position.column        = std::clamp(position.column, 0, line_length);
     return position;
+}
+
+const std::string& TextViewController::line_at(int index) const
+{
+    if (!_line_at || index < 0 || index >= _total_line_count)
+    {
+        throw std::out_of_range("TextViewController::line_at index out of range");
+    }
+
+    return _line_at(index);
 }

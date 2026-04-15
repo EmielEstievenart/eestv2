@@ -12,6 +12,12 @@ namespace slayerlog
 namespace
 {
 
+struct RenderedRow
+{
+    std::string text;
+    std::optional<TextViewStyle> style;
+};
+
 // Approximate viewport size for the first render before FTXUI's reflect() has measured
 // the actual box. Breakdown: window border (2) + header (1) + separators (2) + status lines (3).
 // The value 7 slightly underestimates, which is acceptable as a fallback for a single frame.
@@ -39,6 +45,41 @@ std::string join(const std::vector<std::string>& items, const std::string& separ
         result += items[i];
     }
     return result;
+}
+
+void apply_style(ftxui::Canvas& canvas, int row, int col_start, int col_end, const TextViewStyle& style)
+{
+    for (int col = col_start; col < col_end; ++col)
+    {
+        canvas.Style(col * 2, row * 4,
+                     [&style](ftxui::Cell& cell)
+                     {
+                         if (style.foreground.has_value())
+                         {
+                             cell.foreground_color = *style.foreground;
+                         }
+
+                         if (style.background.has_value())
+                         {
+                             cell.background_color = *style.background;
+                         }
+
+                         if (style.bold)
+                         {
+                             cell.bold = true;
+                         }
+
+                         if (style.dim)
+                         {
+                             cell.dim = true;
+                         }
+
+                         if (style.inverted)
+                         {
+                             cell.inverted = true;
+                         }
+                     });
+    }
 }
 
 ftxui::Element build_filter_status(const ProcessedSources& processed_sources)
@@ -130,53 +171,90 @@ ftxui::Element LogView::render(const ProcessedSources& processed_sources, LogCon
     controller.text_view_controller().update_viewport_col_count(effective_width);
 
     // Get render data from the text view controller
-    auto data = controller.text_view_controller().render_data();
+    auto data              = controller.text_view_controller().render_data();
+    const bool empty_state = processed_sources.line_count() == 0;
+    std::vector<RenderedRow> rendered_rows;
 
-    // Handle empty state
-    if (processed_sources.line_count() == 0)
+    if (empty_state)
     {
-        data.total_lines = 1;
-        data.visible_lines.clear();
-        data.visible_lines.push_back("1 " + std::string(processed_sources.total_line_count() == 0 ? "<empty file>" : "<no matching lines>"));
-        data.max_line_width = static_cast<int>(data.visible_lines[0].size());
-        data.line_decorations.clear();
+        data.total_lines        = 1;
+        data.first_visible_line = 0;
+        data.first_visible_col  = 0;
         data.range_decorations.clear();
-        TextViewLineDecoration decoration;
-        decoration.line_index = 0;
-        decoration.style.dim  = true;
-        data.line_decorations.push_back(decoration);
+        data.max_line_width = static_cast<int>(2 + std::string(processed_sources.total_line_count() == 0 ? "<empty file>" : "<no matching lines>").size());
+
+        RenderedRow row;
+        row.text = "1 " + std::string(processed_sources.total_line_count() == 0 ? "<empty file>" : "<no matching lines>");
+
+        TextViewStyle style;
+        style.dim = true;
+        row.style = style;
+        rendered_rows.push_back(std::move(row));
     }
     else
     {
-        // Add hidden column preview highlight
-        if (hidden_column_preview.has_value())
-        {
-            data.col_highlight.col_start = hidden_column_preview->start;
-            data.col_highlight.col_end   = hidden_column_preview->end;
-            data.col_highlight.color     = theme::hidden_columns_preview_bg;
-            data.col_highlight.active    = true;
-        }
-
-        // Add find decorations
         const auto active_find_index = controller.active_find_visible_index(processed_sources);
-        for (std::size_t offset = 0; offset < data.visible_lines.size(); ++offset)
+        const int row_count          = std::max(0, std::min(data.total_lines - data.first_visible_line, data.viewport_line_count));
+        rendered_rows.reserve(static_cast<std::size_t>(row_count));
+
+        for (int row = 0; row < row_count; ++row)
         {
-            const int line_index      = data.first_visible_line + static_cast<int>(offset);
+            const int line_index = data.first_visible_line + row;
+
+            RenderedRow rendered_row;
+            rendered_row.text = controller.line_at(line_index);
+
             const bool is_find_match  = controller.find_active() && controller.visible_line_matches_find(processed_sources, line_index);
             const bool is_active_find = active_find_index.has_value() && active_find_index->value == line_index;
-
             if (is_find_match)
             {
-                TextViewLineDecoration decoration;
-                decoration.line_index       = line_index;
-                decoration.style.background = is_active_find ? theme::find_active_bg : theme::find_match_bg;
-                decoration.style.foreground = is_active_find ? theme::find_active_fg : theme::find_match_fg;
-                data.line_decorations.push_back(decoration);
+                TextViewStyle style;
+                style.background   = is_active_find ? theme::find_active_bg : theme::find_match_bg;
+                style.foreground   = is_active_find ? theme::find_active_fg : theme::find_match_fg;
+                rendered_row.style = style;
             }
+
+            rendered_rows.push_back(std::move(rendered_row));
         }
     }
 
-    auto log_view = _text_view.render(data) | ftxui::flex;
+    if (hidden_column_preview.has_value())
+    {
+        data.col_highlight.col_start = hidden_column_preview->start;
+        data.col_highlight.col_end   = hidden_column_preview->end;
+        data.col_highlight.color     = theme::hidden_columns_preview_bg;
+        data.col_highlight.active    = true;
+    }
+
+    const auto draw_content = [rendered_rows = std::move(rendered_rows)](ftxui::Canvas& canvas, int first_line, int line_count, int first_col, int col_count)
+    {
+        (void)first_line;
+
+        const int rendered_line_count = std::min(line_count, static_cast<int>(rendered_rows.size()));
+        for (int row = 0; row < rendered_line_count; ++row)
+        {
+            const auto& rendered_row = rendered_rows[static_cast<std::size_t>(row)];
+            if (first_col < static_cast<int>(rendered_row.text.size()))
+            {
+                canvas.DrawText(0, row * 4, rendered_row.text.substr(static_cast<std::size_t>(first_col), static_cast<std::size_t>(col_count)));
+            }
+
+            if (!rendered_row.style.has_value())
+            {
+                continue;
+            }
+
+            const int visible_width = std::min(col_count, std::max(0, static_cast<int>(rendered_row.text.size()) - first_col));
+            if (visible_width <= 0)
+            {
+                continue;
+            }
+
+            apply_style(canvas, row, 0, visible_width, *rendered_row.style);
+        }
+    };
+
+    auto log_view = _text_view.render(data, draw_content) | ftxui::flex;
 
     // Header with optional paused indicator
     ftxui::Element header;
@@ -206,12 +284,12 @@ ftxui::Element LogView::render(const ProcessedSources& processed_sources, LogCon
 
 std::optional<TextViewPosition> LogView::mouse_to_text_position(const LogController& controller, const ftxui::Mouse& mouse) const
 {
-    if (controller.text_view_model().line_count() == 0)
+    const auto data = controller.text_view_controller().render_data();
+    if (data.total_lines == 0)
     {
         return std::nullopt;
     }
 
-    const auto data = controller.text_view_controller().render_data();
     return _text_view.mouse_to_text_position(data, mouse);
 }
 

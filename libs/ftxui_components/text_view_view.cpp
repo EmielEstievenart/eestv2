@@ -86,27 +86,6 @@ void style_highlighted_columns(ftxui::Canvas& canvas, int row, const TextViewRen
     style_columns(canvas, row, vp_start, vp_end, style);
 }
 
-void style_line_decorations(ftxui::Canvas& canvas, int row, const TextViewRenderData& data)
-{
-    const int line_index = data.first_visible_line + row;
-    const auto& line     = data.visible_lines[static_cast<std::size_t>(row)];
-    const int line_width = std::min(static_cast<int>(line.size()), effective_viewport_col_count(data));
-    if (line_width <= 0)
-    {
-        return;
-    }
-
-    for (const TextViewLineDecoration& decoration : data.line_decorations)
-    {
-        if (decoration.line_index != line_index)
-        {
-            continue;
-        }
-
-        style_columns(canvas, row, 0, line_width, decoration.style);
-    }
-}
-
 void style_range_decorations(ftxui::Canvas& canvas, int row, const TextViewRenderData& data)
 {
     const int line_index = data.first_visible_line + row;
@@ -129,37 +108,33 @@ void style_range_decorations(ftxui::Canvas& canvas, int row, const TextViewRende
     }
 }
 
-ftxui::Element render_content(const TextViewRenderData& data)
+ftxui::Element render_content(const TextViewRenderData& data, const TextViewView::RenderCallback& draw_content)
 {
     const int viewport_lines = effective_viewport_line_count(data);
     const int viewport_cols  = effective_viewport_col_count(data);
+    const int visible_lines  = std::max(0, std::min(data.total_lines - data.first_visible_line, viewport_lines));
 
     return ftxui::canvas(viewport_cols * 2, viewport_lines * 4,
-                         [data](ftxui::Canvas& canvas)
+                         [data, draw_content, visible_lines, viewport_cols](ftxui::Canvas& canvas)
                          {
-                             if (data.total_lines == 0)
+                             for (int row = 0; row < visible_lines; ++row)
                              {
-                                 canvas.DrawText(0, 0, "<empty>", [](ftxui::Cell& cell) { cell.dim = true; });
-                                 return;
+                                 style_highlighted_columns(canvas, row, data);
                              }
 
-                             for (int row = 0; row < static_cast<int>(data.visible_lines.size()); ++row)
+                             if (draw_content)
                              {
-                                 // Style backgrounds first so later text and range decorations
-                                 // compose predictably.
-                                 style_highlighted_columns(canvas, row, data);
-                                 canvas.DrawText(0, row * 4, data.visible_lines[static_cast<std::size_t>(row)]);
-                                 style_line_decorations(canvas, row, data);
+                                 draw_content(canvas, data.first_visible_line, visible_lines, data.first_visible_col, viewport_cols);
+                             }
+
+                             for (int row = 0; row < visible_lines; ++row)
+                             {
                                  style_range_decorations(canvas, row, data);
                              }
                          });
 }
 
 } // namespace
-
-TextViewView::TextViewView(TextViewController& controller) : _controller(&controller)
-{
-}
 
 ftxui::Element TextViewView::render_scrollbar(const TextViewRenderData& data)
 {
@@ -235,31 +210,17 @@ TextViewRenderData TextViewView::normalize_render_data(TextViewRenderData data) 
     return data;
 }
 
-ftxui::Element TextViewView::render(const TextViewRenderData& input_data)
+ftxui::Element TextViewView::render(const TextViewRenderData& input_data, const RenderCallback& draw_content)
 {
     const TextViewRenderData data = normalize_render_data(input_data);
     return ftxui::vbox({
                ftxui::hbox({
-                   render_content(data) | ftxui::flex | ftxui::reflect(_content_box),
+                   render_content(data, draw_content) | ftxui::flex | ftxui::reflect(_content_box),
                    render_scrollbar(data),
                }) | ftxui::flex,
                render_hscrollbar(data),
            }) |
            ftxui::reflect(_box);
-}
-
-ftxui::Element TextViewView::component()
-{
-    if (_controller == nullptr)
-    {
-        return render({});
-    }
-
-    const int box_height = std::max(1, viewport_line_count());
-    const int box_width  = std::max(1, viewport_col_count());
-    _controller->update_viewport_line_count(box_height);
-    _controller->update_viewport_col_count(box_width);
-    return render(_controller->render_data());
 }
 
 int TextViewView::viewport_line_count() const
@@ -293,10 +254,9 @@ std::optional<TextViewPosition> TextViewView::mouse_to_text_position(const TextV
     }
 
     const int column = data.first_visible_col + std::max(0, mouse.x - _content_box.x_min);
-    const auto& line = data.visible_lines[static_cast<std::size_t>(row)];
 
     TextViewPosition position;
     position.line_index = line_index;
-    position.column     = std::clamp(column, data.first_visible_col, data.first_visible_col + static_cast<int>(line.size()));
+    position.column     = std::clamp(column, data.first_visible_col, data.max_line_width);
     return position;
 }
