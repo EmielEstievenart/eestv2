@@ -29,8 +29,7 @@ bool MasterController::handle_event(const ftxui::Event& event)
         return true;
     }
 
-    const auto result = _log_controller.handle_event(_model, event, _log_view.visible_line_count(_screen.dimy()), _log_view.visible_col_count(),
-                                                     [this](const ftxui::Mouse& mouse) { return _log_view.mouse_to_text_position(_model, _log_controller, mouse); });
+    const auto result = _log_controller.handle_event(_model, event, [this](const ftxui::Mouse& mouse) { return _log_view.mouse_to_text_position(_log_controller, mouse); });
 
     if (result.request_exit)
     {

@@ -184,9 +184,9 @@ ftxui::Element TextViewView::render_scrollbar(const TextViewRenderData& data)
                          {
                              for (int blk = 0; blk < total_block_rows; ++blk)
                              {
-                                 const bool        is_thumb = blk >= thumb_top_block && blk < (thumb_top_block + thumb_h_blocks);
-                                 const ftxui::Color color   = is_thumb ? ftxui::Color::White : ftxui::Color::GrayDark;
-                                 const int         y        = blk * 2;
+                                 const bool is_thumb      = blk >= thumb_top_block && blk < (thumb_top_block + thumb_h_blocks);
+                                 const ftxui::Color color = is_thumb ? ftxui::Color::White : ftxui::Color::GrayDark;
+                                 const int y              = blk * 2;
                                  canvas.DrawBlock(0, y, true, color);
                                  canvas.DrawBlock(1, y, true, color);
                              }
@@ -202,8 +202,8 @@ ftxui::Element TextViewView::render_hscrollbar(const TextViewRenderData& data)
         return ftxui::text("") | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, 0);
     }
 
-    const int thumb_width  = std::max(1, (viewport_cols * viewport_cols) / std::max(data.max_line_width, viewport_cols));
-    const int max_offset   = std::max(1, data.max_line_width - viewport_cols);
+    const int thumb_width = std::max(1, (viewport_cols * viewport_cols) / std::max(data.max_line_width, viewport_cols));
+    const int max_offset  = std::max(1, data.max_line_width - viewport_cols);
 
     // DrawBlock gives 2 block-columns per terminal column, enabling sub-character thumb positioning.
     const int total_block_cols   = viewport_cols * 2;
@@ -218,8 +218,8 @@ ftxui::Element TextViewView::render_hscrollbar(const TextViewRenderData& data)
                          {
                              for (int blk = 0; blk < total_block_cols; ++blk)
                              {
-                                 const bool         is_thumb = blk >= thumb_left_block && blk < (thumb_left_block + thumb_w_blocks);
-                                 const ftxui::Color color    = is_thumb ? ftxui::Color::White : ftxui::Color::GrayDark;
+                                 const bool is_thumb      = blk >= thumb_left_block && blk < (thumb_left_block + thumb_w_blocks);
+                                 const ftxui::Color color = is_thumb ? ftxui::Color::White : ftxui::Color::GrayDark;
                                  canvas.DrawBlock(blk, 0, true, color);
                              }
                          });
@@ -259,7 +259,7 @@ ftxui::Element TextViewView::component()
     const int box_width  = std::max(1, viewport_col_count());
     _controller->update_viewport_line_count(box_height);
     _controller->update_viewport_col_count(box_width);
-    return render(_controller->render_data(box_height));
+    return render(_controller->render_data());
 }
 
 int TextViewView::viewport_line_count() const

@@ -10,3 +10,7 @@ add_library(
 target_include_directories(ftxui_components PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(ftxui_components PUBLIC component)
+
+if(WIN32)
+  target_link_libraries(ftxui_components PRIVATE user32)
+endif()

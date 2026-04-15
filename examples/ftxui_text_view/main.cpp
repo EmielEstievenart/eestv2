@@ -14,20 +14,21 @@ int main()
 {
     auto screen = ScreenInteractive::Fullscreen();
 
-    TextViewModel model;
-    TextViewController controller(model);
-
-    std::vector<std::string> initial_lines;
-    initial_lines.reserve(200);
+    // The app owns the line data. The model is a non-owning view.
+    std::vector<std::string> lines;
+    lines.reserve(201);
     for (int i = 1; i <= 200; ++i)
     {
-        initial_lines.push_back("Line " + std::to_string(i) + " - this is sample content for scrolling.");
+        lines.push_back("Line " + std::to_string(i) + " - this is sample content for scrolling.");
     }
-    initial_lines.push_back("Line - this is sample content for scrolling. BUT ITS "
-                            "REEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                            "AAAAAAAAAAALLLLLLLLLLLYYYY LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOONNNNGGGG");
+    lines.push_back(
+        "Line - this is sample content for scrolling. BUT ITS "
+        "REEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        "AAAAAAAAAAALLLLLLLLLLLYYYY LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOONNNNGGGG");
 
-    controller.append_lines(initial_lines, 20);
+    TextViewModel model;
+    TextViewController controller(model);
+    controller.swap_lines(lines);
 
     // Highlight columns 5-9 ("1 - t" on line 1, the digit+separator region) in red.
     // Press 'h' at runtime to toggle the highlight on and off.
@@ -58,7 +59,12 @@ int main()
                                             controller.clear_background_column_range();
                                         return true;
                                     }
-                                    return controller.parse_event(event, screen.ExitLoopClosure());
+                                    auto result = controller.parse_event(event);
+                                    if (result.request_exit)
+                                    {
+                                        screen.Exit();
+                                    }
+                                    return result.handled;
                                 });
 
     screen.Loop(component);

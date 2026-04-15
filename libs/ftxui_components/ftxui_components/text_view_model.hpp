@@ -3,16 +3,20 @@
 #include <string>
 #include <vector>
 
+// Non-owning view over an externally-owned vector of strings.
+// The caller owns the data and must ensure the referenced vector outlives the model.
 class TextViewModel
 {
 public:
-    void append_line(std::string line);
-    void append_lines(const std::vector<std::string>& lines);
+    // Point the model at an externally-owned vector.
+    // The model does NOT take ownership -- the caller must keep the vector alive.
+    void set_lines(const std::vector<std::string>& lines);
 
+    [[nodiscard]] bool has_lines() const;
     [[nodiscard]] int line_count() const;
     [[nodiscard]] const std::string& line_at(int index) const;
     [[nodiscard]] int max_line_width() const;
 
 private:
-    std::vector<std::string> _lines;
+    const std::vector<std::string>* _lines = nullptr;
 };

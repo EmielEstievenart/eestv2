@@ -31,7 +31,7 @@ namespace
 constexpr std::string_view timestamp_formats_section = "timestamp_formats";
 constexpr std::string_view timestamp_format_key      = "format";
 
-void append_batch_to_model(const slayerlog::LogBatch& batch, slayerlog::LogModel& model, ftxui::ScreenInteractive& screen)
+void append_batch_to_model(const slayerlog::LogBatch& batch, slayerlog::LogModel& model, slayerlog::LogController& controller, ftxui::ScreenInteractive& screen)
 {
     if (batch.empty())
     {
@@ -39,13 +39,15 @@ void append_batch_to_model(const slayerlog::LogBatch& batch, slayerlog::LogModel
     }
 
     model.append_batch(batch);
+    controller.sync_view(model);
     screen.PostEvent(ftxui::Event::Custom);
 }
 
-std::thread start_watcher_thread(int poll_interval_ms, slayerlog::TrackedSourceManager& tracked_source_manager, std::mutex& model_mutex, slayerlog::LogModel& model, ftxui::ScreenInteractive& screen, std::atomic<bool>& keep_running)
+std::thread start_watcher_thread(int poll_interval_ms, slayerlog::TrackedSourceManager& tracked_source_manager, std::mutex& model_mutex, slayerlog::LogModel& model, slayerlog::LogController& controller, ftxui::ScreenInteractive& screen,
+                                 std::atomic<bool>& keep_running)
 {
     return std::thread(
-        [poll_interval_ms, tracked_source_manager = &tracked_source_manager, model_mutex = &model_mutex, model = &model, screen = &screen, keep_running = &keep_running]
+        [poll_interval_ms, tracked_source_manager = &tracked_source_manager, model_mutex = &model_mutex, model = &model, controller = &controller, screen = &screen, keep_running = &keep_running]
         {
             while (*keep_running)
             {
@@ -56,7 +58,7 @@ std::thread start_watcher_thread(int poll_interval_ms, slayerlog::TrackedSourceM
                 }
 
                 std::lock_guard lock(*model_mutex);
-                append_batch_to_model(tracked_source_manager->poll(), *model, *screen);
+                append_batch_to_model(tracked_source_manager->poll(), *model, *controller, *screen);
             }
         });
 }
@@ -123,17 +125,17 @@ int main(int argc, char** argv)
 
     slayerlog::CommandPaletteController command_palette_controller(command_palette_model, command_manager, command_history);
 
-    slayerlog::register_commands(command_manager, model, controller, [&] { return view.visible_line_count(screen.dimy()); }, command_palette_controller, header_text, screen, tracked_source_manager);
+    slayerlog::register_commands(command_manager, model, controller, command_palette_controller, header_text, screen, tracked_source_manager);
 
     slayerlog::MasterController master_controller(model, controller, view, screen, command_palette_controller);
 
     {
         std::lock_guard lock(model_mutex);
-        slayerlog::reload_model_from_manager(tracked_source_manager, header_text, model, screen);
+        slayerlog::reload_model_from_manager(tracked_source_manager, header_text, model, controller, screen);
     }
 
     std::atomic<bool> keep_running = true;
-    std::thread watcher_thread     = start_watcher_thread(config.poll_interval_ms, tracked_source_manager, model_mutex, model, screen, keep_running);
+    std::thread watcher_thread     = start_watcher_thread(config.poll_interval_ms, tracked_source_manager, model_mutex, model, controller, screen, keep_running);
 
     auto viewer = ftxui::Renderer(
         [&]

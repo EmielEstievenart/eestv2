@@ -77,8 +77,10 @@ TEST(MasterControllerTest, WhenPaletteOpenInputRoutesToPalette)
         ObservedLogLine {"alpha.log", "line two"},
         ObservedLogLine {"alpha.log", "line three"},
     });
-    controller.scroll_to_top(model, 1);
-    EXPECT_EQ(controller.first_visible_line_index(model, 1).value, 0);
+    controller.rebuild_view(model);
+    controller.text_view_controller().update_viewport_line_count(1);
+    controller.text_view_controller().scroll_to_top();
+    EXPECT_EQ(controller.text_view_controller().first_visible_line(), 0);
 
     CommandPaletteModel command_palette_model;
     CommandManager command_manager;
@@ -91,7 +93,7 @@ TEST(MasterControllerTest, WhenPaletteOpenInputRoutesToPalette)
     MasterController master_controller(model, controller, view, screen, command_palette_controller);
 
     EXPECT_TRUE(master_controller.handle_event(ftxui::Event::ArrowDown));
-    EXPECT_EQ(controller.first_visible_line_index(model, 1).value, 0);
+    EXPECT_EQ(controller.text_view_controller().first_visible_line(), 0);
 }
 
 TEST(MasterControllerTest, CtrlRTogglesHistoryModeWhilePaletteOpen)

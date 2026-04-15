@@ -3,16 +3,13 @@
 #include <functional>
 #include <optional>
 #include <string>
-#include <utility>
-
-#ifdef _WIN32
-#    ifndef NOMINMAX
-#        define NOMINMAX
-#    endif
-#endif
+#include <vector>
 
 #include <ftxui/component/event.hpp>
 #include <ftxui/component/mouse.hpp>
+
+#include <ftxui_components/text_view_controller.hpp>
+#include <ftxui_components/text_view_model.hpp>
 
 #include "log_model.hpp"
 
@@ -28,52 +25,55 @@ struct LogEventResult
 class LogController
 {
 public:
+    LogController();
+
     void reset();
 
-    VisibleLineIndex first_visible_line_index(const LogModel& model, int viewport_line_count) const;
+    // --- Content management ---
 
-    void scroll_up(const LogModel& model, int viewport_line_count, int amount = 1);
-    void scroll_down(const LogModel& model, int viewport_line_count, int amount = 1);
-    void scroll_left(int amount = 1);
-    void scroll_right(const LogModel& model, int viewport_col_count, int amount = 1);
-    void scroll_to_top(const LogModel& model, int viewport_line_count);
-    void scroll_to_bottom();
-    int first_visible_col(const LogModel& model, int viewport_col_count) const;
-    bool go_to_line(const LogModel& model, int line_number, int viewport_line_count);
+    // Full rebuild: renders all visible lines into inactive buffer, swaps to active.
+    // Call after filter changes, model resets, replace_batch, hide_columns, etc.
+    void rebuild_view(const LogModel& model);
 
-    bool set_find_query(LogModel& model, std::string query, int viewport_line_count);
+    // Incremental update: appends new rendered lines to active buffer.
+    // Call after append_batch / append_lines for streaming.
+    void sync_view(const LogModel& model);
+
+    // --- Domain-specific navigation ---
+
+    bool go_to_line(const LogModel& model, int line_number);
+
+    // --- Find ---
+
+    bool set_find_query(LogModel& model, std::string query);
     void clear_find(LogModel& model);
-    bool go_to_next_find_match(const LogModel& model, int viewport_line_count);
-    bool go_to_previous_find_match(const LogModel& model, int viewport_line_count);
+    bool go_to_next_find_match(const LogModel& model);
+    bool go_to_previous_find_match(const LogModel& model);
     std::optional<VisibleLineIndex> active_find_visible_index(const LogModel& model) const;
 
-    void begin_selection(const LogModel& model, TextPosition position);
-    void update_selection(const LogModel& model, TextPosition position);
-    void end_selection(const LogModel& model, std::optional<TextPosition> position);
-    void clear_selection();
-    bool selection_in_progress() const;
-    std::optional<std::pair<TextPosition, TextPosition>> selection_bounds(const LogModel& model) const;
-    std::string selection_text(const LogModel& model) const;
+    // --- Event handling ---
 
-    LogEventResult handle_event(LogModel& model, ftxui::Event event, int viewport_line_count, int viewport_col_count, const std::function<std::optional<TextPosition>(const ftxui::Mouse& mouse)>& mouse_to_text_position);
+    LogEventResult handle_event(LogModel& model, ftxui::Event event, const std::function<std::optional<TextViewPosition>(const ftxui::Mouse&)>& mouse_to_text_position);
+
+    // --- Access to underlying text view ---
+
+    TextViewController& text_view_controller();
+    const TextViewController& text_view_controller() const;
+    const TextViewModel& text_view_model() const;
 
 private:
-    bool copy_selection_to_clipboard(const LogModel& model) const;
+    std::vector<std::string>& active_buffer();
+    std::vector<std::string>& inactive_buffer();
 
-    int max_first_visible_line_index(const LogModel& model, int viewport_line_count) const;
-    int max_first_visible_col(const LogModel& model, int viewport_col_count) const;
-    void center_on_visible_line(const LogModel& model, VisibleLineIndex target_visible_index, int viewport_line_count);
-    TextPosition clamp_selection_position(const LogModel& model, TextPosition position) const;
+    TextViewModel _text_view_model;
+    TextViewController _text_view_controller;
 
-    VisibleLineIndex _first_visible_line_index {0};
-    int _first_visible_col = 0;
-    bool _follow_bottom    = true;
+    std::vector<std::string> _buffer_a;
+    std::vector<std::string> _buffer_b;
+    bool _active_buffer_is_a = true;
+    int _synced_line_count   = 0;
 
     std::optional<AllLineIndex> _active_find_entry_index;
-
-    bool _selection_in_progress = false;
-    std::optional<TextPosition> _selection_anchor;
-    std::optional<TextPosition> _selection_focus;
 };
 
 } // namespace slayerlog
