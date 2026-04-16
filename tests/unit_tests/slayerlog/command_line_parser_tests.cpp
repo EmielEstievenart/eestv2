@@ -135,9 +135,10 @@ TEST(CommandLineParserTest, BuildHelpTextIncludesRegisteredCommands)
     EXPECT_NE(help_text.find("Config Storage:"), std::string::npos);
     EXPECT_NE(help_text.find("Viewer Keys:"), std::string::npos);
     EXPECT_NE(help_text.find("Command Palette Controls:"), std::string::npos);
+    EXPECT_NE(help_text.find("Ctrl+F opens the command palette with find prefilled."), std::string::npos);
     EXPECT_NE(help_text.find("ssh://user@example.com/var/log/app.log"), std::string::npos);
     EXPECT_NE(help_text.find("app.log worker.log"), std::string::npos);
-    EXPECT_NE(help_text.find("supports positional sources and ssh://user@host/absolute/path.log"), std::string::npos);
+    EXPECT_NE(help_text.find("Source to open on startup."), std::string::npos);
     EXPECT_NE(help_text.find(default_settings_file_path().string()), std::string::npos);
     EXPECT_NE(help_text.find("Settings, command history, and timestamp formats are stored in:"), std::string::npos);
     EXPECT_NE(help_text.find("Windows default: %LOCALAPPDATA%/slayerlog/settings.ini"), std::string::npos);

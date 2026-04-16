@@ -135,6 +135,14 @@ void CommandPaletteController::open()
     refresh_matches();
 }
 
+void CommandPaletteController::open_with_query(std::string query)
+{
+    open();
+    _model.query           = std::move(query);
+    _model.cursor_position = _model.query.size();
+    refresh_matches();
+}
+
 void CommandPaletteController::open_history()
 {
     _model.open = true;

@@ -59,6 +59,23 @@ TEST(CommandPaletteControllerTest, OpenResetsSessionStateAndLoadsAllCommands)
     EXPECT_EQ(controller.model().matching_commands[1].name, "beta");
 }
 
+TEST(CommandPaletteControllerTest, OpenWithQueryPrefillsQueryAndRecomputesMatches)
+{
+    CommandManager manager;
+    manager.register_command({"find", "Find text", "find <text>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
+    manager.register_command({"filter-in", "Filter in", "filter-in <text>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
+
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+    controller.open_with_query("find error");
+
+    EXPECT_TRUE(controller.is_open());
+    EXPECT_EQ(controller.model().query, "find error");
+    EXPECT_EQ(controller.model().cursor_position, std::string("find error").size());
+    ASSERT_EQ(controller.model().matching_commands.size(), 1U);
+    EXPECT_EQ(controller.model().matching_commands[0].name, "find");
+}
+
 TEST(CommandPaletteControllerTest, CharacterInputUpdatesQueryAndMatchingCommands)
 {
     CommandManager manager;

@@ -142,6 +142,7 @@ std::string build_help_text(const CommandManager& command_manager)
     append_help_section(output, "Viewer Keys",
                         {
                             "Ctrl+P opens the command palette.",
+                            "Ctrl+F opens the command palette with find prefilled.",
                             "Ctrl+R opens command history from the main view or toggles history inside the palette.",
                             "Right jumps to the next visible find match; Left jumps to the previous one.",
                             "Esc clears the active find state.",

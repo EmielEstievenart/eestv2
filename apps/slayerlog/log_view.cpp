@@ -148,6 +148,8 @@ ftxui::Element build_key_hints()
     return ftxui::hbox({
         theme::key_hint("Ctrl+P", "commands"),
         sep(),
+        theme::key_hint("Ctrl+F", "find"),
+        sep(),
         theme::key_hint("Ctrl+R", "history"),
         sep(),
         theme::key_hint("\xe2\x86\x92", "next"),
