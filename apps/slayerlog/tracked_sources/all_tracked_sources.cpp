@@ -68,7 +68,7 @@ std::optional<std::string> AllTrackedSources::open_source(const LogSource& sourc
         {
             std::vector<std::string> lines;
             source_state.watcher->poll(lines);
-            source_state.tracked_source.add_entries_from_raw_strings(lines);
+            source_state.tracked_source.add_entries_from_raw_strings(std::move(lines));
         }
 
         _sources.push_back(std::move(source_state));
@@ -134,7 +134,7 @@ std::optional<AllLineIndex> AllTrackedSources::poll()
                 continue;
             }
 
-            source_state.tracked_source.add_entries_from_raw_strings(lines);
+            source_state.tracked_source.add_entries_from_raw_strings(std::move(lines));
             append_entries_to_batch(batch, source_state, source_index, first_new_entry_index);
         }
         catch (const std::exception& ex)

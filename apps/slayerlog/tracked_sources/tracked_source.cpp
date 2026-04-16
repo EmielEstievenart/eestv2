@@ -27,7 +27,9 @@ void TrackedSource::set_source_label(std::string source_label)
 
 void TrackedSource::add_entry_from_raw_string(std::string_view text)
 {
-    add_entry(ParsedLogLine {std::string(text), _timestamp_parser.parse(std::string(text))});
+    std::string owned_text(text);
+    auto timestamp = _timestamp_parser.parse(owned_text);
+    add_entry(ParsedLogLine {std::move(owned_text), std::move(timestamp)});
 }
 
 void TrackedSource::add_entry(ParsedLogLine line)
@@ -51,12 +53,13 @@ void TrackedSource::add_entry(ParsedLogLine line)
     });
 }
 
-void TrackedSource::add_entries_from_raw_strings(const std::vector<std::string>& lines)
+void TrackedSource::add_entries_from_raw_strings(std::vector<std::string> lines)
 {
     _entries.reserve(_entries.size() + lines.size());
-    for (const auto& line : lines)
+    for (auto& line : lines)
     {
-        add_entry_from_raw_string(line);
+        auto timestamp = _timestamp_parser.parse(line);
+        add_entry(ParsedLogLine {std::move(line), std::move(timestamp)});
     }
 }
 

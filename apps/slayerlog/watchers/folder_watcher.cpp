@@ -134,12 +134,12 @@ std::vector<ParsedLogLine> FolderWatcher::poll_parsed_lines()
         }
 
         batch.reserve(batch.size() + child_lines.size());
-        for (const auto& line : child_lines)
+        for (auto& line : child_lines)
         {
             const auto parsed_timestamp = child.timestamp_parser.parse(line);
             LogBatchEntry batch_entry;
             batch_entry.source_index = source_index;
-            batch_entry.text         = line;
+            batch_entry.text         = std::move(line);
             if (parsed_timestamp.has_value())
             {
                 batch_entry.timestamp        = parsed_timestamp->time_point;
@@ -162,19 +162,19 @@ std::vector<ParsedLogLine> FolderWatcher::poll_parsed_lines()
         return {};
     }
 
-    const auto merged = merge_log_batch(batch);
+    auto merged = merge_log_batch(batch);
     std::vector<ParsedLogLine> lines;
     lines.reserve(merged.size());
-    for (const auto& line : merged)
+    for (auto& line : merged)
     {
         ParsedLogLine parsed_line;
-        parsed_line.text = line.text;
+        parsed_line.text = std::move(line.text);
         if (line.timestamp.has_value())
         {
             parsed_line.timestamp = ParsedLogTimestamp {
                 *line.timestamp,
                 {},
-                line.parsed_time_text,
+                std::move(line.parsed_time_text),
             };
         }
 

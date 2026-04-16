@@ -16,8 +16,9 @@ namespace slayerlog
 
 struct LogEntry
 {
-    std::string raw_text;
-    std::optional<LogTimePoint> timestamp;
+
+    std::string raw_text;                  /*The unmodified text.*/
+    std::optional<LogTimePoint> timestamp; /*The extracted timestamp, if any. */
     std::string extracted_timestamp_text;
     std::string parsed_timestamp_text;
     std::uint64_t sequence_number = 0;
@@ -34,7 +35,7 @@ public:
 
     void add_entry_from_raw_string(std::string_view text);
     void add_entry(ParsedLogLine line);
-    void add_entries_from_raw_strings(const std::vector<std::string>& lines);
+    void add_entries_from_raw_strings(std::vector<std::string> lines);
     void add_entries(std::vector<ParsedLogLine> lines);
 
     const std::vector<LogEntry>& entries() const;
