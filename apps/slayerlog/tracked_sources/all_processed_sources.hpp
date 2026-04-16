@@ -18,6 +18,13 @@ class AllTrackedSources;
 class AllProcessedSources
 {
 public:
+    struct FilterSelection
+    {
+        bool include      = true;
+        std::size_t index = 0;
+        std::string text;
+    };
+
     void reset();
 
     void append_lines(const std::vector<ObservedLogLine>& lines);
@@ -33,8 +40,10 @@ public:
     void add_include_filter(std::string filter_text);
     void add_exclude_filter(std::string filter_text);
     void reset_filters();
+    bool remove_filters(const std::vector<FilterSelection>& filters);
     const std::vector<std::string>& include_filters() const;
     const std::vector<std::string>& exclude_filters() const;
+    std::vector<FilterSelection> all_filters() const;
     void hide_before_line_number(int line_number);
     std::optional<int> hidden_before_line_number() const;
     void hide_columns(int start_column, int end_column);

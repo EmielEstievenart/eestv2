@@ -91,4 +91,71 @@ TEST(CommandRegistrarTest, ExportVisibleTextWritesAllVisibleRenderedLines)
     remove_temp_export_file(export_path);
 }
 
+TEST(CommandRegistrarTest, DeleteFiltersCommandOpensPickerAndRemovesSelectedFilters)
+{
+    AllProcessedSources processed_sources;
+    processed_sources.append_lines({
+        ObservedLogLine {"alpha.log", "show keep alpha"},
+        ObservedLogLine {"alpha.log", "hide beta"},
+        ObservedLogLine {"alpha.log", "show gamma"},
+    });
+    processed_sources.add_include_filter("show");
+    processed_sources.add_include_filter("gamma");
+    processed_sources.add_exclude_filter("beta");
+
+    CommandManager command_manager;
+    LogController controller;
+    CommandPaletteModel command_palette_model;
+    CommandPaletteController command_palette_controller(command_palette_model, command_manager);
+    std::string header_text;
+    auto screen = ftxui::ScreenInteractive::FixedSize(80, 24);
+    AllTrackedSources tracked_sources;
+    register_commands(command_manager, processed_sources, controller, command_palette_controller, header_text, screen, tracked_sources);
+
+    const auto result = command_manager.execute("delete-filters");
+
+    EXPECT_TRUE(result.success);
+    EXPECT_FALSE(result.close_palette_on_success);
+    EXPECT_EQ(result.message, "Mark filters to delete and press Enter");
+    ASSERT_TRUE(command_palette_controller.is_open());
+    EXPECT_EQ(command_palette_controller.model().mode, CommandPaletteMode::DeleteFilters);
+    ASSERT_EQ(command_palette_controller.model().filter_picker_entries.size(), 3U);
+    EXPECT_EQ(command_palette_controller.model().filter_picker_entries[0].label, "show");
+    EXPECT_EQ(command_palette_controller.model().filter_picker_entries[1].label, "gamma");
+    EXPECT_EQ(command_palette_controller.model().filter_picker_entries[2].label, "beta");
+    EXPECT_TRUE(command_palette_controller.model().filter_picker_entries[0].include);
+    EXPECT_TRUE(command_palette_controller.model().filter_picker_entries[1].include);
+    EXPECT_FALSE(command_palette_controller.model().filter_picker_entries[2].include);
+
+    ASSERT_TRUE(command_palette_controller.handle_event(ftxui::Event::Character(" ")));
+    ASSERT_TRUE(command_palette_controller.handle_event(ftxui::Event::ArrowDown));
+    ASSERT_TRUE(command_palette_controller.handle_event(ftxui::Event::ArrowDown));
+    ASSERT_TRUE(command_palette_controller.handle_event(ftxui::Event::Character(" ")));
+    ASSERT_TRUE(command_palette_controller.handle_event(ftxui::Event::Return));
+
+    EXPECT_FALSE(command_palette_controller.is_open());
+    EXPECT_EQ(processed_sources.include_filters().size(), 1U);
+    EXPECT_EQ(processed_sources.include_filters()[0], "gamma");
+    EXPECT_TRUE(processed_sources.exclude_filters().empty());
+}
+
+TEST(CommandRegistrarTest, DeleteFiltersCommandFailsWhenNoFiltersExist)
+{
+    AllProcessedSources processed_sources;
+
+    CommandManager command_manager;
+    LogController controller;
+    CommandPaletteModel command_palette_model;
+    CommandPaletteController command_palette_controller(command_palette_model, command_manager);
+    std::string header_text;
+    auto screen = ftxui::ScreenInteractive::FixedSize(80, 24);
+    AllTrackedSources tracked_sources;
+    register_commands(command_manager, processed_sources, controller, command_palette_controller, header_text, screen, tracked_sources);
+
+    const auto result = command_manager.execute("delete-filters");
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.message, "No filters to delete");
+}
+
 } // namespace slayerlog

@@ -496,4 +496,58 @@ TEST(CommandPaletteControllerTest, CloseOpenFilePickerEscapeCancels)
     EXPECT_FALSE(handler_called);
 }
 
+TEST(CommandPaletteControllerTest, DeleteFiltersPickerTogglesMultipleSelectionsAndExecutesHandler)
+{
+    CommandManager manager;
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+
+    std::vector<CommandPaletteModel::FilterPickerEntry> selected_filters;
+    controller.open_delete_filters_picker({{"alpha", true, 0, false}, {"beta", false, 0, false}, {"gamma", true, 1, false}},
+                                          [&](const std::vector<CommandPaletteModel::FilterPickerEntry>& filters)
+                                          {
+                                              selected_filters = filters;
+                                              return CommandResult {true, "Deleted"};
+                                          });
+
+    ASSERT_TRUE(controller.is_open());
+    EXPECT_EQ(controller.model().mode, CommandPaletteMode::DeleteFilters);
+    ASSERT_EQ(controller.model().filter_picker_entries.size(), 3U);
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Character(" ")));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::ArrowDown));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::ArrowDown));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Character(" ")));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Return));
+
+    ASSERT_EQ(selected_filters.size(), 2U);
+    EXPECT_EQ(selected_filters[0].label, "alpha");
+    EXPECT_TRUE(selected_filters[0].include);
+    EXPECT_EQ(selected_filters[1].label, "gamma");
+    EXPECT_TRUE(selected_filters[1].include);
+    EXPECT_FALSE(controller.is_open());
+}
+
+TEST(CommandPaletteControllerTest, DeleteFiltersPickerRejectsEnterWhenNothingSelected)
+{
+    CommandManager manager;
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+
+    bool handler_called = false;
+    controller.open_delete_filters_picker({{"alpha", true, 0, false}},
+                                          [&](const std::vector<CommandPaletteModel::FilterPickerEntry>&)
+                                          {
+                                              handler_called = true;
+                                              return CommandResult {true, "Deleted"};
+                                          });
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::Return));
+
+    EXPECT_TRUE(controller.is_open());
+    EXPECT_FALSE(handler_called);
+    EXPECT_TRUE(controller.model().status_is_error);
+    EXPECT_EQ(controller.model().status_message, "No filters are marked for deletion.");
+}
+
 } // namespace slayerlog

@@ -216,6 +216,81 @@ void AllProcessedSources::reset_filters()
     rebuild_visible_entries();
 }
 
+bool AllProcessedSources::remove_filters(const std::vector<FilterSelection>& filters)
+{
+    if (filters.empty())
+    {
+        return false;
+    }
+
+    std::vector<std::size_t> include_indices;
+    std::vector<std::size_t> exclude_indices;
+    include_indices.reserve(filters.size());
+    exclude_indices.reserve(filters.size());
+
+    for (const auto& filter : filters)
+    {
+        if (filter.include)
+        {
+            if (filter.index >= _include_filters.size())
+            {
+                return false;
+            }
+
+            include_indices.push_back(filter.index);
+        }
+        else
+        {
+            if (filter.index >= _exclude_filters.size())
+            {
+                return false;
+            }
+
+            exclude_indices.push_back(filter.index);
+        }
+    }
+
+    std::sort(include_indices.begin(), include_indices.end());
+    include_indices.erase(std::unique(include_indices.begin(), include_indices.end()), include_indices.end());
+    std::sort(exclude_indices.begin(), exclude_indices.end());
+    exclude_indices.erase(std::unique(exclude_indices.begin(), exclude_indices.end()), exclude_indices.end());
+
+    auto erase_selected = [](auto& values, const std::vector<std::size_t>& selected_indices)
+    {
+        if (selected_indices.empty())
+        {
+            return;
+        }
+
+        std::size_t next_selected = 0;
+        std::size_t write_index   = 0;
+        for (std::size_t read_index = 0; read_index < values.size(); ++read_index)
+        {
+            if (next_selected < selected_indices.size() && read_index == selected_indices[next_selected])
+            {
+                ++next_selected;
+                continue;
+            }
+
+            if (write_index != read_index)
+            {
+                values[write_index] = std::move(values[read_index]);
+            }
+
+            ++write_index;
+        }
+
+        values.resize(write_index);
+    };
+
+    erase_selected(_include_filters, include_indices);
+    erase_selected(_include_filter_patterns, include_indices);
+    erase_selected(_exclude_filters, exclude_indices);
+    erase_selected(_exclude_filter_patterns, exclude_indices);
+    rebuild_visible_entries();
+    return true;
+}
+
 const std::vector<std::string>& AllProcessedSources::include_filters() const
 {
     return _include_filters;
@@ -224,6 +299,24 @@ const std::vector<std::string>& AllProcessedSources::include_filters() const
 const std::vector<std::string>& AllProcessedSources::exclude_filters() const
 {
     return _exclude_filters;
+}
+
+std::vector<AllProcessedSources::FilterSelection> AllProcessedSources::all_filters() const
+{
+    std::vector<FilterSelection> filters;
+    filters.reserve(_include_filters.size() + _exclude_filters.size());
+
+    for (std::size_t index = 0; index < _include_filters.size(); ++index)
+    {
+        filters.push_back(FilterSelection {true, index, _include_filters[index]});
+    }
+
+    for (std::size_t index = 0; index < _exclude_filters.size(); ++index)
+    {
+        filters.push_back(FilterSelection {false, index, _exclude_filters[index]});
+    }
+
+    return filters;
 }
 
 void AllProcessedSources::hide_before_line_number(int line_number)

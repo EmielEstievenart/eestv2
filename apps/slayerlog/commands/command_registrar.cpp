@@ -225,6 +225,47 @@ CommandResult close_open_file_command(CommandPaletteController& command_palette_
     return CommandResult {true, "Select a file to close", false};
 }
 
+std::vector<CommandPaletteModel::FilterPickerEntry> build_filter_picker_entries(const AllProcessedSources& processed_sources)
+{
+    std::vector<CommandPaletteModel::FilterPickerEntry> entries;
+    for (const auto& filter : processed_sources.all_filters())
+    {
+        entries.push_back(CommandPaletteModel::FilterPickerEntry {filter.text, filter.include, filter.index, false});
+    }
+
+    return entries;
+}
+
+CommandResult delete_filters_command(CommandPaletteController& command_palette_controller, AllProcessedSources& processed_sources, LogController& controller)
+{
+    const auto filter_entries = build_filter_picker_entries(processed_sources);
+    if (filter_entries.empty())
+    {
+        return CommandResult {false, "No filters to delete"};
+    }
+
+    command_palette_controller.open_delete_filters_picker(filter_entries,
+                                                          [&](const std::vector<CommandPaletteModel::FilterPickerEntry>& selected_filters) -> CommandResult
+                                                          {
+                                                              std::vector<AllProcessedSources::FilterSelection> filters_to_remove;
+                                                              filters_to_remove.reserve(selected_filters.size());
+                                                              for (const auto& filter : selected_filters)
+                                                              {
+                                                                  filters_to_remove.push_back(AllProcessedSources::FilterSelection {filter.include, filter.filter_index, filter.label});
+                                                              }
+
+                                                              if (!processed_sources.remove_filters(filters_to_remove))
+                                                              {
+                                                                  return CommandResult {false, "Failed to delete selected filters"};
+                                                              }
+
+                                                              controller.rebuild_view(processed_sources);
+                                                              return CommandResult {true, "Deleted " + std::to_string(filters_to_remove.size()) + " filter" + (filters_to_remove.size() == 1 ? "" : "s")};
+                                                          });
+
+    return CommandResult {true, "Mark filters to delete and press Enter", false};
+}
+
 } // namespace
 
 void register_commands(CommandManager& command_manager, AllProcessedSources& processed_sources, LogController& controller, CommandPaletteController& command_palette_controller, std::string& header_text, ftxui::ScreenInteractive& screen,
@@ -299,6 +340,24 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          processed_sources.reset_filters();
                                          controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Cleared all filters"};
+                                     });
+
+    command_manager.register_command({"delete-filters",
+                                      "Delete one or more active filters",
+                                      "delete-filters",
+                                      {
+                                          "Open a picker containing every active filter.",
+                                          "Use Up/Down to select a filter, Space to mark it, and Enter to delete the marked filters.",
+                                          "Each filter is labeled with (in) or (out).",
+                                      }},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!trim_text(arguments).empty())
+                                         {
+                                             return CommandResult {false, "Usage: delete-filters"};
+                                         }
+
+                                         return delete_filters_command(command_palette_controller, processed_sources, controller);
                                      });
 
     command_manager.register_command({"clear-filters", "Alias for reset-filters", "clear-filters"},

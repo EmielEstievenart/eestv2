@@ -127,7 +127,9 @@ void CommandPaletteController::open()
     _model.mode = CommandPaletteMode::Commands;
     _model.query.clear();
     _model.open_files.clear();
+    _model.filter_picker_entries.clear();
     _close_open_file_selection_handler = {};
+    _delete_filters_selection_handler  = {};
     _model.cursor_position             = 0;
     _model.selected_index              = 0;
     _model.status_message.clear();
@@ -149,7 +151,9 @@ void CommandPaletteController::open_history()
     _model.mode = CommandPaletteMode::History;
     _model.query.clear();
     _model.open_files.clear();
+    _model.filter_picker_entries.clear();
     _close_open_file_selection_handler = {};
+    _delete_filters_selection_handler  = {};
     _model.cursor_position             = 0;
     _model.selected_index              = 0;
     _model.status_message.clear();
@@ -162,8 +166,26 @@ void CommandPaletteController::open_close_open_file_picker(std::vector<std::stri
     _model.open = true;
     _model.mode = CommandPaletteMode::CloseOpenFile;
     _model.query.clear();
-    _model.open_files                  = std::move(open_files);
+    _model.open_files = std::move(open_files);
+    _model.filter_picker_entries.clear();
     _close_open_file_selection_handler = std::move(on_confirm);
+    _delete_filters_selection_handler  = {};
+    _model.cursor_position             = 0;
+    _model.selected_index              = 0;
+    _model.status_message.clear();
+    _model.status_is_error = false;
+    refresh_matches();
+}
+
+void CommandPaletteController::open_delete_filters_picker(std::vector<CommandPaletteModel::FilterPickerEntry> filters, std::function<CommandResult(const std::vector<CommandPaletteModel::FilterPickerEntry>& selected_filters)> on_confirm)
+{
+    _model.open = true;
+    _model.mode = CommandPaletteMode::DeleteFilters;
+    _model.query.clear();
+    _model.open_files.clear();
+    _model.filter_picker_entries       = std::move(filters);
+    _close_open_file_selection_handler = {};
+    _delete_filters_selection_handler  = std::move(on_confirm);
     _model.cursor_position             = 0;
     _model.selected_index              = 0;
     _model.status_message.clear();
@@ -177,7 +199,9 @@ void CommandPaletteController::close()
     _model.mode = CommandPaletteMode::Commands;
     _model.query.clear();
     _model.open_files.clear();
+    _model.filter_picker_entries.clear();
     _close_open_file_selection_handler = {};
+    _delete_filters_selection_handler  = {};
     _model.cursor_position             = 0;
     _model.selected_index              = 0;
     refresh_matches();
@@ -196,8 +220,9 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
     }
 
     const bool close_open_file_mode = _model.mode == CommandPaletteMode::CloseOpenFile;
+    const bool delete_filters_mode  = _model.mode == CommandPaletteMode::DeleteFilters;
 
-    if (_command_history != nullptr && event == ftxui::Event::CtrlR && !close_open_file_mode)
+    if (_command_history != nullptr && event == ftxui::Event::CtrlR && !close_open_file_mode && !delete_filters_mode)
     {
         _model.mode           = _model.mode == CommandPaletteMode::Commands ? CommandPaletteMode::History : CommandPaletteMode::Commands;
         _model.selected_index = 0;
@@ -219,7 +244,20 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
         return true;
     }
 
-    if (close_open_file_mode && event != ftxui::Event::Return)
+    if (delete_filters_mode && event == ftxui::Event::Character(" "))
+    {
+        if (_model.selected_index >= 0 && static_cast<std::size_t>(_model.selected_index) < _model.filter_picker_entries.size())
+        {
+            auto& entry    = _model.filter_picker_entries[static_cast<std::size_t>(_model.selected_index)];
+            entry.selected = !entry.selected;
+            _model.status_message.clear();
+            _model.status_is_error = false;
+        }
+
+        return true;
+    }
+
+    if ((close_open_file_mode || delete_filters_mode) && event != ftxui::Event::Return)
     {
         return true;
     }
@@ -287,6 +325,10 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
         else if (_model.mode == CommandPaletteMode::CloseOpenFile)
         {
             result = execute_close_open_file_selection();
+        }
+        else if (_model.mode == CommandPaletteMode::DeleteFilters)
+        {
+            result = execute_delete_filters_selection();
         }
         else
         {
@@ -358,6 +400,7 @@ void CommandPaletteController::refresh_matches()
     {
         _model.matching_commands.clear();
         _model.open_files.clear();
+        _model.filter_picker_entries.clear();
         if (_command_history != nullptr)
         {
             _model.matching_history_entries = _command_history->matching_entries(_model.query);
@@ -371,12 +414,14 @@ void CommandPaletteController::refresh_matches()
     {
         _model.matching_history_entries.clear();
         _model.open_files.clear();
+        _model.filter_picker_entries.clear();
         _model.matching_commands = _command_manager.matching_commands(_model.query);
     }
     else
     {
         _model.matching_history_entries.clear();
         _model.matching_commands.clear();
+        _model.open_files.clear();
     }
 
     if (active_match_count() == 0)
@@ -423,6 +468,11 @@ std::size_t CommandPaletteController::active_match_count() const
     if (_model.mode == CommandPaletteMode::CloseOpenFile)
     {
         return _model.open_files.size();
+    }
+
+    if (_model.mode == CommandPaletteMode::DeleteFilters)
+    {
+        return _model.filter_picker_entries.size();
     }
 
     return _model.matching_commands.size();
@@ -526,6 +576,30 @@ CommandResult CommandPaletteController::execute_close_open_file_selection()
     }
 
     return _close_open_file_selection_handler(static_cast<std::size_t>(_model.selected_index));
+}
+
+CommandResult CommandPaletteController::execute_delete_filters_selection()
+{
+    if (_delete_filters_selection_handler == nullptr)
+    {
+        return {false, "No delete-filters handler is configured."};
+    }
+
+    std::vector<CommandPaletteModel::FilterPickerEntry> selected_filters;
+    for (const auto& entry : _model.filter_picker_entries)
+    {
+        if (entry.selected)
+        {
+            selected_filters.push_back(entry);
+        }
+    }
+
+    if (selected_filters.empty())
+    {
+        return {false, "No filters are marked for deletion."};
+    }
+
+    return _delete_filters_selection_handler(selected_filters);
 }
 
 bool CommandPaletteController::record_successful_command(std::string_view command_line)
