@@ -17,6 +17,7 @@ struct ObservedLogLine
     std::string text;
     std::optional<LogTimePoint> timestamp;
     std::string parsed_time_text;
+    std::string extracted_time_text;
 };
 
 struct LogBatchEntry
@@ -27,6 +28,7 @@ struct LogBatchEntry
     std::optional<LogTimePoint> timestamp;
     std::uint64_t source_sequence_number = 0;
     std::string parsed_time_text;
+    std::string extracted_time_text;
 };
 
 using LogBatch = std::vector<LogBatchEntry>;

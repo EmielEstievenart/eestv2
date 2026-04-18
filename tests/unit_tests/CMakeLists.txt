@@ -17,7 +17,6 @@ add_executable(
   data_bridge/data_bridge_cli_tests.cpp
   flags/flags_tests.cpp
   slayerlog/file_watcher_tests.cpp
-  slayerlog/folder_watcher_tests.cpp
   slayerlog/zstd_file_watcher_tests.cpp
   slayerlog/log_source_tests.cpp
   slayerlog/tracked_source_tests.cpp
@@ -62,7 +61,6 @@ add_executable(
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/process_pipe.cpp
-   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/folder_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.cpp

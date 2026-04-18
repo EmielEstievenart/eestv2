@@ -62,7 +62,7 @@ std::vector<ObservedLogLine> merge_log_batch(const LogBatch& batch)
                     break;
                 }
 
-                merged_lines.push_back({entry.source_label, entry.text, entry.timestamp, entry.parsed_time_text});
+                merged_lines.push_back({entry.source_label, entry.text, entry.timestamp, entry.parsed_time_text, entry.extracted_time_text});
                 advance_source(source_state);
             }
         }
@@ -103,7 +103,7 @@ std::vector<ObservedLogLine> merge_log_batch(const LogBatch& batch)
 
         auto& source_state = source_states[*next_source_index];
         const auto& entry  = current_entry(source_state);
-        merged_lines.push_back({entry.source_label, entry.text, entry.timestamp, entry.parsed_time_text});
+        merged_lines.push_back({entry.source_label, entry.text, entry.timestamp, entry.parsed_time_text, entry.extracted_time_text});
         advance_source(source_state);
     }
 

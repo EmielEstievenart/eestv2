@@ -54,8 +54,6 @@ add_executable(
   watchers/stream_line_buffer.cpp
   watchers/stream_line_buffer.hpp
   watchers/log_watcher_base.hpp
-  watchers/folder_watcher.cpp
-  watchers/folder_watcher.hpp
   watchers/file_watcher.cpp
   watchers/file_watcher.hpp
   watchers/zstd_file_watcher.cpp

@@ -15,7 +15,6 @@
 namespace slayerlog
 {
 
-class LogWatcherBase;
 class TrackedSource;
 
 class AllTrackedSources
@@ -40,7 +39,6 @@ public:
 private:
     struct SourceState;
 
-    std::unique_ptr<LogWatcherBase> create_watcher_for_source(const LogSource& source) const;
     bool contains_source(const LogSource& candidate_source) const;
     void rebuild_source_labels();
     void rebuild_all_lines();

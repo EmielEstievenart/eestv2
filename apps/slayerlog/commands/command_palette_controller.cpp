@@ -417,6 +417,18 @@ void CommandPaletteController::refresh_matches()
         _model.filter_picker_entries.clear();
         _model.matching_commands = _command_manager.matching_commands(_model.query);
     }
+    else if (_model.mode == CommandPaletteMode::CloseOpenFile)
+    {
+        _model.matching_history_entries.clear();
+        _model.matching_commands.clear();
+        _model.filter_picker_entries.clear();
+    }
+    else if (_model.mode == CommandPaletteMode::DeleteFilters)
+    {
+        _model.matching_history_entries.clear();
+        _model.matching_commands.clear();
+        _model.open_files.clear();
+    }
     else
     {
         _model.matching_history_entries.clear();
