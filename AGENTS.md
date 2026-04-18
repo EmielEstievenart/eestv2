@@ -5,7 +5,6 @@
 
 ## Build, Test, and Development Commands
 Set `BOOST_ROOT` to a Boost source checkout before configuring; this project uses `add_subdirectory()` for Boost.
-If you are an AI agent working in a sandboxed environment, run all `cmake --preset ...`, `cmake --build ...`, and related configure/build commands outside the sandbox.
 
 ```bash
 cmake --preset windows-clang-debug
