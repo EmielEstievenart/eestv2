@@ -449,7 +449,7 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          processed_sources.set_show_original_time(true);
                                          controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Showing original detected timestamps in messages"};
-                                     });
+                                      });
 
     command_manager.register_command({"hide-original-time",
                                       "Hide detected timestamp in original text",
@@ -467,6 +467,42 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          processed_sources.set_show_original_time(false);
                                          controller.rebuild_view(processed_sources);
                                          return CommandResult {true, "Hiding original detected timestamps in messages"};
+                                      });
+
+    command_manager.register_command({"show-identical-lines",
+                                      "Show identical messages line-by-line",
+                                      "show-identical-lines",
+                                      {
+                                          "Render every matching message row instead of collapsing identical rows.",
+                                      }},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!trim_text(arguments).empty())
+                                         {
+                                             return CommandResult {false, "Usage: show-identical-lines"};
+                                         }
+
+                                         processed_sources.set_hide_identical_lines(false);
+                                         controller.rebuild_view(processed_sources);
+                                         return CommandResult {true, "Showing identical messages"};
+                                     });
+
+    command_manager.register_command({"hide-identical-lines",
+                                      "Hide repeated identical messages",
+                                      "hide-identical-lines",
+                                      {
+                                          "Keep the first occurrence and show a summary row for identical messages above.",
+                                      }},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!trim_text(arguments).empty())
+                                         {
+                                             return CommandResult {false, "Usage: hide-identical-lines"};
+                                         }
+
+                                         processed_sources.set_hide_identical_lines(true);
+                                         controller.rebuild_view(processed_sources);
+                                         return CommandResult {true, "Hiding identical messages"};
                                      });
 
     command_manager.register_command({"open-file",

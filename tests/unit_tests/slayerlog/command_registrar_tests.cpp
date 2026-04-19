@@ -122,6 +122,40 @@ TEST(CommandRegistrarTest, ShowAndHideOriginalTimeCommandsToggleRenderedMessage)
     EXPECT_EQ(processed_sources.rendered_line(0), "1 {2026-04-01 10:00:00} INFO  hello");
 }
 
+TEST(CommandRegistrarTest, ShowAndHideIdenticalLinesCommandsToggleCollapsing)
+{
+    AllProcessedSources processed_sources;
+    LogEntry first  {"alpha.log", "INFO 2026-04-01 10:00:00 hello"};
+    LogEntry second {"alpha.log", "INFO 2026-04-01 10:00:01 hello"};
+    first.metadata.extracted_time_start  = 5;
+    first.metadata.extracted_time_end    = 24;
+    second.metadata.extracted_time_start = 5;
+    second.metadata.extracted_time_end   = 24;
+    processed_sources.append_lines({first, second});
+
+    CommandManager command_manager;
+    LogController controller;
+    CommandPaletteModel command_palette_model;
+    CommandPaletteController command_palette_controller(command_palette_model, command_manager);
+    std::string header_text;
+    auto screen = ftxui::ScreenInteractive::FixedSize(80, 24);
+    AllTrackedSources tracked_sources;
+    register_commands(command_manager, processed_sources, controller, command_palette_controller, header_text, screen, tracked_sources);
+
+    ASSERT_EQ(processed_sources.line_count(), 2);
+    EXPECT_EQ(processed_sources.rendered_line(1), "  hiding 1 identical messages above");
+
+    const auto show_result = command_manager.execute("show-identical-lines");
+    EXPECT_TRUE(show_result.success);
+    EXPECT_EQ(show_result.message, "Showing identical messages");
+    EXPECT_EQ(processed_sources.rendered_line(1), "2 INFO  hello");
+
+    const auto hide_result = command_manager.execute("hide-identical-lines");
+    EXPECT_TRUE(hide_result.success);
+    EXPECT_EQ(hide_result.message, "Hiding identical messages");
+    EXPECT_EQ(processed_sources.rendered_line(1), "  hiding 1 identical messages above");
+}
+
 TEST(CommandRegistrarTest, BuildHeaderTextIncludesNumberedSourceTags)
 {
     EXPECT_EQ(build_header_text({}), "No files opened (use open-file <path> or open-folder <path>)");

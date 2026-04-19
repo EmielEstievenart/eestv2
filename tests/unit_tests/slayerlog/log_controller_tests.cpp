@@ -29,6 +29,14 @@ std::vector<LogEntry> numbered_lines(int count)
     return lines;
 }
 
+LogEntry timestamped_entry(std::string text)
+{
+    LogEntry entry {"alpha.log", std::move(text)};
+    entry.metadata.extracted_time_start = 5;
+    entry.metadata.extracted_time_end   = 24;
+    return entry;
+}
+
 } // namespace
 
 TEST(LogControllerTest, ScrollStateTracksViewportAndFollowBottom)
@@ -76,6 +84,26 @@ TEST(LogControllerTest, GoToLineCentersVisibleContentAndFailsForHiddenLine)
     EXPECT_FALSE(controller.go_to_line(model, 1));
 }
 
+TEST(LogControllerTest, GoToLineTargetsCollapsedIdenticalRows)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        timestamped_entry("INFO 2026-04-01 10:00:00 hello"),
+        timestamped_entry("INFO 2026-04-01 10:00:01 hello"),
+        timestamped_entry("INFO 2026-04-01 10:00:02 hello"),
+        timestamped_entry("INFO 2026-04-01 10:00:03 world"),
+    });
+    controller.rebuild_view(model);
+    controller.text_view_controller().update_viewport_line_count(1);
+
+    ASSERT_TRUE(controller.go_to_line(model, 2));
+    EXPECT_EQ(controller.text_view_controller().first_visible_line(), 1);
+
+    ASSERT_TRUE(controller.go_to_line(model, 3));
+    EXPECT_EQ(controller.text_view_controller().first_visible_line(), 1);
+}
+
 TEST(LogControllerTest, FindNavigationUsesVisibleMatchesAndWraps)
 {
     LogModel model;
@@ -93,7 +121,7 @@ TEST(LogControllerTest, FindNavigationUsesVisibleMatchesAndWraps)
     ASSERT_TRUE(controller.active_find_visible_index(model).has_value());
     EXPECT_EQ(controller.active_find_visible_index(model)->value, 0);
     EXPECT_TRUE(controller.find_active());
-    EXPECT_EQ(controller.total_find_match_count(), 2);
+    EXPECT_EQ(controller.total_find_match_count(), 3);
     EXPECT_EQ(controller.visible_find_match_count(model), 2);
     EXPECT_TRUE(controller.visible_line_matches_find(model, 0));
     EXPECT_FALSE(controller.visible_line_matches_find(model, 2));

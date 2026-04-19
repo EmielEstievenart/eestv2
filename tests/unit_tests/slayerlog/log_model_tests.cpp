@@ -55,6 +55,17 @@ LogEntry make_batch_entry(std::size_t source_index, std::string source_label, st
     return entry;
 }
 
+LogEntry make_entry_with_extracted_time(std::size_t source_index, std::string source_label, std::string text, std::size_t extracted_time_start, std::size_t extracted_time_end)
+{
+    LogEntry entry;
+    entry.metadata.source_index         = source_index;
+    entry.metadata.source_label         = std::move(source_label);
+    entry.text                          = std::move(text);
+    entry.metadata.extracted_time_start = extracted_time_start;
+    entry.metadata.extracted_time_end   = extracted_time_end;
+    return entry;
+}
+
 } // namespace
 
 TEST(LogModelTest, AppendsLinesInProvidedOrder)
@@ -197,6 +208,45 @@ TEST(LogModelTest, ShowsDetectedTimestampTextWhenEnabled)
     model.set_show_original_time(true);
 
     EXPECT_EQ(model.rendered_line(0), "1 {2026-04-01 10:00:00} INFO 2026-04-01 10:00:00 hello");
+}
+
+TEST(LogModelTest, HidesIdenticalMessagesThatOnlyDifferByTimestampByDefault)
+{
+    LogModel model;
+    model.append_lines({
+        make_entry_with_extracted_time(0, "alpha.log", "INFO 2026-04-01 10:00:00 hello", 5, 24),
+        make_entry_with_extracted_time(0, "alpha.log", "INFO 2026-04-01 10:00:01 hello", 5, 24),
+        make_entry_with_extracted_time(0, "alpha.log", "INFO 2026-04-01 10:00:02 hello", 5, 24),
+        make_entry_with_extracted_time(0, "alpha.log", "INFO 2026-04-01 10:00:03 world", 5, 24),
+    });
+
+    ASSERT_EQ(model.line_count(), 3);
+    EXPECT_EQ(model.rendered_line(0), "1 INFO  hello");
+    EXPECT_EQ(model.rendered_line(1), "  hiding 2 identical messages above");
+    EXPECT_EQ(model.rendered_line(2), "4 INFO  world");
+    EXPECT_EQ(model.line_number_for_visible_line(VisibleLineIndex {1}), 3);
+    ASSERT_TRUE(model.visible_line_index_for_line_number(2).has_value());
+    EXPECT_EQ(model.visible_line_index_for_line_number(2)->value, 1);
+    ASSERT_TRUE(model.visible_line_index_for_line_number(3).has_value());
+    EXPECT_EQ(model.visible_line_index_for_line_number(3)->value, 1);
+}
+
+TEST(LogModelTest, ShowIdenticalLinesRestoresAllMatchingRows)
+{
+    LogModel model;
+    model.append_lines({
+        make_entry_with_extracted_time(0, "alpha.log", "INFO 2026-04-01 10:00:00 hello", 5, 24),
+        make_entry_with_extracted_time(0, "alpha.log", "INFO 2026-04-01 10:00:01 hello", 5, 24),
+    });
+
+    ASSERT_EQ(model.line_count(), 2);
+    EXPECT_EQ(model.rendered_line(1), "  hiding 1 identical messages above");
+
+    model.set_hide_identical_lines(false);
+
+    EXPECT_EQ(model.line_count(), 2);
+    EXPECT_EQ(model.rendered_line(0), "1 INFO  hello");
+    EXPECT_EQ(model.rendered_line(1), "2 INFO  hello");
 }
 
 TEST(LogModelTest, ReservesTimestampColumnWidthForRowsWithoutTimestamp)

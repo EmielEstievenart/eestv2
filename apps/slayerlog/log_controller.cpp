@@ -63,6 +63,12 @@ void LogController::sync_view(const AllProcessedSources& processed_sources)
         return;
     }
 
+    if (_synced_line_count > 0 && static_cast<int>(active_buffer().size()) >= _synced_line_count && active_buffer().back() != processed_sources.rendered_line(_synced_line_count - 1))
+    {
+        rebuild_view(processed_sources);
+        return;
+    }
+
     if (current_count == _synced_line_count)
     {
         return;

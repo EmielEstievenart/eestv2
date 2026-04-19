@@ -103,6 +103,25 @@ std::vector<std::shared_ptr<LogEntry>> source_entries_from_index(const AllTracke
     return entries;
 }
 
+std::string message_text_without_extracted_timestamp(const LogEntry& entry)
+{
+    if (!entry.metadata.extracted_time_start.has_value() || !entry.metadata.extracted_time_end.has_value())
+    {
+        return entry.text;
+    }
+
+    const std::size_t start = *entry.metadata.extracted_time_start;
+    const std::size_t end   = *entry.metadata.extracted_time_end;
+    if (start >= end || end > entry.text.size())
+    {
+        return entry.text;
+    }
+
+    std::string deduplication_text = entry.text;
+    deduplication_text.erase(start, end - start);
+    return deduplication_text;
+}
+
 } // namespace
 
 std::optional<HiddenColumnRange> parse_hidden_column_range(std::string_view text)
@@ -127,7 +146,7 @@ std::optional<HiddenColumnRange> parse_hidden_column_range(std::string_view text
 void AllProcessedSources::reset()
 {
     _all_entries.clear();
-    _visible_entry_indices.clear();
+    _visible_rows.clear();
     _paused_updates.clear();
     _pending_source_replacement.reset();
 
@@ -144,6 +163,7 @@ void AllProcessedSources::reset()
     _updates_paused     = false;
     _show_source_labels = false;
     _show_original_time = false;
+    _hide_identical_lines = true;
 }
 
 void AllProcessedSources::append_lines(const std::vector<std::shared_ptr<LogEntry>>& lines)
@@ -178,7 +198,7 @@ void AllProcessedSources::replace_batch(const std::vector<std::shared_ptr<LogEnt
     const auto merged_lines = merge_log_batch(batch);
 
     _all_entries.clear();
-    _visible_entry_indices.clear();
+    _visible_rows.clear();
     _paused_updates.clear();
     _pending_source_replacement.reset();
 
@@ -247,7 +267,7 @@ void AllProcessedSources::replace_from_sources(const AllTrackedSources& tracked_
 void AllProcessedSources::rebuild_from_sources(const AllTrackedSources& tracked_sources)
 {
     _all_entries.clear();
-    _visible_entry_indices.clear();
+    _visible_rows.clear();
     _paused_updates.clear();
     _pending_source_replacement.reset();
 
@@ -299,6 +319,22 @@ void AllProcessedSources::set_show_original_time(bool show_original_time)
 bool AllProcessedSources::show_original_time() const
 {
     return _show_original_time;
+}
+
+void AllProcessedSources::set_hide_identical_lines(bool hide_identical_lines)
+{
+    if (_hide_identical_lines == hide_identical_lines)
+    {
+        return;
+    }
+
+    _hide_identical_lines = hide_identical_lines;
+    rebuild_visible_entries();
+}
+
+bool AllProcessedSources::hide_identical_lines() const
+{
+    return _hide_identical_lines;
 }
 
 int AllProcessedSources::line_number_column_width() const
@@ -515,33 +551,59 @@ const LogEntry& AllProcessedSources::entry_at(AllLineIndex entry_index) const
 
 std::optional<AllLineIndex> AllProcessedSources::entry_index_for_visible_line(VisibleLineIndex visible_line_index) const
 {
-    if (visible_line_index.value < 0 || visible_line_index.value >= static_cast<int>(_visible_entry_indices.size()))
+    if (visible_line_index.value < 0 || visible_line_index.value >= static_cast<int>(_visible_rows.size()))
     {
         return std::nullopt;
     }
 
-    return _visible_entry_indices[visible_line_index];
+    return _visible_rows[visible_line_index].entry_index;
 }
 
 std::optional<VisibleLineIndex> AllProcessedSources::visible_line_index_for_entry(AllLineIndex entry_index) const
 {
-    const auto visible_line = std::find(_visible_entry_indices.begin(), _visible_entry_indices.end(), entry_index);
-    if (visible_line == _visible_entry_indices.end())
+    for (int index = 0; index < static_cast<int>(_visible_rows.size()); ++index)
     {
-        return std::nullopt;
+        const VisibleLineIndex visible_line_index {index};
+        const auto& visible_row = _visible_rows[visible_line_index];
+        if (visible_row.entry_index.has_value() && *visible_row.entry_index == entry_index)
+        {
+            return visible_line_index;
+        }
+
+        if (!visible_row.hidden_identical_run.has_value())
+        {
+            continue;
+        }
+
+        const auto& hidden_identical_run = *visible_row.hidden_identical_run;
+        if (entry_index.value >= hidden_identical_run.first_hidden_entry_index.value && entry_index.value <= hidden_identical_run.last_hidden_entry_index.value)
+        {
+            return visible_line_index;
+        }
     }
 
-    return VisibleLineIndex {static_cast<int>(std::distance(_visible_entry_indices.begin(), visible_line))};
+    return std::nullopt;
 }
 
 std::optional<int> AllProcessedSources::line_number_for_visible_line(VisibleLineIndex visible_line_index) const
 {
-    if (visible_line_index.value < 0 || visible_line_index.value >= static_cast<int>(_visible_entry_indices.size()))
+    if (visible_line_index.value < 0 || visible_line_index.value >= static_cast<int>(_visible_rows.size()))
     {
         return std::nullopt;
     }
 
-    return _visible_entry_indices[visible_line_index].value + 1;
+    const auto& visible_row = _visible_rows[visible_line_index];
+    if (visible_row.entry_index.has_value())
+    {
+        return visible_row.entry_index->value + 1;
+    }
+
+    if (visible_row.hidden_identical_run.has_value())
+    {
+        return visible_row.hidden_identical_run->last_hidden_entry_index.value + 1;
+    }
+
+    return std::nullopt;
 }
 
 std::optional<VisibleLineIndex> AllProcessedSources::visible_line_index_for_line_number(int line_number) const
@@ -556,12 +618,19 @@ std::optional<VisibleLineIndex> AllProcessedSources::visible_line_index_for_line
 
 bool AllProcessedSources::entry_index_is_visible(AllLineIndex entry_index) const
 {
-    return std::binary_search(_visible_entry_indices.begin(), _visible_entry_indices.end(), entry_index);
+    const auto visible_line_index = visible_line_index_for_entry(entry_index);
+    if (!visible_line_index.has_value())
+    {
+        return false;
+    }
+
+    const auto& visible_row = _visible_rows[*visible_line_index];
+    return visible_row.entry_index.has_value() && *visible_row.entry_index == entry_index;
 }
 
 int AllProcessedSources::line_count() const
 {
-    return static_cast<int>(_visible_entry_indices.size());
+    return static_cast<int>(_visible_rows.size());
 }
 
 int AllProcessedSources::total_line_count() const
@@ -572,8 +641,18 @@ int AllProcessedSources::total_line_count() const
 std::string AllProcessedSources::rendered_line(int index) const
 {
     const VisibleLineIndex visible_line_index {index};
-    const AllLineIndex entry_index = _visible_entry_indices[visible_line_index];
-    return render_entry(entry_index);
+    const auto& visible_row = _visible_rows[visible_line_index];
+    if (visible_row.entry_index.has_value())
+    {
+        return render_entry(*visible_row.entry_index);
+    }
+
+    if (visible_row.hidden_identical_run.has_value())
+    {
+        return render_hidden_identical_row(*visible_row.hidden_identical_run);
+    }
+
+    return {};
 }
 
 std::vector<std::string> AllProcessedSources::rendered_lines(int first_index, int count) const
@@ -584,18 +663,17 @@ std::vector<std::string> AllProcessedSources::rendered_lines(int first_index, in
     }
 
     const int clamped_first = std::max(0, first_index);
-    if (clamped_first >= static_cast<int>(_visible_entry_indices.size()))
+    if (clamped_first >= static_cast<int>(_visible_rows.size()))
     {
         return {};
     }
 
-    const int last_index = std::min(static_cast<int>(_visible_entry_indices.size()), clamped_first + count);
+    const int last_index = std::min(static_cast<int>(_visible_rows.size()), clamped_first + count);
     std::vector<std::string> lines;
     lines.reserve(static_cast<std::size_t>(last_index - clamped_first));
     for (int index = clamped_first; index < last_index; ++index)
     {
-        const VisibleLineIndex visible_line_index {index};
-        lines.push_back(render_entry(_visible_entry_indices[visible_line_index]));
+        lines.push_back(rendered_line(index));
     }
 
     return lines;
@@ -604,9 +682,9 @@ std::vector<std::string> AllProcessedSources::rendered_lines(int first_index, in
 int AllProcessedSources::max_rendered_line_width() const
 {
     int width = 0;
-    for (const auto entry_index : _visible_entry_indices)
+    for (int index = 0; index < static_cast<int>(_visible_rows.size()); ++index)
     {
-        width = std::max(width, static_cast<int>(render_entry(entry_index).size()));
+        width = std::max(width, static_cast<int>(rendered_line(index).size()));
     }
 
     return width;
@@ -629,6 +707,32 @@ std::string AllProcessedSources::render_entry(AllLineIndex entry_index) const
 
     output << render_message_text(entry);
     return apply_hidden_columns(output.str());
+}
+
+std::string AllProcessedSources::render_hidden_identical_row(const HiddenIdenticalRun& hidden_identical_run) const
+{
+    std::string rendered_text(static_cast<std::size_t>(_line_number_column_width), ' ');
+    rendered_text += ' ';
+
+    if (_timestamp_column_width > 0)
+    {
+        rendered_text += std::string(static_cast<std::size_t>(_timestamp_column_width), ' ');
+        rendered_text += ' ';
+    }
+
+    if (_show_source_labels)
+    {
+        rendered_text += std::string(static_cast<std::size_t>(_source_number_column_width), ' ');
+        rendered_text += ' ';
+    }
+
+    rendered_text += "hiding " + std::to_string(hidden_identical_run.hidden_count) + " identical messages above";
+    return apply_hidden_columns(std::move(rendered_text));
+}
+
+std::string AllProcessedSources::entry_deduplication_text(const LogEntry& entry) const
+{
+    return std::to_string(entry.metadata.source_index) + "\n" + message_text_without_extracted_timestamp(entry);
 }
 
 void AllProcessedSources::append_lines_immediately(const std::vector<std::shared_ptr<LogEntry>>& lines)
@@ -675,20 +779,7 @@ void AllProcessedSources::apply_source_replacement(AllLineIndex first_changed_en
         }
     }
 
-    IndexedVector<AllLineIndex, VisibleLineIndex> retained_visible_indices;
-    retained_visible_indices.reserve(_visible_entry_indices.size());
-    for (const auto entry_index : _visible_entry_indices)
-    {
-        if (entry_index.value >= clamped_start)
-        {
-            break;
-        }
-
-        retained_visible_indices.push_back(entry_index);
-    }
-
-    _visible_entry_indices = std::move(retained_visible_indices);
-    expand_visible_entries(AllLineIndex {clamped_start});
+    rebuild_visible_entries();
 }
 
 void AllProcessedSources::flush_paused_updates()
@@ -710,40 +801,67 @@ void AllProcessedSources::flush_paused_updates()
 
 void AllProcessedSources::rebuild_visible_entries()
 {
-    _visible_entry_indices.clear();
-    _visible_entry_indices.reserve(_all_entries.size());
+    _visible_rows.clear();
+    _visible_rows.reserve(_all_entries.size());
+
     std::size_t index = 0;
     if (_hidden_before_line_number.has_value())
     {
         index = static_cast<std::size_t>(std::max(0, *_hidden_before_line_number - 1));
     }
 
+    std::optional<std::string> previous_deduplication_text;
+    
     for (; index < _all_entries.size(); ++index)
     {
         const AllLineIndex entry_index {static_cast<int>(index)};
         if (entry_matches_filters(_all_entries[entry_index]))
         {
-            _visible_entry_indices.push_back(entry_index);
+            if (!_hide_identical_lines)
+            {
+                _visible_rows.push_back(VisibleRow {
+                    std::optional<AllLineIndex>(entry_index),
+                    std::nullopt,
+                });
+                previous_deduplication_text = std::nullopt;
+                continue;
+            }
+
+            const std::string deduplication_text = entry_deduplication_text(*_all_entries[entry_index]);
+            if (!previous_deduplication_text.has_value() || *previous_deduplication_text != deduplication_text)
+            {
+                _visible_rows.push_back(VisibleRow {
+                    std::optional<AllLineIndex>(entry_index),
+                    std::nullopt,
+                });
+                previous_deduplication_text = deduplication_text;
+                continue;
+            }
+
+            if (_visible_rows.empty() || !_visible_rows[VisibleLineIndex {static_cast<int>(_visible_rows.size() - 1)}].hidden_identical_run.has_value())
+            {
+                _visible_rows.push_back(VisibleRow {
+                    std::nullopt,
+                    HiddenIdenticalRun {
+                        entry_index,
+                        entry_index,
+                        1,
+                    },
+                });
+                continue;
+            }
+
+            auto& hidden_identical_run = _visible_rows[VisibleLineIndex {static_cast<int>(_visible_rows.size() - 1)}].hidden_identical_run;
+            hidden_identical_run->last_hidden_entry_index = entry_index;
+            ++hidden_identical_run->hidden_count;
         }
     }
 }
 
 void AllProcessedSources::expand_visible_entries(AllLineIndex first_new_entry_index)
 {
-    int index = first_new_entry_index.value;
-    if (_hidden_before_line_number.has_value())
-    {
-        index = std::max(index, std::max(0, *_hidden_before_line_number - 1));
-    }
-
-    for (; index < static_cast<int>(_all_entries.size()); ++index)
-    {
-        const AllLineIndex entry_index {index};
-        if (entry_matches_filters(_all_entries[entry_index]))
-        {
-            _visible_entry_indices.push_back(entry_index);
-        }
-    }
+    (void)first_new_entry_index;
+    rebuild_visible_entries();
 }
 
 void AllProcessedSources::reset_column_width_cache()
@@ -794,21 +912,12 @@ std::string AllProcessedSources::render_timestamp_text(const LogEntry& entry) co
 
 std::string AllProcessedSources::render_message_text(const LogEntry& entry) const
 {
-    if (_show_original_time || !entry.metadata.extracted_time_start.has_value() || !entry.metadata.extracted_time_end.has_value())
+    if (_show_original_time)
     {
         return entry.text;
     }
 
-    const std::size_t start = *entry.metadata.extracted_time_start;
-    const std::size_t end   = *entry.metadata.extracted_time_end;
-    if (start >= end || end > entry.text.size())
-    {
-        return entry.text;
-    }
-
-    std::string rendered_text = entry.text;
-    rendered_text.erase(start, end - start);
-    return rendered_text;
+    return message_text_without_extracted_timestamp(entry);
 }
 
 bool AllProcessedSources::entry_matches_filters(const std::shared_ptr<LogEntry>& entry) const

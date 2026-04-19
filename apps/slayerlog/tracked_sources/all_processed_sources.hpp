@@ -19,6 +19,13 @@ class AllTrackedSources;
 class AllProcessedSources
 {
 public:
+    struct HiddenIdenticalRun
+    {
+        AllLineIndex first_hidden_entry_index;
+        AllLineIndex last_hidden_entry_index;
+        int hidden_count = 0;
+    };
+
     struct FilterSelection
     {
         bool include      = true;
@@ -45,6 +52,8 @@ public:
     bool show_source_labels() const;
     void set_show_original_time(bool show_original_time);
     bool show_original_time() const;
+    void set_hide_identical_lines(bool hide_identical_lines);
+    bool hide_identical_lines() const;
     void add_include_filter(std::string filter_text);
     void add_exclude_filter(std::string filter_text);
     void reset_filters();
@@ -77,6 +86,12 @@ public:
     int max_rendered_line_width() const;
 
 private:
+    struct VisibleRow
+    {
+        std::optional<AllLineIndex> entry_index;
+        std::optional<HiddenIdenticalRun> hidden_identical_run;
+    };
+
     struct PendingSourceReplacement
     {
         AllLineIndex first_changed_entry_index;
@@ -84,6 +99,8 @@ private:
     };
 
     std::string render_entry(AllLineIndex entry_index) const;
+    std::string render_hidden_identical_row(const HiddenIdenticalRun& hidden_identical_run) const;
+    std::string entry_deduplication_text(const LogEntry& entry) const;
     void append_lines_immediately(const std::vector<std::shared_ptr<LogEntry>>& lines);
     void apply_source_replacement(AllLineIndex first_changed_entry_index, const std::vector<std::shared_ptr<LogEntry>>& replacement_entries);
     void flush_paused_updates();
@@ -97,7 +114,7 @@ private:
     std::string apply_hidden_columns(std::string text) const;
 
     IndexedVector<std::shared_ptr<LogEntry>, AllLineIndex> _all_entries;
-    IndexedVector<AllLineIndex, VisibleLineIndex> _visible_entry_indices;
+    IndexedVector<VisibleRow, VisibleLineIndex> _visible_rows;
     std::vector<std::shared_ptr<LogEntry>> _paused_updates;
     std::optional<PendingSourceReplacement> _pending_source_replacement;
 
@@ -117,6 +134,7 @@ private:
     bool _updates_paused     = false;
     bool _show_source_labels = false;
     bool _show_original_time = false;
+    bool _hide_identical_lines = true;
 };
 
 } // namespace slayerlog
