@@ -98,7 +98,7 @@ TrackedSource::TrackedSource(LogSource source, std::string source_label, std::sh
     if (_timestamp_formats == nullptr)
     {
         _timestamp_formats = default_timestamp_format_catalog();
-        _timestamp_parser   = SourceTimestampParser(_timestamp_formats);
+        _timestamp_parser  = SourceTimestampParser(_timestamp_formats);
     }
 
     _single_watcher = create_single_watcher_for_source(_source);
@@ -119,51 +119,16 @@ void TrackedSource::set_source_label(std::string source_label)
     _source_label = std::move(source_label);
 }
 
-void TrackedSource::add_entry_from_raw_string(std::string_view text)
-{
-    std::string owned_text(text);
-    auto timestamp = _timestamp_parser.parse(owned_text);
-    add_entry(ParsedLogLine {std::move(owned_text), std::move(timestamp)});
-}
-
-void TrackedSource::add_entry(ParsedLogLine line)
-{
-    std::optional<LogTimePoint> timestamp;
-    std::string extracted_timestamp_text;
-    std::string parsed_timestamp_text;
-    if (line.timestamp.has_value())
-    {
-        timestamp                = line.timestamp->time_point;
-        extracted_timestamp_text = line.timestamp->extracted_text;
-        parsed_timestamp_text    = line.timestamp->display_text;
-    }
-
-    LogEntry entry {
-        std::move(line.text),
-        std::move(timestamp),
-        std::move(extracted_timestamp_text),
-        std::move(parsed_timestamp_text),
-    };
-    entry.metadata.sequence_number = _next_sequence_number++;
-    _entries.push_back(std::move(entry));
-}
-
 void TrackedSource::add_entries_from_raw_strings(std::vector<std::string> lines)
 {
     _entries.reserve(_entries.size() + lines.size());
     for (auto& line : lines)
     {
-        auto timestamp = _timestamp_parser.parse(line);
-        add_entry(ParsedLogLine {std::move(line), std::move(timestamp)});
-    }
-}
-
-void TrackedSource::add_entries(std::vector<ParsedLogLine> lines)
-{
-    _entries.reserve(_entries.size() + lines.size());
-    for (auto& line : lines)
-    {
-        add_entry(std::move(line));
+        _entries.emplace_back(std::move(line));
+        auto& parsed_line = _entries.back();
+        _timestamp_parser.parse(parsed_line);
+        parsed_line.metadata.sequence_number = _next_sequence_number++;
+        parsed_line.metadata.source          = this;
     }
 }
 
@@ -228,17 +193,11 @@ bool TrackedSource::poll_folder()
         batch.reserve(batch.size() + child_lines.size());
         for (auto& line : child_lines)
         {
-            const auto parsed_timestamp = child.timestamp_parser.parse(line);
             LogBatchEntry batch_entry;
             batch_entry.source_index = source_index;
             batch_entry.source_label = _source_label;
             batch_entry.text         = std::move(line);
-            if (parsed_timestamp.has_value())
-            {
-                batch_entry.metadata.timestamp           = parsed_timestamp->time_point;
-                batch_entry.metadata.parsed_time_text    = parsed_timestamp->display_text;
-                batch_entry.metadata.extracted_time_text = parsed_timestamp->extracted_text;
-            }
+            child.timestamp_parser.parse(batch_entry);
 
             batch_entry.metadata.sequence_number = child.next_line_sequence++;
             batch.push_back(std::move(batch_entry));
@@ -257,25 +216,20 @@ bool TrackedSource::poll_folder()
     }
 
     auto merged = merge_log_batch(batch);
-    std::vector<ParsedLogLine> lines;
-    lines.reserve(merged.size());
+    _entries.reserve(_entries.size() + merged.size());
     for (auto& line : merged)
     {
-        ParsedLogLine parsed_line;
-        parsed_line.text = std::move(line.text);
-        if (line.metadata.timestamp.has_value())
-        {
-            parsed_line.timestamp = ParsedLogTimestamp {
-                *line.metadata.timestamp,
-                std::move(line.metadata.extracted_time_text),
-                std::move(line.metadata.parsed_time_text),
-            };
-        }
+        _entries.emplace_back(
+            std::move(line.text),
+            std::move(line.metadata.timestamp),
+            std::move(line.metadata.extracted_time_text),
+            std::move(line.metadata.parsed_time_text));
 
-        lines.push_back(std::move(parsed_line));
+        auto& entry                      = _entries.back();
+        entry.metadata.sequence_number   = _next_sequence_number++;
+        entry.metadata.source            = this;
     }
 
-    add_entries(std::move(lines));
     return true;
 }
 

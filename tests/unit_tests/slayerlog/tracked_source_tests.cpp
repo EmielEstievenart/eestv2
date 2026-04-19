@@ -159,7 +159,7 @@ TEST(TrackedSourceTest, StoresParsedEntriesAndSequenceNumbers)
 TEST(TrackedSourceTest, UpdatesSourceLabelWithoutTouchingStoredEntries)
 {
     TrackedSource tracked_source(parse_log_source("alpha.log"), "alpha.log");
-    tracked_source.add_entry_from_raw_string("plain line");
+    tracked_source.add_entries_from_raw_strings({"plain line"});
 
     tracked_source.set_source_label("renamed.log");
 

@@ -5,7 +5,7 @@
 #include <string>
 #include <utility>
 
-#include "log_timestamp.hpp"
+#include "timestamp/log_time_point.hpp"
 
 namespace slayerlog
 {

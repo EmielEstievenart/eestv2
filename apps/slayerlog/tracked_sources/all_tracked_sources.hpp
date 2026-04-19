@@ -9,7 +9,7 @@
 
 #include "log_batch.hpp"
 #include "log_source.hpp"
-#include "log_timestamp.hpp"
+#include "timestamp/log_timestamp.hpp"
 #include "log_types.hpp"
 
 namespace slayerlog

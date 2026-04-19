@@ -1,29 +1,16 @@
 #pragma once
 
-#include <chrono>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "timestamp/log_time_point.hpp"
+#include "tracked_sources/log_line.hpp"
+
 namespace slayerlog
 {
-
-using LogTimePoint = std::chrono::system_clock::time_point;
-
-struct ParsedLogTimestamp
-{
-    LogTimePoint time_point;
-    std::string extracted_text;
-    std::string display_text;
-};
-
-struct ParsedLogLine
-{
-    std::string text;
-    std::optional<ParsedLogTimestamp> timestamp;
-};
 
 class TimestampFormatCatalog
 {
@@ -59,7 +46,7 @@ class SourceTimestampParser
 public:
     explicit SourceTimestampParser(std::shared_ptr<const TimestampFormatCatalog> catalog = default_timestamp_format_catalog());
 
-    std::optional<ParsedLogTimestamp> parse(const std::string& line);
+    bool parse(RawLogLine& line);
 
 private:
     std::shared_ptr<const TimestampFormatCatalog> _catalog;
@@ -67,7 +54,7 @@ private:
     std::optional<std::size_t> _detected_start_index_slot;
 };
 
-std::optional<ParsedLogTimestamp> parse_log_timestamp_details(const std::string& line);
+std::optional<LogLineMetadata> parse_log_timestamp_details(const std::string& line);
 std::optional<LogTimePoint> parse_log_timestamp(const std::string& line);
 
 } // namespace slayerlog

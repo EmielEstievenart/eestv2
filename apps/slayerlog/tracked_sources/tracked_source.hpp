@@ -4,7 +4,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -13,7 +12,7 @@
 #include "log_batch.hpp"
 #include "log_line.hpp"
 #include "log_source.hpp"
-#include "log_timestamp.hpp"
+#include "timestamp/log_timestamp.hpp"
 #include "watchers/log_watcher_base.hpp"
 
 namespace slayerlog
@@ -30,10 +29,7 @@ public:
     const std::string& source_label() const;
     void set_source_label(std::string source_label);
 
-    void add_entry_from_raw_string(std::string_view text);
-    void add_entry(ParsedLogLine line);
     void add_entries_from_raw_strings(std::vector<std::string> lines);
-    void add_entries(std::vector<ParsedLogLine> lines);
 
     bool poll();
 

@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "log_line.hpp"
+#include "tracked_sources/log_line.hpp"
 
 namespace slayerlog
 {

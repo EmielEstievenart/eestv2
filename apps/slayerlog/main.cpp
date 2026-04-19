@@ -18,7 +18,7 @@
 #include "debug_log.hpp"
 #include "tracked_sources/all_tracked_sources.hpp"
 #include "log_controller.hpp"
-#include "log_timestamp.hpp"
+#include "timestamp/log_timestamp.hpp"
 #include "log_view.hpp"
 #include "master_controller.hpp"
 #include "master_view.hpp"

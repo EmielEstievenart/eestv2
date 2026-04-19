@@ -55,7 +55,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_batch.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_view.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_timestamp.cpp
+   ${CMAKE_SOURCE_DIR}/apps/slayerlog/timestamp/log_timestamp.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_controller.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.cpp

@@ -12,20 +12,20 @@ add_executable(
   debug_log.hpp
   log_source.cpp
   log_source.hpp
-  log_watcher.hpp
+   watchers/log_watcher.hpp
   log_controller.cpp
   log_controller.hpp
   log_batch.cpp
   log_batch.hpp
-  log_line.hpp
+   tracked_sources/log_line.hpp
   log_view.cpp
   log_view.hpp
   master_controller.cpp
   master_controller.hpp
   master_view.cpp
   master_view.hpp
-  log_timestamp.cpp
-  log_timestamp.hpp
+   timestamp/log_timestamp.cpp
+   timestamp/log_timestamp.hpp
   log_types.hpp
   settings_ini.cpp
   settings_ini.hpp

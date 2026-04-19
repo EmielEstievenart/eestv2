@@ -5,7 +5,7 @@
 #include <utility>
 
 #include "log_batch.hpp"
-#include "log_timestamp.hpp"
+#include "timestamp/log_timestamp.hpp"
 
 namespace slayerlog
 {

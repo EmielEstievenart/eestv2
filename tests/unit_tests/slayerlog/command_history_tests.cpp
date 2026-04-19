@@ -5,7 +5,7 @@
 #include <string>
 
 #include "commands/command_history.hpp"
-#include "log_timestamp.hpp"
+#include "timestamp/log_timestamp.hpp"
 
 namespace slayerlog
 {

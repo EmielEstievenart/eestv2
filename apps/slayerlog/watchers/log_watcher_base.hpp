@@ -3,7 +3,7 @@
 #include <mutex>
 #include <vector>
 
-#include "log_watcher.hpp"
+#include "watchers/log_watcher.hpp"
 
 namespace slayerlog
 {
