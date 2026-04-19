@@ -170,6 +170,19 @@ TEST(TrackedSourceTest, UpdatesSourceLabelWithoutTouchingStoredEntries)
     EXPECT_EQ(tracked_source.entries()[0].text, "plain line");
 }
 
+TEST(TrackedSourceTest, FilePollReadsZstdFileOnce)
+{
+    ScopedTestFolder folder;
+    folder.write_zstd_file("single.log.zst", "2026-04-01T10:01:00 from zst\nplain zst follow-up\n");
+
+    TrackedSourceFile tracked_source(parse_log_source((folder.path() / "single.log.zst").string()), "single.log.zst");
+    expect_poll_lines(tracked_source, {
+                                        "2026-04-01T10:01:00 from zst",
+                                        "plain zst follow-up",
+                                    });
+    expect_no_poll_lines(tracked_source);
+}
+
 TEST(TrackedSourceTest, FolderPollKeepsTailingNormalFilesAfterFirstPoll)
 {
     ScopedTestFolder folder;
