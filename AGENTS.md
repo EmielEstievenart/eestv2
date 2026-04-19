@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+Before any edits, confirm the working directory with pwd!
+
 ## Project Structure & Module Organization
 `code/eestv/` contains the reusable library code, grouped by domain such as `serial/`, `net/`, `data_bridge/`, `logging/`, and `threading/`. `apps/` contains executable applications, currently including `apps/slayerlog/`. `examples/` holds small focused sample programs, while `tests/unit_tests/` mirrors the production layout with GoogleTest coverage. Third-party dependencies live under `libs/`, and generated build output goes to `out/build/<preset>/`.
 
