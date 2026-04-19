@@ -1,9 +1,7 @@
 #include "timestamp/source_timestamp_parser.hpp"
 
 #include <iomanip>
-#include <optional>
 #include <sstream>
-#include <utility>
 
 namespace slayerlog
 {
@@ -81,26 +79,25 @@ std::string format_display_time(const DateAndTime& parsed)
     return output.str();
 }
 
-std::optional<LogEntryMetadata> try_parse_with_format(const eestv::compiledDataAndTimeParser& parser, const std::string& line, int start_index)
+bool try_parse_with_format(const eestv::compiledDataAndTimeParser& parser, const std::string& line, int start_index, LogEntryMetadata& metadata)
 {
     DateAndTime parsed;
     int end_index = 0;
     if (!apply_parser(parser, line, start_index, parsed, end_index))
     {
-        return std::nullopt;
+        return false;
     }
 
     const auto time_point = parsed.to_time_point();
     if (!time_point.has_value())
     {
-        return std::nullopt;
+        return false;
     }
 
-    return LogEntryMetadata {
-        *time_point,
-        line.substr(static_cast<std::size_t>(start_index), static_cast<std::size_t>(end_index - start_index)),
-        format_display_time(parsed),
-    };
+    metadata.timestamp = *time_point;
+    metadata.extracted_time_text = line.substr(static_cast<std::size_t>(start_index), static_cast<std::size_t>(end_index - start_index));
+    metadata.parsed_time_text    = format_display_time(parsed);
+    return true;
 }
 
 const eestv::compiledDataAndTimeParser& compiled_parser_from_entry(const TimestampFormatCatalog::Entry& entry)
@@ -110,24 +107,17 @@ const eestv::compiledDataAndTimeParser& compiled_parser_from_entry(const Timesta
 
 } // namespace
 
-bool SourceTimestampParser::init(LogEntry& line, const TimestampFormatCatalog& catalog)
+bool SourceTimestampParser::init(const LogEntry& line, const TimestampFormatCatalog& catalog)
 {
+    if (_compiled_parser.has_value() && _detected_start_index_slot.has_value())
+    {
+        return true;
+    }
+
     const auto start_indices = TimestampParser::possible_parse_start_indices(line.text);
     if (start_indices.empty())
     {
         return false;
-    }
-
-    const auto apply_metadata = [&line](LogEntryMetadata&& metadata)
-    {
-        line.metadata.timestamp           = std::move(metadata.timestamp);
-        line.metadata.extracted_time_text = std::move(metadata.extracted_time_text);
-        line.metadata.parsed_time_text    = std::move(metadata.parsed_time_text);
-    };
-
-    if (_compiled_parser.has_value() && _detected_start_index_slot.has_value())
-    {
-        return parse(line);
     }
 
     for (std::size_t start_slot = 0; start_slot < start_indices.size(); ++start_slot)
@@ -136,15 +126,14 @@ bool SourceTimestampParser::init(LogEntry& line, const TimestampFormatCatalog& c
         for (const auto& entry : catalog.entries())
         {
             const auto& parser = compiled_parser_from_entry(entry);
-            auto parsed        = try_parse_with_format(parser, line.text, start_index);
-            if (!parsed.has_value())
+            LogEntryMetadata parsed_metadata;
+            if (!try_parse_with_format(parser, line.text, start_index, parsed_metadata))
             {
                 continue;
             }
 
             _compiled_parser           = parser;
             _detected_start_index_slot = start_slot;
-            apply_metadata(std::move(*parsed));
             return true;
         }
     }
@@ -165,16 +154,7 @@ bool SourceTimestampParser::parse(LogEntry& line)
         return false;
     }
 
-    auto parsed = try_parse_with_format(*_compiled_parser, line.text, start_indices[*_detected_start_index_slot]);
-    if (!parsed.has_value())
-    {
-        return false;
-    }
-
-    line.metadata.timestamp           = std::move(parsed->timestamp);
-    line.metadata.extracted_time_text = std::move(parsed->extracted_time_text);
-    line.metadata.parsed_time_text    = std::move(parsed->parsed_time_text);
-    return true;
+    return try_parse_with_format(*_compiled_parser, line.text, start_indices[*_detected_start_index_slot], line.metadata);
 }
 
 } // namespace slayerlog

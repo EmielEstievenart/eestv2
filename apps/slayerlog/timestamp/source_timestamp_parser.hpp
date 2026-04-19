@@ -14,7 +14,7 @@ namespace slayerlog
 class SourceTimestampParser
 {
 public:
-    bool init(LogEntry& line, const TimestampFormatCatalog& catalog);
+    bool init(const LogEntry& line, const TimestampFormatCatalog& catalog);
     bool parse(LogEntry& line);
 
 private:

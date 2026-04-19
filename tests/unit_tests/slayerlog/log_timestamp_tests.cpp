@@ -23,6 +23,11 @@ std::optional<LogEntryMetadata> parse_timestamp_details(const std::string& line)
         return std::nullopt;
     }
 
+    if (!parser.parse(raw_line))
+    {
+        return std::nullopt;
+    }
+
     return raw_line.metadata;
 }
 
@@ -85,15 +90,29 @@ TEST(LogTimestampTest, DetectsTimestampAfterPrefixAndKeepsCompiledParser)
     LogEntry first_line("INFO 2026-04-01 12:34:56 first");
     LogEntry second_line("WARN 2026-04-01 12:35:56 second");
 
-    const bool first_parsed  = parser.init(first_line, *formats);
+    const bool initialized   = parser.init(first_line, *formats);
+    const bool first_parsed  = parser.parse(first_line);
     const bool second_parsed = parser.parse(second_line);
 
+    ASSERT_TRUE(initialized);
     ASSERT_TRUE(first_parsed);
     ASSERT_TRUE(second_parsed);
     EXPECT_EQ(first_line.metadata.extracted_time_text, "2026-04-01 12:34:56");
     EXPECT_EQ(second_line.metadata.extracted_time_text, "2026-04-01 12:35:56");
     EXPECT_EQ(first_line.metadata.parsed_time_text, "2026-04-01 12:34:56");
     EXPECT_EQ(second_line.metadata.parsed_time_text, "2026-04-01 12:35:56");
+}
+
+TEST(LogTimestampTest, InitDoesNotPopulateMetadata)
+{
+    auto formats = std::make_shared<const TimestampFormatCatalog>(std::vector<std::string> {"YYYY-MM-DD hh:mm:ss"});
+    SourceTimestampParser parser;
+    LogEntry line("INFO 2026-04-01 12:34:56 first");
+
+    ASSERT_TRUE(parser.init(line, *formats));
+    EXPECT_FALSE(line.metadata.timestamp.has_value());
+    EXPECT_TRUE(line.metadata.extracted_time_text.empty());
+    EXPECT_TRUE(line.metadata.parsed_time_text.empty());
 }
 
 TEST(LogTimestampTest, FormatsTimezoneInDisplayText)

@@ -23,7 +23,7 @@ LogEntry make_entry(std::size_t source_index, std::string source_label, std::str
     {
         SourceTimestampParser parser;
         LogEntry raw_line(text);
-        if (parser.init(raw_line, *catalog))
+        if (parser.init(raw_line, *catalog) && parser.parse(raw_line))
         {
             timestamp = raw_line.metadata.timestamp;
         }
