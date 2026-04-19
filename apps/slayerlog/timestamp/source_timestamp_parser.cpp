@@ -97,6 +97,8 @@ bool try_parse_with_format(const eestv::compiledDataAndTimeParser& parser, const
     metadata.timestamp = *time_point;
     metadata.extracted_time_text = line.substr(static_cast<std::size_t>(start_index), static_cast<std::size_t>(end_index - start_index));
     metadata.parsed_time_text    = format_display_time(parsed);
+    metadata.extracted_time_start = static_cast<std::size_t>(start_index);
+    metadata.extracted_time_end   = static_cast<std::size_t>(end_index);
     return true;
 }
 

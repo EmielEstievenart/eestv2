@@ -17,6 +17,8 @@ struct LogEntryMetadata
     std::optional<std::chrono::system_clock::time_point> timestamp;
     std::string extracted_time_text;
     std::string parsed_time_text;
+    std::optional<std::size_t> extracted_time_start;
+    std::optional<std::size_t> extracted_time_end;
     std::uint64_t sequence_number = 0;
     std::size_t source_index = 0;
     std::string source_label;

@@ -172,13 +172,29 @@ TEST(LogModelTest, RendersSourceNumbersWhenEnabled)
     EXPECT_EQ(model.rendered_line(0), "1  1 hello");
 }
 
-TEST(LogModelTest, RendersParsedTimeBeforeOriginalText)
+TEST(LogModelTest, HidesDetectedTimestampTextByDefault)
 {
     LogModel model;
 
-    model.append_lines({
-        LogEntry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, "2026-04-01 10:00:00"},
-    });
+    LogEntry entry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, "2026-04-01 10:00:00"};
+    entry.metadata.extracted_time_start = 5;
+    entry.metadata.extracted_time_end   = 24;
+
+    model.append_lines({entry});
+
+    EXPECT_EQ(model.rendered_line(0), "1 {2026-04-01 10:00:00} INFO  hello");
+}
+
+TEST(LogModelTest, ShowsDetectedTimestampTextWhenEnabled)
+{
+    LogModel model;
+
+    LogEntry entry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, "2026-04-01 10:00:00"};
+    entry.metadata.extracted_time_start = 5;
+    entry.metadata.extracted_time_end   = 24;
+
+    model.append_lines({entry});
+    model.set_show_original_time(true);
 
     EXPECT_EQ(model.rendered_line(0), "1 {2026-04-01 10:00:00} INFO 2026-04-01 10:00:00 hello");
 }

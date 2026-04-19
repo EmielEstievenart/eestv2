@@ -101,6 +101,14 @@ TEST(LogTimestampTest, DetectsTimestampAfterPrefixAndKeepsCompiledParser)
     EXPECT_EQ(second_line.metadata.extracted_time_text, "2026-04-01 12:35:56");
     EXPECT_EQ(first_line.metadata.parsed_time_text, "2026-04-01 12:34:56");
     EXPECT_EQ(second_line.metadata.parsed_time_text, "2026-04-01 12:35:56");
+    ASSERT_TRUE(first_line.metadata.extracted_time_start.has_value());
+    ASSERT_TRUE(first_line.metadata.extracted_time_end.has_value());
+    ASSERT_TRUE(second_line.metadata.extracted_time_start.has_value());
+    ASSERT_TRUE(second_line.metadata.extracted_time_end.has_value());
+    EXPECT_EQ(*first_line.metadata.extracted_time_start, 5U);
+    EXPECT_EQ(*first_line.metadata.extracted_time_end, 24U);
+    EXPECT_EQ(*second_line.metadata.extracted_time_start, 5U);
+    EXPECT_EQ(*second_line.metadata.extracted_time_end, 24U);
 }
 
 TEST(LogTimestampTest, InitDoesNotPopulateMetadata)
@@ -113,6 +121,8 @@ TEST(LogTimestampTest, InitDoesNotPopulateMetadata)
     EXPECT_FALSE(line.metadata.timestamp.has_value());
     EXPECT_TRUE(line.metadata.extracted_time_text.empty());
     EXPECT_TRUE(line.metadata.parsed_time_text.empty());
+    EXPECT_FALSE(line.metadata.extracted_time_start.has_value());
+    EXPECT_FALSE(line.metadata.extracted_time_end.has_value());
 }
 
 TEST(LogTimestampTest, FormatsTimezoneInDisplayText)

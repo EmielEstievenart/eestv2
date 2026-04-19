@@ -143,6 +143,7 @@ void AllProcessedSources::reset()
 
     _updates_paused     = false;
     _show_source_labels = false;
+    _show_original_time = false;
 }
 
 void AllProcessedSources::append_lines(const std::vector<std::shared_ptr<LogEntry>>& lines)
@@ -288,6 +289,16 @@ void AllProcessedSources::set_show_source_labels(bool show_source_labels)
 bool AllProcessedSources::show_source_labels() const
 {
     return _show_source_labels;
+}
+
+void AllProcessedSources::set_show_original_time(bool show_original_time)
+{
+    _show_original_time = show_original_time;
+}
+
+bool AllProcessedSources::show_original_time() const
+{
+    return _show_original_time;
 }
 
 int AllProcessedSources::line_number_column_width() const
@@ -616,7 +627,7 @@ std::string AllProcessedSources::render_entry(AllLineIndex entry_index) const
         output << std::setw(_source_number_column_width) << std::right << (entry.metadata.source_index + 1) << " ";
     }
 
-    output << entry.text;
+    output << render_message_text(entry);
     return apply_hidden_columns(output.str());
 }
 
@@ -779,6 +790,25 @@ std::string AllProcessedSources::render_timestamp_text(const LogEntry& entry) co
     }
 
     return "{" + entry.metadata.parsed_time_text + "}";
+}
+
+std::string AllProcessedSources::render_message_text(const LogEntry& entry) const
+{
+    if (_show_original_time || !entry.metadata.extracted_time_start.has_value() || !entry.metadata.extracted_time_end.has_value())
+    {
+        return entry.text;
+    }
+
+    const std::size_t start = *entry.metadata.extracted_time_start;
+    const std::size_t end   = *entry.metadata.extracted_time_end;
+    if (start >= end || end > entry.text.size())
+    {
+        return entry.text;
+    }
+
+    std::string rendered_text = entry.text;
+    rendered_text.erase(start, end - start);
+    return rendered_text;
 }
 
 bool AllProcessedSources::entry_matches_filters(const std::shared_ptr<LogEntry>& entry) const

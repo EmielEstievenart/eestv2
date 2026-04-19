@@ -433,6 +433,42 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                          return CommandResult {true, "Cleared hidden column filter"};
                                      });
 
+    command_manager.register_command({"show-original-time",
+                                      "Show detected timestamp in original text",
+                                      "show-original-time",
+                                      {
+                                          "When a timestamp is detected in a log line, keep it visible in the message text.",
+                                      }},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!trim_text(arguments).empty())
+                                         {
+                                             return CommandResult {false, "Usage: show-original-time"};
+                                         }
+
+                                         processed_sources.set_show_original_time(true);
+                                         controller.rebuild_view(processed_sources);
+                                         return CommandResult {true, "Showing original detected timestamps in messages"};
+                                     });
+
+    command_manager.register_command({"hide-original-time",
+                                      "Hide detected timestamp in original text",
+                                      "hide-original-time",
+                                      {
+                                          "When a timestamp is detected in a log line, remove it from the rendered message text.",
+                                      }},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!trim_text(arguments).empty())
+                                         {
+                                             return CommandResult {false, "Usage: hide-original-time"};
+                                         }
+
+                                         processed_sources.set_show_original_time(false);
+                                         controller.rebuild_view(processed_sources);
+                                         return CommandResult {true, "Hiding original detected timestamps in messages"};
+                                     });
+
     command_manager.register_command({"open-file",
                                       "Open file and reload all tracked logs",
                                       "open-file <path>",

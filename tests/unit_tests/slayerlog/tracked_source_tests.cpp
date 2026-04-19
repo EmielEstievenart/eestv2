@@ -149,12 +149,18 @@ TEST(TrackedSourceTest, StoresParsedEntriesAndSequenceNumbers)
     EXPECT_TRUE(entries[0]->metadata.timestamp.has_value());
     EXPECT_EQ(entries[0]->metadata.extracted_time_text, "2026-04-01T10:00:00");
     EXPECT_EQ(entries[0]->metadata.parsed_time_text, "2026-04-01 10:00:00");
+    ASSERT_TRUE(entries[0]->metadata.extracted_time_start.has_value());
+    ASSERT_TRUE(entries[0]->metadata.extracted_time_end.has_value());
+    EXPECT_EQ(*entries[0]->metadata.extracted_time_start, 0U);
+    EXPECT_EQ(*entries[0]->metadata.extracted_time_end, 19U);
     EXPECT_EQ(entries[0]->metadata.sequence_number, 0U);
 
     EXPECT_EQ(entries[1]->text, "plain second");
     EXPECT_FALSE(entries[1]->metadata.timestamp.has_value());
     EXPECT_TRUE(entries[1]->metadata.extracted_time_text.empty());
     EXPECT_TRUE(entries[1]->metadata.parsed_time_text.empty());
+    EXPECT_FALSE(entries[1]->metadata.extracted_time_start.has_value());
+    EXPECT_FALSE(entries[1]->metadata.extracted_time_end.has_value());
     EXPECT_EQ(entries[1]->metadata.sequence_number, 1U);
 }
 
@@ -259,6 +265,14 @@ TEST(TrackedSourceTest, FolderPollMergesPlainAndZstdChildResultsByTimestamp)
     ASSERT_EQ(entries.size(), 2U);
     EXPECT_EQ(entries[0]->metadata.extracted_time_text, "2026-04-01T10:01:00");
     EXPECT_EQ(entries[1]->metadata.extracted_time_text, "2026-04-01T10:02:00");
+    ASSERT_TRUE(entries[0]->metadata.extracted_time_start.has_value());
+    ASSERT_TRUE(entries[0]->metadata.extracted_time_end.has_value());
+    ASSERT_TRUE(entries[1]->metadata.extracted_time_start.has_value());
+    ASSERT_TRUE(entries[1]->metadata.extracted_time_end.has_value());
+    EXPECT_EQ(*entries[0]->metadata.extracted_time_start, 0U);
+    EXPECT_EQ(*entries[0]->metadata.extracted_time_end, 19U);
+    EXPECT_EQ(*entries[1]->metadata.extracted_time_start, 0U);
+    EXPECT_EQ(*entries[1]->metadata.extracted_time_end, 19U);
 }
 
 TEST(TrackedSourceTest, FolderPollMissingFolderThrows)

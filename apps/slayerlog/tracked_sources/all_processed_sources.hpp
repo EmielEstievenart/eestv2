@@ -43,6 +43,8 @@ public:
     bool updates_paused() const;
     void set_show_source_labels(bool show_source_labels);
     bool show_source_labels() const;
+    void set_show_original_time(bool show_original_time);
+    bool show_original_time() const;
     void add_include_filter(std::string filter_text);
     void add_exclude_filter(std::string filter_text);
     void reset_filters();
@@ -90,6 +92,7 @@ private:
     void reset_column_width_cache();
     void observe_entry_widths(AllLineIndex entry_index, const LogEntry& entry);
     std::string render_timestamp_text(const LogEntry& entry) const;
+    std::string render_message_text(const LogEntry& entry) const;
     bool entry_matches_filters(const std::shared_ptr<LogEntry>& entry) const;
     std::string apply_hidden_columns(std::string text) const;
 
@@ -113,6 +116,7 @@ private:
 
     bool _updates_paused     = false;
     bool _show_source_labels = false;
+    bool _show_original_time = false;
 };
 
 } // namespace slayerlog
