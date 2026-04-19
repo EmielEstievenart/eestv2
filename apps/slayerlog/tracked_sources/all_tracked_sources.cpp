@@ -1,6 +1,7 @@
 #include "all_tracked_sources.hpp"
 
 #include <cstddef>
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <utility>
@@ -11,6 +12,56 @@
 
 namespace slayerlog
 {
+
+namespace
+{
+
+std::optional<std::chrono::system_clock::time_point> earliest_new_timestamp(const std::vector<LogBatchSourceRange>& source_ranges)
+{
+    std::optional<std::chrono::system_clock::time_point> earliest_timestamp;
+    for (const auto& source_range : source_ranges)
+    {
+        if (source_range.entries == nullptr || source_range.first_entry_index >= source_range.entries->size())
+        {
+            continue;
+        }
+
+        const auto& entry = (*source_range.entries)[source_range.first_entry_index];
+        if (!entry->metadata.timestamp.has_value())
+        {
+            continue;
+        }
+
+        if (!earliest_timestamp.has_value() || entry->metadata.timestamp.value() < earliest_timestamp.value())
+        {
+            earliest_timestamp = entry->metadata.timestamp;
+        }
+    }
+
+    return earliest_timestamp;
+}
+
+std::size_t find_rewrite_start_index(const IndexedVector<std::shared_ptr<LogEntry>, AllLineIndex>& all_lines,
+                                     const std::chrono::system_clock::time_point& earliest_timestamp)
+{
+    for (std::size_t line_index = 0; line_index < all_lines.size(); ++line_index)
+    {
+        const auto& line = all_lines[AllLineIndex {static_cast<int>(line_index)}];
+        if (!line->metadata.timestamp.has_value())
+        {
+            continue;
+        }
+
+        if (line->metadata.timestamp.value() >= earliest_timestamp)
+        {
+            return line_index;
+        }
+    }
+
+    return all_lines.size();
+}
+
+} // namespace
 
 AllTrackedSources::AllTrackedSources(std::shared_ptr<const TimestampFormatCatalog> timestamp_formats) : _timestamp_formats(std::move(timestamp_formats))
 {
@@ -104,9 +155,80 @@ std::optional<AllLineIndex> AllTrackedSources::poll()
         return std::nullopt;
     }
 
-    const AllLineIndex first_new_index {static_cast<int>(_all_lines.size())};
-    append_merged_lines(merge_log_batch(source_ranges));
-    return first_new_index;
+    std::vector<std::shared_ptr<LogEntry>> merged_lines;
+    const auto append_new_tail            = [&]() -> AllLineIndex
+    {
+        const AllLineIndex first_new_index {static_cast<int>(_all_lines.size())};
+        merge_log_batch(source_ranges, merged_lines);
+        append_merged_lines(merged_lines);
+        return first_new_index;
+    };
+
+    bool can_append_to_tail = true;
+    std::optional<std::chrono::system_clock::time_point> min_new_timestamp;
+    if (!_all_lines.empty())
+    {
+        const auto& last_line = _all_lines[AllLineIndex {static_cast<int>(_all_lines.size() - 1)}];
+        if (last_line->metadata.timestamp.has_value())
+        {
+            min_new_timestamp = earliest_new_timestamp(source_ranges);
+            if (min_new_timestamp.has_value() && min_new_timestamp.value() < last_line->metadata.timestamp.value())
+            {
+                can_append_to_tail = false;
+            }
+        }
+    }
+
+    if (can_append_to_tail)
+    {
+        return append_new_tail();
+    }
+
+    if (!min_new_timestamp.has_value())
+    {
+        return append_new_tail();
+    }
+
+    const std::size_t rewrite_start_index = find_rewrite_start_index(_all_lines, min_new_timestamp.value());
+    if (rewrite_start_index >= _all_lines.size())
+    {
+        return append_new_tail();
+    }
+
+    std::vector<std::shared_ptr<LogEntry>> existing_suffix;
+    existing_suffix.reserve(_all_lines.size() - rewrite_start_index);
+    for (std::size_t line_index = rewrite_start_index; line_index < _all_lines.size(); ++line_index)
+    {
+        existing_suffix.push_back(_all_lines[AllLineIndex {static_cast<int>(line_index)}]);
+    }
+
+    std::vector<LogBatchSourceRange> rewrite_ranges;
+    rewrite_ranges.reserve(source_ranges.size() + 1);
+    rewrite_ranges.push_back({
+        &existing_suffix,
+        0,
+        0,
+        std::string(),
+        true,
+    });
+    for (const auto& source_range : source_ranges)
+    {
+        rewrite_ranges.push_back(source_range);
+    }
+
+    merge_log_batch(rewrite_ranges, merged_lines);
+
+    for (std::size_t merged_index = 0; merged_index < existing_suffix.size(); ++merged_index)
+    {
+        _all_lines[AllLineIndex {static_cast<int>(rewrite_start_index + merged_index)}] = merged_lines[merged_index];
+    }
+
+    for (std::size_t merged_index = existing_suffix.size(); merged_index < merged_lines.size(); ++merged_index)
+    {
+        _all_lines.push_back(merged_lines[merged_index]);
+    }
+
+    return AllLineIndex {static_cast<int>(rewrite_start_index)};
 }
 
 const IndexedVector<std::shared_ptr<LogEntry>, AllLineIndex>& AllTrackedSources::all_lines() const
@@ -181,7 +303,9 @@ void AllTrackedSources::rebuild_all_lines()
         append_source_range(source_ranges, *_sources[source_index], source_index, 0);
     }
 
-    append_merged_lines(merge_log_batch(source_ranges));
+    std::vector<std::shared_ptr<LogEntry>> merged_lines;
+    merge_log_batch(source_ranges, merged_lines);
+    append_merged_lines(merged_lines);
 }
 
 void AllTrackedSources::append_source_range(std::vector<LogBatchSourceRange>& source_ranges, const TrackedSourceBase& source, std::size_t source_index,

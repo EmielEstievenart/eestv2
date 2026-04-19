@@ -63,6 +63,21 @@ std::vector<std::shared_ptr<LogEntry>> make_shared_entries(const std::vector<Log
     return shared_lines;
 }
 
+std::vector<std::shared_ptr<LogEntry>> source_entries_from_index(const AllTrackedSources& tracked_sources, AllLineIndex first_entry_index)
+{
+    const auto& lines = tracked_sources.all_lines();
+    const int clamped_start = std::clamp(first_entry_index.value, 0, static_cast<int>(lines.size()));
+
+    std::vector<std::shared_ptr<LogEntry>> entries;
+    entries.reserve(lines.size() - static_cast<std::size_t>(clamped_start));
+    for (int index = clamped_start; index < static_cast<int>(lines.size()); ++index)
+    {
+        entries.push_back(lines[AllLineIndex {index}]);
+    }
+
+    return entries;
+}
+
 } // namespace
 
 std::optional<HiddenColumnRange> parse_hidden_column_range(std::string_view text)
@@ -89,6 +104,7 @@ void AllProcessedSources::reset()
     _all_entries.clear();
     _visible_entry_indices.clear();
     _paused_updates.clear();
+    _pending_source_replacement.reset();
 
     _include_filters.clear();
     _exclude_filters.clear();
@@ -136,6 +152,7 @@ void AllProcessedSources::replace_batch(const std::vector<std::shared_ptr<LogEnt
     _all_entries.clear();
     _visible_entry_indices.clear();
     _paused_updates.clear();
+    _pending_source_replacement.reset();
 
     _all_entries.reserve(merged_lines.size());
     for (const auto& line : merged_lines)
@@ -169,11 +186,36 @@ void AllProcessedSources::append_from_sources(const AllTrackedSources& tracked_s
     append_lines(appended_lines);
 }
 
+void AllProcessedSources::replace_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_changed_entry_index)
+{
+    int replacement_start = first_changed_entry_index.value;
+    if (_pending_source_replacement.has_value())
+    {
+        replacement_start = std::min(replacement_start, _pending_source_replacement->first_changed_entry_index.value);
+    }
+
+    const AllLineIndex effective_start {replacement_start};
+    const auto replacement_entries = source_entries_from_index(tracked_sources, effective_start);
+
+    if (_updates_paused)
+    {
+        _pending_source_replacement = PendingSourceReplacement {
+            effective_start,
+            replacement_entries,
+        };
+        _paused_updates.clear();
+        return;
+    }
+
+    apply_source_replacement(effective_start, replacement_entries);
+}
+
 void AllProcessedSources::rebuild_from_sources(const AllTrackedSources& tracked_sources)
 {
     _all_entries.clear();
     _visible_entry_indices.clear();
     _paused_updates.clear();
+    _pending_source_replacement.reset();
 
     const auto& lines = tracked_sources.all_lines();
     _all_entries.reserve(lines.size());
@@ -513,8 +555,53 @@ void AllProcessedSources::append_lines_immediately(const std::vector<std::shared
     expand_visible_entries(first_new_entry_index);
 }
 
+void AllProcessedSources::apply_source_replacement(AllLineIndex first_changed_entry_index, const std::vector<std::shared_ptr<LogEntry>>& replacement_entries)
+{
+    const int clamped_start = std::clamp(first_changed_entry_index.value, 0, static_cast<int>(_all_entries.size()));
+
+    IndexedVector<std::shared_ptr<LogEntry>, AllLineIndex> updated_entries;
+    updated_entries.reserve(static_cast<std::size_t>(clamped_start) + replacement_entries.size());
+    for (int index = 0; index < clamped_start; ++index)
+    {
+        updated_entries.push_back(_all_entries[AllLineIndex {index}]);
+    }
+
+    for (const auto& entry : replacement_entries)
+    {
+        updated_entries.push_back(entry);
+    }
+
+    _all_entries = std::move(updated_entries);
+
+    IndexedVector<AllLineIndex, VisibleLineIndex> retained_visible_indices;
+    retained_visible_indices.reserve(_visible_entry_indices.size());
+    for (const auto entry_index : _visible_entry_indices)
+    {
+        if (entry_index.value >= clamped_start)
+        {
+            break;
+        }
+
+        retained_visible_indices.push_back(entry_index);
+    }
+
+    _visible_entry_indices = std::move(retained_visible_indices);
+    expand_visible_entries(AllLineIndex {clamped_start});
+}
+
 void AllProcessedSources::flush_paused_updates()
 {
+    if (_pending_source_replacement.has_value())
+    {
+        apply_source_replacement(_pending_source_replacement->first_changed_entry_index, _pending_source_replacement->replacement_entries);
+        _pending_source_replacement.reset();
+    }
+
+    if (_paused_updates.empty())
+    {
+        return;
+    }
+
     append_lines_immediately(_paused_updates);
     _paused_updates.clear();
 }

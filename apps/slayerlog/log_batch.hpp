@@ -16,6 +16,7 @@ struct LogBatchSourceRange
     std::size_t first_entry_index                          = 0;
     std::size_t source_index                               = 0;
     std::string source_label;
+    bool preserve_source_metadata                          = false;
 };
 
 void merge_log_batch(const std::vector<LogBatchSourceRange>& source_ranges, std::vector<std::shared_ptr<LogEntry>>& merged_lines);

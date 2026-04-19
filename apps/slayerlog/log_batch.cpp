@@ -24,6 +24,7 @@ struct SourceRangeBatchState
     std::size_t next_entry_index                           = 0;
     std::size_t source_index                               = 0;
     std::string source_label;
+    bool preserve_source_metadata                          = false;
 };
 
 bool has_pending_entry(const SharedSourceBatchState& state)
@@ -56,11 +57,15 @@ void advance_source(SourceRangeBatchState& state)
     ++state.next_entry_index;
 }
 
-std::shared_ptr<LogEntry> clone_with_source_metadata(const LogEntry& entry, std::size_t source_index, const std::string& source_label)
+std::shared_ptr<LogEntry> clone_for_source_range(const LogEntry& entry, const SourceRangeBatchState& source_state)
 {
-    auto cloned_entry                         = std::make_shared<LogEntry>(entry);
-    cloned_entry->metadata.source_index       = source_index;
-    cloned_entry->metadata.source_label       = source_label;
+    auto cloned_entry = std::make_shared<LogEntry>(entry);
+    if (!source_state.preserve_source_metadata)
+    {
+        cloned_entry->metadata.source_index = source_state.source_index;
+        cloned_entry->metadata.source_label = source_state.source_label;
+    }
+
     return cloned_entry;
 }
 
@@ -161,6 +166,7 @@ void merge_log_batch(const std::vector<LogBatchSourceRange>& source_ranges, std:
             source_range.first_entry_index,
             source_range.source_index,
             source_range.source_label,
+            source_range.preserve_source_metadata,
         });
 
         total_entry_count += source_range.entries->size() - source_range.first_entry_index;
@@ -181,7 +187,7 @@ void merge_log_batch(const std::vector<LogBatchSourceRange>& source_ranges, std:
                     break;
                 }
 
-                merged_lines.push_back(clone_with_source_metadata(*entry, source_state.source_index, source_state.source_label));
+                merged_lines.push_back(clone_for_source_range(*entry, source_state));
                 advance_source(source_state);
                 ++merged_entry_count;
             }
@@ -223,7 +229,7 @@ void merge_log_batch(const std::vector<LogBatchSourceRange>& source_ranges, std:
 
         auto& source_state = source_states[*next_state_index];
         const auto& entry  = current_entry_pointer(source_state);
-        merged_lines.push_back(clone_with_source_metadata(*entry, source_state.source_index, source_state.source_label));
+        merged_lines.push_back(clone_for_source_range(*entry, source_state));
         advance_source(source_state);
         ++merged_entry_count;
     }

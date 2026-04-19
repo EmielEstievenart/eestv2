@@ -36,6 +36,7 @@ public:
     void replace_batch(const std::vector<LogEntry>& batch);
 
     void append_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_new_entry_index);
+    void replace_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_changed_entry_index);
     void rebuild_from_sources(const AllTrackedSources& tracked_sources);
 
     void toggle_pause();
@@ -68,8 +69,15 @@ public:
     int max_rendered_line_width() const;
 
 private:
+    struct PendingSourceReplacement
+    {
+        AllLineIndex first_changed_entry_index;
+        std::vector<std::shared_ptr<LogEntry>> replacement_entries;
+    };
+
     std::string render_entry(AllLineIndex entry_index) const;
     void append_lines_immediately(const std::vector<std::shared_ptr<LogEntry>>& lines);
+    void apply_source_replacement(AllLineIndex first_changed_entry_index, const std::vector<std::shared_ptr<LogEntry>>& replacement_entries);
     void flush_paused_updates();
     void rebuild_visible_entries();
     void expand_visible_entries(AllLineIndex first_new_entry_index);
@@ -79,6 +87,7 @@ private:
     IndexedVector<std::shared_ptr<LogEntry>, AllLineIndex> _all_entries;
     IndexedVector<AllLineIndex, VisibleLineIndex> _visible_entry_indices;
     std::vector<std::shared_ptr<LogEntry>> _paused_updates;
+    std::optional<PendingSourceReplacement> _pending_source_replacement;
 
     std::vector<std::string> _include_filters;
     std::vector<std::string> _exclude_filters;

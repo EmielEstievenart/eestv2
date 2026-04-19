@@ -11,6 +11,7 @@
 
 #include <zstd.h>
 
+#include "tracked_sources/all_processed_sources.hpp"
 #include "tracked_sources/all_tracked_sources.hpp"
 #include "log_source.hpp"
 
@@ -115,6 +116,18 @@ std::vector<std::string> delta_texts(const AllTrackedSources& tracked_sources, A
     return texts;
 }
 
+std::vector<std::string> processed_texts(const AllProcessedSources& processed_sources)
+{
+    std::vector<std::string> texts;
+    texts.reserve(static_cast<std::size_t>(processed_sources.total_line_count()));
+    for (int index = 0; index < processed_sources.total_line_count(); ++index)
+    {
+        texts.push_back(processed_sources.entry_at(AllLineIndex {index}).text);
+    }
+
+    return texts;
+}
+
 } // namespace
 
 TEST(AllTrackedSourcesTest, OpenSourceLoadsInitialContentsAndPollReturnsOnlyNewLines)
@@ -140,6 +153,129 @@ TEST(AllTrackedSourcesTest, OpenSourceLoadsInitialContentsAndPollReturnsOnlyNewL
                                               "second",
                                               "third",
                                           }));
+}
+
+TEST(AllTrackedSourcesTest, PollRewritesTailWhenNewTimestampWouldSortBeforeCurrentEnd)
+{
+    const auto root      = make_unique_test_path("");
+    const auto alpha_log = root / "alpha.log";
+    const auto beta_log  = root / "beta.log";
+    ScopedTestFile alpha_file(alpha_log);
+    ScopedTestFile beta_file(beta_log);
+    alpha_file.write("2026-04-01T10:02:00 alpha second\n");
+    beta_file.write("2026-04-01T10:05:00 beta fifth\n");
+
+    AllTrackedSources tracked_sources;
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(alpha_log.string())).has_value());
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(beta_log.string())).has_value());
+
+    EXPECT_EQ(all_texts(tracked_sources), (std::vector<std::string> {
+                                               "2026-04-01T10:02:00 alpha second",
+                                               "2026-04-01T10:05:00 beta fifth",
+                                           }));
+
+    beta_file.append("2026-04-01T10:01:00 beta first late\n");
+    const auto first_changed_line_index = tracked_sources.poll();
+    ASSERT_TRUE(first_changed_line_index.has_value());
+    EXPECT_EQ(first_changed_line_index->value, 0);
+
+    EXPECT_EQ(all_texts(tracked_sources), (std::vector<std::string> {
+                                               "2026-04-01T10:01:00 beta first late",
+                                               "2026-04-01T10:02:00 alpha second",
+                                               "2026-04-01T10:05:00 beta fifth",
+                                           }));
+}
+
+TEST(AllProcessedSourcesTest, ReplaceFromSourcesUpdatesOnlyChangedSuffix)
+{
+    const auto root      = make_unique_test_path("");
+    const auto alpha_log = root / "alpha.log";
+    const auto beta_log  = root / "beta.log";
+    ScopedTestFile alpha_file(alpha_log);
+    ScopedTestFile beta_file(beta_log);
+    alpha_file.write("2026-04-01T10:00:00 alpha first\n");
+    beta_file.write("2026-04-01T10:10:00 beta second\n");
+
+    AllTrackedSources tracked_sources;
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(alpha_log.string())).has_value());
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(beta_log.string())).has_value());
+
+    AllProcessedSources processed_sources;
+    processed_sources.rebuild_from_sources(tracked_sources);
+
+    alpha_file.append("2026-04-01T10:20:00 alpha third\n");
+    const auto alpha_append_index = tracked_sources.poll();
+    ASSERT_TRUE(alpha_append_index.has_value());
+    processed_sources.append_from_sources(tracked_sources, *alpha_append_index);
+
+    beta_file.append("2026-04-01T10:15:00 beta late\n");
+    const auto first_changed_index = tracked_sources.poll();
+    ASSERT_TRUE(first_changed_index.has_value());
+    EXPECT_EQ(first_changed_index->value, 2);
+
+    processed_sources.replace_from_sources(tracked_sources, *first_changed_index);
+
+    EXPECT_EQ(processed_texts(processed_sources), (std::vector<std::string> {
+                                                    "2026-04-01T10:00:00 alpha first",
+                                                    "2026-04-01T10:10:00 beta second",
+                                                    "2026-04-01T10:15:00 beta late",
+                                                    "2026-04-01T10:20:00 alpha third",
+                                                }));
+}
+
+TEST(AllProcessedSourcesTest, QueuesReplaceFromSourcesWhilePausedAndAppliesOnResume)
+{
+    const auto root      = make_unique_test_path("");
+    const auto alpha_log = root / "alpha.log";
+    const auto beta_log  = root / "beta.log";
+    ScopedTestFile alpha_file(alpha_log);
+    ScopedTestFile beta_file(beta_log);
+    alpha_file.write("2026-04-01T10:00:00 alpha first\n");
+    beta_file.write("2026-04-01T10:10:00 beta second\n");
+
+    AllTrackedSources tracked_sources;
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(alpha_log.string())).has_value());
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(beta_log.string())).has_value());
+
+    AllProcessedSources processed_sources;
+    processed_sources.rebuild_from_sources(tracked_sources);
+
+    alpha_file.append("2026-04-01T10:20:00 alpha third\n");
+    const auto alpha_append_index = tracked_sources.poll();
+    ASSERT_TRUE(alpha_append_index.has_value());
+    processed_sources.append_from_sources(tracked_sources, *alpha_append_index);
+
+    processed_sources.toggle_pause();
+
+    beta_file.append("2026-04-01T10:15:00 beta late\n");
+    const auto first_changed_index = tracked_sources.poll();
+    ASSERT_TRUE(first_changed_index.has_value());
+    EXPECT_EQ(first_changed_index->value, 2);
+    processed_sources.replace_from_sources(tracked_sources, *first_changed_index);
+
+    EXPECT_EQ(processed_sources.total_line_count(), 3);
+    EXPECT_EQ(processed_texts(processed_sources), (std::vector<std::string> {
+                                                    "2026-04-01T10:00:00 alpha first",
+                                                    "2026-04-01T10:10:00 beta second",
+                                                    "2026-04-01T10:20:00 alpha third",
+                                                }));
+
+    alpha_file.append("2026-04-01T10:25:00 alpha fourth\n");
+    const auto alpha_fourth_index = tracked_sources.poll();
+    ASSERT_TRUE(alpha_fourth_index.has_value());
+    processed_sources.append_from_sources(tracked_sources, *alpha_fourth_index);
+
+    EXPECT_EQ(processed_sources.total_line_count(), 3);
+
+    processed_sources.toggle_pause();
+
+    EXPECT_EQ(processed_texts(processed_sources), (std::vector<std::string> {
+                                                    "2026-04-01T10:00:00 alpha first",
+                                                    "2026-04-01T10:10:00 beta second",
+                                                    "2026-04-01T10:15:00 beta late",
+                                                    "2026-04-01T10:20:00 alpha third",
+                                                    "2026-04-01T10:25:00 alpha fourth",
+                                                }));
 }
 
 TEST(AllTrackedSourcesTest, RebuildsSourceLabelsWhenBasenameCollisionsChange)

@@ -35,6 +35,14 @@ constexpr std::string_view timestamp_format_key      = "format";
 void append_sources_delta_to_processed_sources(const slayerlog::AllTrackedSources& tracked_sources, slayerlog::AllLineIndex first_new_line_index, slayerlog::AllProcessedSources& processed_sources, slayerlog::LogController& controller,
                                                ftxui::ScreenInteractive& screen)
 {
+    if (first_new_line_index.value < processed_sources.total_line_count())
+    {
+        processed_sources.replace_from_sources(tracked_sources, first_new_line_index);
+        controller.rebuild_view(processed_sources);
+        screen.PostEvent(ftxui::Event::Custom);
+        return;
+    }
+
     processed_sources.append_from_sources(tracked_sources, first_new_line_index);
     controller.sync_view(processed_sources);
     screen.PostEvent(ftxui::Event::Custom);
