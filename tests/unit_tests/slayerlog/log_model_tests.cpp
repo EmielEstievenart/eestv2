@@ -46,9 +46,9 @@ LogBatchEntry make_batch_entry(std::size_t source_index, std::string source_labe
     entry.source_index           = source_index;
     entry.source_label           = std::move(source_label);
     entry.text                   = std::move(text);
-    entry.timestamp              = timestamp;
-    entry.source_sequence_number = sequence_number;
-    entry.parsed_time_text       = std::move(parsed_time_text);
+    entry.metadata.timestamp     = timestamp;
+    entry.metadata.sequence_number = sequence_number;
+    entry.metadata.parsed_time_text = std::move(parsed_time_text);
     return entry;
 }
 

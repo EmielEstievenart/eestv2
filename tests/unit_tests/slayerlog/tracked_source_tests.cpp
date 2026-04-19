@@ -109,7 +109,7 @@ std::vector<std::string> delta_texts(const TrackedSource& tracked_source, std::s
     texts.reserve(entries.size() - first_new_entry_index);
     for (std::size_t entry_index = first_new_entry_index; entry_index < entries.size(); ++entry_index)
     {
-        texts.push_back(entries[entry_index].raw_text);
+        texts.push_back(entries[entry_index].text);
     }
 
     return texts;
@@ -143,17 +143,17 @@ TEST(TrackedSourceTest, StoresParsedEntriesAndSequenceNumbers)
     const auto& entries = tracked_source.entries();
     ASSERT_EQ(entries.size(), 2U);
 
-    EXPECT_EQ(entries[0].raw_text, "2026-04-01T10:00:00 first");
-    EXPECT_TRUE(entries[0].timestamp.has_value());
-    EXPECT_EQ(entries[0].extracted_timestamp_text, "2026-04-01T10:00:00");
-    EXPECT_EQ(entries[0].parsed_timestamp_text, "2026-04-01 10:00:00");
-    EXPECT_EQ(entries[0].sequence_number, 0U);
+    EXPECT_EQ(entries[0].text, "2026-04-01T10:00:00 first");
+    EXPECT_TRUE(entries[0].metadata.timestamp.has_value());
+    EXPECT_EQ(entries[0].metadata.extracted_time_text, "2026-04-01T10:00:00");
+    EXPECT_EQ(entries[0].metadata.parsed_time_text, "2026-04-01 10:00:00");
+    EXPECT_EQ(entries[0].metadata.sequence_number, 0U);
 
-    EXPECT_EQ(entries[1].raw_text, "plain second");
-    EXPECT_FALSE(entries[1].timestamp.has_value());
-    EXPECT_TRUE(entries[1].extracted_timestamp_text.empty());
-    EXPECT_TRUE(entries[1].parsed_timestamp_text.empty());
-    EXPECT_EQ(entries[1].sequence_number, 1U);
+    EXPECT_EQ(entries[1].text, "plain second");
+    EXPECT_FALSE(entries[1].metadata.timestamp.has_value());
+    EXPECT_TRUE(entries[1].metadata.extracted_time_text.empty());
+    EXPECT_TRUE(entries[1].metadata.parsed_time_text.empty());
+    EXPECT_EQ(entries[1].metadata.sequence_number, 1U);
 }
 
 TEST(TrackedSourceTest, UpdatesSourceLabelWithoutTouchingStoredEntries)
@@ -165,7 +165,7 @@ TEST(TrackedSourceTest, UpdatesSourceLabelWithoutTouchingStoredEntries)
 
     EXPECT_EQ(tracked_source.source_label(), "renamed.log");
     ASSERT_EQ(tracked_source.entries().size(), 1U);
-    EXPECT_EQ(tracked_source.entries()[0].raw_text, "plain line");
+    EXPECT_EQ(tracked_source.entries()[0].text, "plain line");
 }
 
 TEST(TrackedSourceTest, FolderPollKeepsTailingNormalFilesAfterFirstPoll)
@@ -241,8 +241,8 @@ TEST(TrackedSourceTest, FolderPollMergesPlainAndZstdChildResultsByTimestamp)
 
     const auto& entries = tracked_source.entries();
     ASSERT_EQ(entries.size(), 2U);
-    EXPECT_EQ(entries[0].extracted_timestamp_text, "2026-04-01T10:01:00");
-    EXPECT_EQ(entries[1].extracted_timestamp_text, "2026-04-01T10:02:00");
+    EXPECT_EQ(entries[0].metadata.extracted_time_text, "2026-04-01T10:01:00");
+    EXPECT_EQ(entries[1].metadata.extracted_time_text, "2026-04-01T10:02:00");
 }
 
 TEST(TrackedSourceTest, FolderPollMissingFolderThrows)

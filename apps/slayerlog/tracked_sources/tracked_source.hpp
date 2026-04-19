@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "log_batch.hpp"
+#include "log_line.hpp"
 #include "log_source.hpp"
 #include "log_timestamp.hpp"
 #include "watchers/log_watcher_base.hpp"
@@ -18,15 +19,7 @@
 namespace slayerlog
 {
 
-struct LogEntry
-{
-
-    std::string raw_text;                  /*The unmodified text.*/
-    std::optional<LogTimePoint> timestamp; /*The extracted timestamp, if any. */
-    std::string extracted_timestamp_text;
-    std::string parsed_timestamp_text;
-    std::uint64_t sequence_number = 0;
-};
+using LogEntry = RawLogLine;
 
 class TrackedSource
 {

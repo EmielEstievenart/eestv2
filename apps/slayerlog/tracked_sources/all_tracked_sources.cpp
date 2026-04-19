@@ -214,11 +214,11 @@ void AllTrackedSources::append_entries_to_batch(LogBatch& batch, const SourceSta
         LogBatchEntry batch_entry;
         batch_entry.source_index           = source_index;
         batch_entry.source_label           = source_state.tracked_source.source_label();
-        batch_entry.text                   = entry.raw_text;
-        batch_entry.timestamp              = entry.timestamp;
-        batch_entry.source_sequence_number = entry.sequence_number;
-        batch_entry.parsed_time_text       = entry.parsed_timestamp_text;
-        batch_entry.extracted_time_text    = entry.extracted_timestamp_text;
+        batch_entry.text                   = entry.text;
+        batch_entry.metadata.timestamp     = entry.metadata.timestamp;
+        batch_entry.metadata.sequence_number = entry.metadata.sequence_number;
+        batch_entry.metadata.parsed_time_text    = entry.metadata.parsed_time_text;
+        batch_entry.metadata.extracted_time_text = entry.metadata.extracted_time_text;
         batch.push_back(std::move(batch_entry));
     }
 }

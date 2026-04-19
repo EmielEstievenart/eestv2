@@ -138,13 +138,14 @@ void TrackedSource::add_entry(ParsedLogLine line)
         parsed_timestamp_text    = line.timestamp->display_text;
     }
 
-    _entries.push_back(LogEntry {
+    LogEntry entry {
         std::move(line.text),
-        timestamp,
+        std::move(timestamp),
         std::move(extracted_timestamp_text),
         std::move(parsed_timestamp_text),
-        _next_sequence_number++,
-    });
+    };
+    entry.metadata.sequence_number = _next_sequence_number++;
+    _entries.push_back(std::move(entry));
 }
 
 void TrackedSource::add_entries_from_raw_strings(std::vector<std::string> lines)
@@ -234,12 +235,12 @@ bool TrackedSource::poll_folder()
             batch_entry.text         = std::move(line);
             if (parsed_timestamp.has_value())
             {
-                batch_entry.timestamp           = parsed_timestamp->time_point;
-                batch_entry.parsed_time_text    = parsed_timestamp->display_text;
-                batch_entry.extracted_time_text = parsed_timestamp->extracted_text;
+                batch_entry.metadata.timestamp           = parsed_timestamp->time_point;
+                batch_entry.metadata.parsed_time_text    = parsed_timestamp->display_text;
+                batch_entry.metadata.extracted_time_text = parsed_timestamp->extracted_text;
             }
 
-            batch_entry.source_sequence_number = child.next_line_sequence++;
+            batch_entry.metadata.sequence_number = child.next_line_sequence++;
             batch.push_back(std::move(batch_entry));
         }
 
@@ -262,12 +263,12 @@ bool TrackedSource::poll_folder()
     {
         ParsedLogLine parsed_line;
         parsed_line.text = std::move(line.text);
-        if (line.timestamp.has_value())
+        if (line.metadata.timestamp.has_value())
         {
             parsed_line.timestamp = ParsedLogTimestamp {
-                *line.timestamp,
-                std::move(line.extracted_time_text),
-                std::move(line.parsed_time_text),
+                *line.metadata.timestamp,
+                std::move(line.metadata.extracted_time_text),
+                std::move(line.metadata.parsed_time_text),
             };
         }
 
