@@ -76,7 +76,8 @@ bool TrackedSourceFolder::poll()
 {
     refresh_active_children();
 
-    std::vector<std::shared_ptr<LogEntry>> batch;
+    std::vector<LogBatchSourceRange> source_ranges;
+    source_ranges.reserve(_active_file_order.size());
     for (std::size_t source_index = 0; source_index < _active_file_order.size(); ++source_index)
     {
         const std::string& path_key = _active_file_order[source_index];
@@ -100,31 +101,20 @@ bool TrackedSourceFolder::poll()
             continue;
         }
 
-        batch.reserve(batch.size() + (child_entries.size() - first_new_entry_index));
-        for (std::size_t entry_index = first_new_entry_index; entry_index < child_entries.size(); ++entry_index)
-        {
-            auto batch_entry = std::make_shared<LogEntry>(*child_entries[entry_index]);
-            batch_entry->metadata.source_index = source_index;
-            batch_entry->metadata.source_label = source_label();
-            batch.push_back(std::move(batch_entry));
-        }
+        source_ranges.push_back({
+            &child_entries,
+            first_new_entry_index,
+            source_index,
+            source_label(),
+        });
     }
 
-    if (batch.empty())
+    if (source_ranges.empty())
     {
         return false;
     }
 
-    auto merged = merge_log_batch(batch);
-    reserve_entries(merged.size());
-    for (const auto& line : merged)
-    {
-        LogEntry& entry                    = append_entry();
-        entry.text                         = line->text;
-        entry.metadata.timestamp           = line->metadata.timestamp;
-        entry.metadata.extracted_time_text = line->metadata.extracted_time_text;
-        entry.metadata.parsed_time_text    = line->metadata.parsed_time_text;
-    }
+    append_merged_entries(source_ranges);
 
     return true;
 }

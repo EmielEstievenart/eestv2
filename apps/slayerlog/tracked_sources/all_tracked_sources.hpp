@@ -38,7 +38,7 @@ private:
     bool contains_source(const LogSource& candidate_source) const;
     void rebuild_source_labels();
     void rebuild_all_lines();
-    void append_entries_to_batch(std::vector<std::shared_ptr<LogEntry>>& batch, const TrackedSourceBase& source, std::size_t source_index, std::size_t first_entry_index) const;
+    void append_source_range(std::vector<LogBatchSourceRange>& source_ranges, const TrackedSourceBase& source, std::size_t source_index, std::size_t first_entry_index) const;
     void append_merged_lines(const std::vector<std::shared_ptr<LogEntry>>& lines);
 
     std::vector<std::unique_ptr<TrackedSourceBase>> _sources;

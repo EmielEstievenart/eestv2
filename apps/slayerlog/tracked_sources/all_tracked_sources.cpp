@@ -69,7 +69,8 @@ std::optional<std::string> AllTrackedSources::close_source(std::size_t source_in
 
 std::optional<AllLineIndex> AllTrackedSources::poll()
 {
-    std::vector<std::shared_ptr<LogEntry>> batch;
+    std::vector<LogBatchSourceRange> source_ranges;
+    source_ranges.reserve(_sources.size());
 
     for (std::size_t source_index = 0; source_index < _sources.size(); ++source_index)
     {
@@ -84,7 +85,7 @@ std::optional<AllLineIndex> AllTrackedSources::poll()
                 continue;
             }
 
-            append_entries_to_batch(batch, *source, source_index, first_new_entry_index);
+            append_source_range(source_ranges, *source, source_index, first_new_entry_index);
         }
         catch (const std::exception& ex)
         {
@@ -98,13 +99,13 @@ std::optional<AllLineIndex> AllTrackedSources::poll()
         }
     }
 
-    if (batch.empty())
+    if (source_ranges.empty())
     {
         return std::nullopt;
     }
 
     const AllLineIndex first_new_index {static_cast<int>(_all_lines.size())};
-    append_merged_lines(merge_log_batch(batch));
+    append_merged_lines(merge_log_batch(source_ranges));
     return first_new_index;
 }
 
@@ -173,17 +174,18 @@ void AllTrackedSources::rebuild_all_lines()
 {
     _all_lines.clear();
 
-    std::vector<std::shared_ptr<LogEntry>> batch;
+    std::vector<LogBatchSourceRange> source_ranges;
+    source_ranges.reserve(_sources.size());
     for (std::size_t source_index = 0; source_index < _sources.size(); ++source_index)
     {
-        append_entries_to_batch(batch, *_sources[source_index], source_index, 0);
+        append_source_range(source_ranges, *_sources[source_index], source_index, 0);
     }
 
-    append_merged_lines(merge_log_batch(batch));
+    append_merged_lines(merge_log_batch(source_ranges));
 }
 
-void AllTrackedSources::append_entries_to_batch(std::vector<std::shared_ptr<LogEntry>>& batch, const TrackedSourceBase& source, std::size_t source_index,
-                                                std::size_t first_entry_index) const
+void AllTrackedSources::append_source_range(std::vector<LogBatchSourceRange>& source_ranges, const TrackedSourceBase& source, std::size_t source_index,
+                                            std::size_t first_entry_index) const
 {
     const auto& entries = source.entries();
     if (first_entry_index >= entries.size())
@@ -191,14 +193,12 @@ void AllTrackedSources::append_entries_to_batch(std::vector<std::shared_ptr<LogE
         return;
     }
 
-    batch.reserve(batch.size() + (entries.size() - first_entry_index));
-    for (std::size_t entry_index = first_entry_index; entry_index < entries.size(); ++entry_index)
-    {
-        auto batch_entry = std::make_shared<LogEntry>(*entries[entry_index]);
-        batch_entry->metadata.source_index = source_index;
-        batch_entry->metadata.source_label = source.source_label();
-        batch.push_back(std::move(batch_entry));
-    }
+    source_ranges.push_back({
+        &entries,
+        first_entry_index,
+        source_index,
+        source.source_label(),
+    });
 }
 
 void AllTrackedSources::append_merged_lines(const std::vector<std::shared_ptr<LogEntry>>& lines)

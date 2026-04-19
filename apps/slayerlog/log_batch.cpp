@@ -12,25 +12,56 @@ namespace slayerlog
 namespace
 {
 
-struct SourceBatchState
+struct SharedSourceBatchState
 {
     std::vector<std::shared_ptr<LogEntry>> entries;
     std::size_t next_entry_index = 0;
 };
 
-bool has_pending_entry(const SourceBatchState& state)
+struct SourceRangeBatchState
+{
+    const std::vector<std::shared_ptr<LogEntry>>* entries = nullptr;
+    std::size_t next_entry_index                           = 0;
+    std::size_t source_index                               = 0;
+    std::string source_label;
+};
+
+bool has_pending_entry(const SharedSourceBatchState& state)
 {
     return state.next_entry_index < state.entries.size();
 }
 
-const std::shared_ptr<LogEntry>& current_entry_pointer(const SourceBatchState& state)
+bool has_pending_entry(const SourceRangeBatchState& state)
+{
+    return state.entries != nullptr && state.next_entry_index < state.entries->size();
+}
+
+const std::shared_ptr<LogEntry>& current_entry_pointer(const SharedSourceBatchState& state)
 {
     return state.entries[state.next_entry_index];
 }
 
-void advance_source(SourceBatchState& state)
+const std::shared_ptr<LogEntry>& current_entry_pointer(const SourceRangeBatchState& state)
+{
+    return (*state.entries)[state.next_entry_index];
+}
+
+void advance_source(SharedSourceBatchState& state)
 {
     ++state.next_entry_index;
+}
+
+void advance_source(SourceRangeBatchState& state)
+{
+    ++state.next_entry_index;
+}
+
+std::shared_ptr<LogEntry> clone_with_source_metadata(const LogEntry& entry, std::size_t source_index, const std::string& source_label)
+{
+    auto cloned_entry                         = std::make_shared<LogEntry>(entry);
+    cloned_entry->metadata.source_index       = source_index;
+    cloned_entry->metadata.source_label       = source_label;
+    return cloned_entry;
 }
 
 std::vector<std::shared_ptr<LogEntry>> merge_shared_log_batch(const std::vector<std::shared_ptr<LogEntry>>& batch)
@@ -41,7 +72,7 @@ std::vector<std::shared_ptr<LogEntry>> merge_shared_log_batch(const std::vector<
         highest_source_index = std::max(highest_source_index, entry->metadata.source_index);
     }
 
-    std::vector<SourceBatchState> source_states(batch.empty() ? 0 : highest_source_index + 1);
+    std::vector<SharedSourceBatchState> source_states(batch.empty() ? 0 : highest_source_index + 1);
     for (const auto& entry : batch)
     {
         source_states[entry->metadata.source_index].entries.push_back(entry);
@@ -111,6 +142,99 @@ std::vector<std::shared_ptr<LogEntry>> merge_shared_log_batch(const std::vector<
 }
 
 } // namespace
+
+void merge_log_batch(const std::vector<LogBatchSourceRange>& source_ranges, std::vector<std::shared_ptr<LogEntry>>& merged_lines)
+{
+    std::size_t total_entry_count = 0;
+    std::vector<SourceRangeBatchState> source_states;
+    source_states.reserve(source_ranges.size());
+
+    for (const auto& source_range : source_ranges)
+    {
+        if (source_range.entries == nullptr || source_range.first_entry_index >= source_range.entries->size())
+        {
+            continue;
+        }
+
+        source_states.push_back({
+            source_range.entries,
+            source_range.first_entry_index,
+            source_range.source_index,
+            source_range.source_label,
+        });
+
+        total_entry_count += source_range.entries->size() - source_range.first_entry_index;
+    }
+
+    merged_lines.reserve(merged_lines.size() + total_entry_count);
+    std::size_t merged_entry_count = 0;
+
+    while (merged_entry_count < total_entry_count)
+    {
+        for (auto& source_state : source_states)
+        {
+            while (has_pending_entry(source_state))
+            {
+                const auto& entry = current_entry_pointer(source_state);
+                if (entry->metadata.timestamp.has_value())
+                {
+                    break;
+                }
+
+                merged_lines.push_back(clone_with_source_metadata(*entry, source_state.source_index, source_state.source_label));
+                advance_source(source_state);
+                ++merged_entry_count;
+            }
+        }
+
+        if (merged_entry_count >= total_entry_count)
+        {
+            break;
+        }
+
+        std::optional<std::size_t> next_state_index;
+        std::optional<std::chrono::system_clock::time_point> next_timestamp;
+
+        for (std::size_t state_index = 0; state_index < source_states.size(); ++state_index)
+        {
+            const auto& source_state = source_states[state_index];
+            if (!has_pending_entry(source_state))
+            {
+                continue;
+            }
+
+            const auto& entry = current_entry_pointer(source_state);
+            if (!entry->metadata.timestamp.has_value())
+            {
+                continue;
+            }
+
+            if (!next_state_index.has_value() || entry->metadata.timestamp.value() < next_timestamp.value())
+            {
+                next_state_index = state_index;
+                next_timestamp   = entry->metadata.timestamp;
+            }
+        }
+
+        if (!next_state_index.has_value())
+        {
+            break;
+        }
+
+        auto& source_state = source_states[*next_state_index];
+        const auto& entry  = current_entry_pointer(source_state);
+        merged_lines.push_back(clone_with_source_metadata(*entry, source_state.source_index, source_state.source_label));
+        advance_source(source_state);
+        ++merged_entry_count;
+    }
+}
+
+std::vector<std::shared_ptr<LogEntry>> merge_log_batch(const std::vector<LogBatchSourceRange>& source_ranges)
+{
+    std::vector<std::shared_ptr<LogEntry>> merged_lines;
+    merge_log_batch(source_ranges, merged_lines);
+    return merged_lines;
+}
 
 std::vector<std::shared_ptr<LogEntry>> merge_log_batch(const std::vector<std::shared_ptr<LogEntry>>& batch)
 {

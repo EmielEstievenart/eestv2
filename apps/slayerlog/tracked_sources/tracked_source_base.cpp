@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include "log_batch.hpp"
+
 namespace slayerlog
 {
 
@@ -51,6 +53,18 @@ LogEntry& TrackedSourceBase::append_entry()
     entry_ptr->metadata.source          = this;
     _entries.push_back(entry_ptr);
     return *entry_ptr;
+}
+
+void TrackedSourceBase::append_merged_entries(const std::vector<LogBatchSourceRange>& source_ranges)
+{
+    const std::size_t first_new_entry_index = _entries.size();
+    merge_log_batch(source_ranges, _entries);
+
+    for (std::size_t entry_index = first_new_entry_index; entry_index < _entries.size(); ++entry_index)
+    {
+        _entries[entry_index]->metadata.sequence_number = _next_sequence_number++;
+        _entries[entry_index]->metadata.source          = this;
+    }
 }
 
 } // namespace slayerlog

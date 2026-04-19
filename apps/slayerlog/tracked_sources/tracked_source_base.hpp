@@ -13,6 +13,8 @@
 namespace slayerlog
 {
 
+struct LogBatchSourceRange;
+
 class TrackedSourceBase
 {
 public:
@@ -31,6 +33,7 @@ protected:
     const std::shared_ptr<const TimestampFormatCatalog>& timestamp_formats() const;
     void reserve_entries(std::size_t additional_count);
     LogEntry& append_entry();
+    void append_merged_entries(const std::vector<LogBatchSourceRange>& source_ranges);
 
 private:
     LogSource _source;
