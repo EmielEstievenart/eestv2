@@ -280,7 +280,8 @@ LogEventResult LogController::handle_event(AllProcessedSources& processed_source
         if (!processed_sources.updates_paused())
         {
             // Unpausing flushes buffered updates
-            sync_view(processed_sources);
+            rebuild_view(processed_sources);
+            (void)processed_sources.consume_column_width_growth();
         }
         return {true, false};
     }

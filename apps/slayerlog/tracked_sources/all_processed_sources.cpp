@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cctype>
 #include <cstddef>
+#include <iomanip>
 #include <sstream>
 #include <system_error>
 
@@ -15,6 +16,30 @@ namespace slayerlog
 
 namespace
 {
+
+constexpr int minimum_source_number_column_width = 2;
+
+int decimal_width(std::size_t value)
+{
+    int width = 1;
+    while (value >= 10)
+    {
+        value /= 10;
+        ++width;
+    }
+
+    return width;
+}
+
+int rendered_timestamp_width(const LogEntry& entry)
+{
+    if (entry.metadata.parsed_time_text.empty())
+    {
+        return 0;
+    }
+
+    return static_cast<int>(entry.metadata.parsed_time_text.size()) + 2;
+}
 
 std::string trim_text(std::string_view text)
 {
@@ -114,6 +139,8 @@ void AllProcessedSources::reset()
     _hidden_before_line_number.reset();
     _hidden_columns.reset();
 
+    reset_column_width_cache();
+
     _updates_paused     = false;
     _show_source_labels = false;
 }
@@ -158,6 +185,12 @@ void AllProcessedSources::replace_batch(const std::vector<std::shared_ptr<LogEnt
     for (const auto& line : merged_lines)
     {
         _all_entries.push_back(line);
+        observe_entry_widths(AllLineIndex {static_cast<int>(_all_entries.size() - 1)}, *line);
+    }
+
+    if (_all_entries.empty())
+    {
+        reset_column_width_cache();
     }
 
     rebuild_visible_entries();
@@ -222,6 +255,12 @@ void AllProcessedSources::rebuild_from_sources(const AllTrackedSources& tracked_
     for (const auto& line : lines)
     {
         _all_entries.push_back(line);
+        observe_entry_widths(AllLineIndex {static_cast<int>(_all_entries.size() - 1)}, *line);
+    }
+
+    if (_all_entries.empty())
+    {
+        reset_column_width_cache();
     }
 
     rebuild_visible_entries();
@@ -244,6 +283,44 @@ bool AllProcessedSources::updates_paused() const
 void AllProcessedSources::set_show_source_labels(bool show_source_labels)
 {
     _show_source_labels = show_source_labels;
+}
+
+bool AllProcessedSources::show_source_labels() const
+{
+    return _show_source_labels;
+}
+
+int AllProcessedSources::line_number_column_width() const
+{
+    return _line_number_column_width;
+}
+
+int AllProcessedSources::timestamp_column_width() const
+{
+    return _timestamp_column_width;
+}
+
+int AllProcessedSources::source_number_column_width() const
+{
+    return _source_number_column_width;
+}
+
+int AllProcessedSources::source_number_column_start() const
+{
+    int column_start = _line_number_column_width + 1;
+    if (_timestamp_column_width > 0)
+    {
+        column_start += _timestamp_column_width + 1;
+    }
+
+    return column_start;
+}
+
+bool AllProcessedSources::consume_column_width_growth()
+{
+    const bool grew = _column_width_grew;
+    _column_width_grew = false;
+    return grew;
 }
 
 void AllProcessedSources::add_include_filter(std::string filter_text)
@@ -528,15 +605,15 @@ std::string AllProcessedSources::render_entry(AllLineIndex entry_index) const
 {
     std::ostringstream output;
     const auto& entry = *_all_entries[entry_index];
-    output << entry_index.value + 1 << " ";
-    if (!entry.metadata.parsed_time_text.empty())
+    output << std::setw(_line_number_column_width) << std::right << (entry_index.value + 1) << " ";
+    if (_timestamp_column_width > 0)
     {
-        output << "{" << entry.metadata.parsed_time_text << "} ";
+        output << std::left << std::setw(_timestamp_column_width) << render_timestamp_text(entry) << std::right << " ";
     }
 
     if (_show_source_labels)
     {
-        output << "[" << entry.metadata.source_label << "] ";
+        output << std::setw(_source_number_column_width) << std::right << (entry.metadata.source_index + 1) << " ";
     }
 
     output << entry.text;
@@ -550,6 +627,7 @@ void AllProcessedSources::append_lines_immediately(const std::vector<std::shared
     for (const auto& line : lines)
     {
         _all_entries.push_back(line);
+        observe_entry_widths(AllLineIndex {static_cast<int>(_all_entries.size() - 1)}, *line);
     }
 
     expand_visible_entries(first_new_entry_index);
@@ -572,6 +650,19 @@ void AllProcessedSources::apply_source_replacement(AllLineIndex first_changed_en
     }
 
     _all_entries = std::move(updated_entries);
+
+    if (_all_entries.empty())
+    {
+        reset_column_width_cache();
+    }
+    else
+    {
+        for (int index = clamped_start; index < static_cast<int>(_all_entries.size()); ++index)
+        {
+            const AllLineIndex entry_index {index};
+            observe_entry_widths(entry_index, *_all_entries[entry_index]);
+        }
+    }
 
     IndexedVector<AllLineIndex, VisibleLineIndex> retained_visible_indices;
     retained_visible_indices.reserve(_visible_entry_indices.size());
@@ -642,6 +733,52 @@ void AllProcessedSources::expand_visible_entries(AllLineIndex first_new_entry_in
             _visible_entry_indices.push_back(entry_index);
         }
     }
+}
+
+void AllProcessedSources::reset_column_width_cache()
+{
+    _line_number_column_width   = 1;
+    _timestamp_column_width     = 0;
+    _source_number_column_width = minimum_source_number_column_width;
+    _column_width_grew          = false;
+}
+
+void AllProcessedSources::observe_entry_widths(AllLineIndex entry_index, const LogEntry& entry)
+{
+    bool grew = false;
+
+    const int line_width = decimal_width(static_cast<std::size_t>(entry_index.value + 1));
+    if (line_width > _line_number_column_width)
+    {
+        _line_number_column_width = line_width;
+        grew = true;
+    }
+
+    const int timestamp_width = rendered_timestamp_width(entry);
+    if (timestamp_width > _timestamp_column_width)
+    {
+        _timestamp_column_width = timestamp_width;
+        grew = true;
+    }
+
+    const int source_width = std::max(minimum_source_number_column_width, decimal_width(entry.metadata.source_index + 1));
+    if (source_width > _source_number_column_width)
+    {
+        _source_number_column_width = source_width;
+        grew = true;
+    }
+
+    _column_width_grew = _column_width_grew || grew;
+}
+
+std::string AllProcessedSources::render_timestamp_text(const LogEntry& entry) const
+{
+    if (entry.metadata.parsed_time_text.empty())
+    {
+        return {};
+    }
+
+    return "{" + entry.metadata.parsed_time_text + "}";
 }
 
 bool AllProcessedSources::entry_matches_filters(const std::shared_ptr<LogEntry>& entry) const

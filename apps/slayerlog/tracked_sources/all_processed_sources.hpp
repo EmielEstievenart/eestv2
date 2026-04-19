@@ -42,6 +42,7 @@ public:
     void toggle_pause();
     bool updates_paused() const;
     void set_show_source_labels(bool show_source_labels);
+    bool show_source_labels() const;
     void add_include_filter(std::string filter_text);
     void add_exclude_filter(std::string filter_text);
     void reset_filters();
@@ -64,6 +65,11 @@ public:
 
     int line_count() const;
     int total_line_count() const;
+    int line_number_column_width() const;
+    int timestamp_column_width() const;
+    int source_number_column_width() const;
+    int source_number_column_start() const;
+    bool consume_column_width_growth();
     std::string rendered_line(int index) const;
     std::vector<std::string> rendered_lines(int first_index, int count) const;
     int max_rendered_line_width() const;
@@ -81,6 +87,9 @@ private:
     void flush_paused_updates();
     void rebuild_visible_entries();
     void expand_visible_entries(AllLineIndex first_new_entry_index);
+    void reset_column_width_cache();
+    void observe_entry_widths(AllLineIndex entry_index, const LogEntry& entry);
+    std::string render_timestamp_text(const LogEntry& entry) const;
     bool entry_matches_filters(const std::shared_ptr<LogEntry>& entry) const;
     std::string apply_hidden_columns(std::string text) const;
 
@@ -96,6 +105,11 @@ private:
 
     std::optional<int> _hidden_before_line_number;
     std::optional<HiddenColumnRange> _hidden_columns;
+
+    int _line_number_column_width   = 1;
+    int _timestamp_column_width     = 0;
+    int _source_number_column_width = 2;
+    bool _column_width_grew         = false;
 
     bool _updates_paused     = false;
     bool _show_source_labels = false;

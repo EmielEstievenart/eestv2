@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <string>
 
 #include <ftxui/dom/elements.hpp>
@@ -26,6 +28,22 @@ inline const auto label_filter_fg = ftxui::Color::Cyan;
 inline const auto label_find_fg   = ftxui::Color::Yellow;
 inline const auto label_key_fg    = ftxui::Color::White;
 inline const auto paused_fg       = ftxui::Color::Yellow;
+
+inline ftxui::Color source_tag_color(std::size_t source_index)
+{
+    static const std::array<ftxui::Color, 8> source_tag_palette {
+        ftxui::Color::CyanLight,
+        ftxui::Color::GreenLight,
+        ftxui::Color::YellowLight,
+        ftxui::Color::BlueLight,
+        ftxui::Color::RedLight,
+        ftxui::Color::MagentaLight,
+        ftxui::Color::White,
+        ftxui::Color::Cyan,
+    };
+
+    return source_tag_palette[source_index % source_tag_palette.size()];
+}
 
 // Scrollbar
 inline const auto scrollbar_thumb_fg = ftxui::Color::GrayLight;

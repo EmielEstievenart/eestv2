@@ -39,12 +39,20 @@ void append_sources_delta_to_processed_sources(const slayerlog::AllTrackedSource
     {
         processed_sources.replace_from_sources(tracked_sources, first_new_line_index);
         controller.rebuild_view(processed_sources);
+        (void)processed_sources.consume_column_width_growth();
         screen.PostEvent(ftxui::Event::Custom);
         return;
     }
 
     processed_sources.append_from_sources(tracked_sources, first_new_line_index);
-    controller.sync_view(processed_sources);
+    if (processed_sources.consume_column_width_growth())
+    {
+        controller.rebuild_view(processed_sources);
+    }
+    else
+    {
+        controller.sync_view(processed_sources);
+    }
     screen.PostEvent(ftxui::Event::Custom);
 }
 
@@ -129,7 +137,7 @@ int main(int argc, char** argv)
 
     std::mutex model_mutex;
     slayerlog::AllProcessedSources processed_sources;
-    processed_sources.set_show_source_labels(tracked_sources.source_count() > 1);
+    processed_sources.set_show_source_labels(tracked_sources.source_count() > 0);
 
     slayerlog::CommandHistory command_history(settings_store);
     if (!command_history.load(settings_error_message))

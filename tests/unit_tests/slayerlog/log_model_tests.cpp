@@ -160,7 +160,7 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     EXPECT_EQ(model.rendered_line(0), "1 post-reset");
 }
 
-TEST(LogModelTest, RendersSourceLabelsWhenEnabled)
+TEST(LogModelTest, RendersSourceNumbersWhenEnabled)
 {
     LogModel model;
     model.set_show_source_labels(true);
@@ -169,7 +169,7 @@ TEST(LogModelTest, RendersSourceLabelsWhenEnabled)
         LogEntry {"alpha.log", "hello"},
     });
 
-    EXPECT_EQ(model.rendered_line(0), "1 [alpha.log] hello");
+    EXPECT_EQ(model.rendered_line(0), "1  1 hello");
 }
 
 TEST(LogModelTest, RendersParsedTimeBeforeOriginalText)
@@ -181,6 +181,56 @@ TEST(LogModelTest, RendersParsedTimeBeforeOriginalText)
     });
 
     EXPECT_EQ(model.rendered_line(0), "1 {2026-04-01 10:00:00} INFO 2026-04-01 10:00:00 hello");
+}
+
+TEST(LogModelTest, ReservesTimestampColumnWidthForRowsWithoutTimestamp)
+{
+    LogModel model;
+    model.set_show_source_labels(true);
+
+    model.append_lines({
+        LogEntry {"alpha.log", "with timestamp", std::nullopt, "2026-04-01 10:00:00"},
+        LogEntry {"alpha.log", "without timestamp"},
+    });
+
+    const auto first  = model.rendered_line(0);
+    const auto second = model.rendered_line(1);
+
+    const int source_column_start = model.source_number_column_start();
+    const int source_column_width = model.source_number_column_width();
+    const int message_column      = source_column_start + source_column_width + 1;
+
+    EXPECT_EQ(first.substr(static_cast<std::size_t>(source_column_start), static_cast<std::size_t>(source_column_width)), " 1");
+    EXPECT_EQ(second.substr(static_cast<std::size_t>(source_column_start), static_cast<std::size_t>(source_column_width)), " 1");
+    EXPECT_EQ(first.substr(static_cast<std::size_t>(message_column)), "with timestamp");
+    EXPECT_EQ(second.substr(static_cast<std::size_t>(message_column)), "without timestamp");
+}
+
+TEST(LogModelTest, ColumnWidthsGrowDynamicallyAndResetWhenModelBecomesEmpty)
+{
+    LogModel model;
+    model.set_show_source_labels(true);
+
+    model.append_lines({
+        LogEntry {"alpha.log", "first", std::nullopt, "2026-04-01 10:00:00"},
+        LogEntry {123, "omega.log", "second"},
+    });
+
+    EXPECT_EQ(model.timestamp_column_width(), static_cast<int>(std::string("{2026-04-01 10:00:00}").size()));
+    EXPECT_GE(model.source_number_column_width(), 3);
+
+    model.replace_batch({
+        LogEntry {"alpha.log", "after replace"},
+    });
+
+    EXPECT_GT(model.timestamp_column_width(), 0);
+    EXPECT_GE(model.source_number_column_width(), 3);
+
+    model.replace_batch(std::vector<LogEntry> {});
+
+    EXPECT_EQ(model.line_count(), 0);
+    EXPECT_EQ(model.timestamp_column_width(), 0);
+    EXPECT_EQ(model.source_number_column_width(), 2);
 }
 
 TEST(LogModelTest, RenderedLinesReturnsVisibleSlice)

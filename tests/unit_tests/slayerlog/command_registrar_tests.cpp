@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <ftxui/component/screen_interactive.hpp>
 
@@ -89,6 +90,13 @@ TEST(CommandRegistrarTest, ExportVisibleTextWritesAllVisibleRenderedLines)
     EXPECT_EQ(read_file_contents(export_path), render_all_visible_lines(processed_sources));
 
     remove_temp_export_file(export_path);
+}
+
+TEST(CommandRegistrarTest, BuildHeaderTextIncludesNumberedSourceTags)
+{
+    EXPECT_EQ(build_header_text({}), "No files opened (use open-file <path> or open-folder <path>)");
+    EXPECT_EQ(build_header_text({"file1.txt", "file2.txt"}), "file1.txt:1 | file2.txt:2");
+    EXPECT_EQ(build_header_text({"single.log"}), "single.log:1");
 }
 
 TEST(CommandRegistrarTest, DeleteFiltersCommandOpensPickerAndRemovesSelectedFilters)
