@@ -115,7 +115,17 @@ std::optional<int> highest_shown_line_number(const AllProcessedSources& processe
 
 CommandResult open_file_command(std::string_view file_path, AllTrackedSources& tracked_sources, std::string& header_text, AllProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
 {
-    const auto error = tracked_sources.open_source(file_path);
+    LogSource source;
+    try
+    {
+        source = parse_log_source(file_path);
+    }
+    catch (const std::exception& ex)
+    {
+        return CommandResult {false, ex.what()};
+    }
+
+    const auto error = tracked_sources.open_source(source);
     if (error.has_value())
     {
         SLAYERLOG_LOG_ERROR("open-file failed file=" << file_path << " error=" << *error);
@@ -123,7 +133,7 @@ CommandResult open_file_command(std::string_view file_path, AllTrackedSources& t
     }
 
     reload_processed_sources(tracked_sources, header_text, processed_sources, controller, screen);
-    return CommandResult {true, "Opened file: " + std::string(file_path)};
+    return CommandResult {true, "Opened file: " + source_display_path(source)};
 }
 
 CommandResult open_folder_command(std::string_view folder_path, AllTrackedSources& tracked_sources, std::string& header_text, AllProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)

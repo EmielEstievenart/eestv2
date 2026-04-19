@@ -64,9 +64,9 @@ TEST(CommandRegistrarTest, ExportVisibleTextWritesAllVisibleRenderedLines)
 {
     AllProcessedSources processed_sources;
     processed_sources.append_lines({
-        ObservedLogLine {"alpha.log", "keep first"},
-        ObservedLogLine {"alpha.log", "drop second"},
-        ObservedLogLine {"alpha.log", "keep third"},
+        LogEntry {"alpha.log", "keep first"},
+        LogEntry {"alpha.log", "drop second"},
+        LogEntry {"alpha.log", "keep third"},
     });
     processed_sources.add_include_filter("keep");
     processed_sources.hide_columns(2, 5);
@@ -95,9 +95,9 @@ TEST(CommandRegistrarTest, DeleteFiltersCommandOpensPickerAndRemovesSelectedFilt
 {
     AllProcessedSources processed_sources;
     processed_sources.append_lines({
-        ObservedLogLine {"alpha.log", "show keep alpha"},
-        ObservedLogLine {"alpha.log", "hide beta"},
-        ObservedLogLine {"alpha.log", "show gamma"},
+        LogEntry {"alpha.log", "show keep alpha"},
+        LogEntry {"alpha.log", "hide beta"},
+        LogEntry {"alpha.log", "show gamma"},
     });
     processed_sources.add_include_filter("show");
     processed_sources.add_include_filter("gamma");

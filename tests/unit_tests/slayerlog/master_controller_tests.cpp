@@ -60,7 +60,7 @@ TEST(MasterControllerTest, CtrlFOpensFindPalettePrefilledFromSelection)
 {
     LogModel model;
     LogController controller;
-    model.append_lines({ObservedLogLine {"alpha.log", "error before timeout after"}});
+    model.append_lines({LogEntry {"alpha.log", "error before timeout after"}});
     controller.rebuild_view(model);
 
     const auto rendered_line   = model.rendered_line(0);
@@ -104,9 +104,9 @@ TEST(MasterControllerTest, FindShortcutEnterActivatesFindAcrossAllMatches)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error first"},
-        ObservedLogLine {"alpha.log", "info middle"},
-        ObservedLogLine {"alpha.log", "error second"},
+        LogEntry {"alpha.log", "error first"},
+        LogEntry {"alpha.log", "info middle"},
+        LogEntry {"alpha.log", "error second"},
     });
     controller.rebuild_view(model);
 
@@ -145,9 +145,9 @@ TEST(MasterControllerTest, WhenPaletteOpenInputRoutesToPalette)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "line one"},
-        ObservedLogLine {"alpha.log", "line two"},
-        ObservedLogLine {"alpha.log", "line three"},
+        LogEntry {"alpha.log", "line one"},
+        LogEntry {"alpha.log", "line two"},
+        LogEntry {"alpha.log", "line three"},
     });
     controller.rebuild_view(model);
     controller.text_view_controller().update_viewport_line_count(1);

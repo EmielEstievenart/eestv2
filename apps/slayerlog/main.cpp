@@ -1,5 +1,6 @@
 #include <atomic>
 #include <chrono>
+#include <exception>
 #include <iostream>
 #include <mutex>
 #include <string>
@@ -18,7 +19,7 @@
 #include "debug_log.hpp"
 #include "tracked_sources/all_tracked_sources.hpp"
 #include "log_controller.hpp"
-#include "timestamp/log_timestamp.hpp"
+#include "timestamp/source_timestamp_parser.hpp"
 #include "log_view.hpp"
 #include "master_controller.hpp"
 #include "master_view.hpp"
@@ -94,7 +95,19 @@ int main(int argc, char** argv)
     SLAYERLOG_LOG_INFO("Starting slayerlog poll_interval_ms=" << config.poll_interval_ms << " configured_sources=" << config.file_paths.size());
     for (const auto& file_path : config.file_paths)
     {
-        const auto error = tracked_sources.open_source(file_path);
+        slayerlog::LogSource source;
+        try
+        {
+            source = slayerlog::parse_log_source(file_path);
+        }
+        catch (const std::exception& ex)
+        {
+            SLAYERLOG_LOG_ERROR("Initial source parse failed file=" << file_path << " error=" << ex.what());
+            std::cerr << ex.what() << '\n';
+            return 1;
+        }
+
+        const auto error = tracked_sources.open_source(source);
         if (error.has_value())
         {
             SLAYERLOG_LOG_ERROR("Initial source open failed file=" << file_path << " error=" << *error);

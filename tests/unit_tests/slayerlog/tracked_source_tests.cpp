@@ -10,7 +10,9 @@
 
 #include <zstd.h>
 
-#include "tracked_source.hpp"
+#include "tracked_source_base.hpp"
+#include "tracked_source_file.hpp"
+#include "tracked_source_folder.hpp"
 
 namespace slayerlog
 {
@@ -102,7 +104,7 @@ private:
     std::filesystem::path _path;
 };
 
-std::vector<std::string> delta_texts(const TrackedSource& tracked_source, std::size_t first_new_entry_index)
+std::vector<std::string> delta_texts(const TrackedSourceBase& tracked_source, std::size_t first_new_entry_index)
 {
     std::vector<std::string> texts;
     const auto& entries = tracked_source.entries();
@@ -115,14 +117,14 @@ std::vector<std::string> delta_texts(const TrackedSource& tracked_source, std::s
     return texts;
 }
 
-void expect_poll_lines(TrackedSource& tracked_source, const std::vector<std::string>& expected_lines)
+void expect_poll_lines(TrackedSourceBase& tracked_source, const std::vector<std::string>& expected_lines)
 {
     const std::size_t first_new_entry_index = tracked_source.entries().size();
     ASSERT_TRUE(tracked_source.poll());
     EXPECT_EQ(delta_texts(tracked_source, first_new_entry_index), expected_lines);
 }
 
-void expect_no_poll_lines(TrackedSource& tracked_source)
+void expect_no_poll_lines(TrackedSourceBase& tracked_source)
 {
     const std::size_t entry_count = tracked_source.entries().size();
     EXPECT_FALSE(tracked_source.poll());
@@ -133,7 +135,7 @@ void expect_no_poll_lines(TrackedSource& tracked_source)
 
 TEST(TrackedSourceTest, StoresParsedEntriesAndSequenceNumbers)
 {
-    TrackedSource tracked_source(parse_log_source("alpha.log"), "alpha.log");
+    TrackedSourceFile tracked_source(parse_log_source("alpha.log"), "alpha.log");
 
     tracked_source.add_entries_from_raw_strings({
         "2026-04-01T10:00:00 first",
@@ -158,7 +160,7 @@ TEST(TrackedSourceTest, StoresParsedEntriesAndSequenceNumbers)
 
 TEST(TrackedSourceTest, UpdatesSourceLabelWithoutTouchingStoredEntries)
 {
-    TrackedSource tracked_source(parse_log_source("alpha.log"), "alpha.log");
+    TrackedSourceFile tracked_source(parse_log_source("alpha.log"), "alpha.log");
     tracked_source.add_entries_from_raw_strings({"plain line"});
 
     tracked_source.set_source_label("renamed.log");
@@ -173,7 +175,7 @@ TEST(TrackedSourceTest, FolderPollKeepsTailingNormalFilesAfterFirstPoll)
     ScopedTestFolder folder;
     folder.write_file("alpha.log", "first\nsecond\n");
 
-    TrackedSource tracked_source(make_local_folder_source(folder.path().string()), "archive");
+    TrackedSourceFolder tracked_source(make_local_folder_source(folder.path().string()), "archive");
     expect_poll_lines(tracked_source, {"first", "second"});
 
     folder.append_file("alpha.log", "third\nfourth\n");
@@ -186,7 +188,7 @@ TEST(TrackedSourceTest, FolderPollDiscoversNewlyCreatedNormalFiles)
     ScopedTestFolder folder;
     folder.write_file("alpha.log", "alpha first\n");
 
-    TrackedSource tracked_source(make_local_folder_source(folder.path().string()), "archive");
+    TrackedSourceFolder tracked_source(make_local_folder_source(folder.path().string()), "archive");
     expect_poll_lines(tracked_source, {"alpha first"});
 
     folder.write_file("beta.log", "beta first\n");
@@ -201,7 +203,7 @@ TEST(TrackedSourceTest, FolderPollDiscoversNewlyCreatedZstdFilesOnce)
     ScopedTestFolder folder;
     folder.write_file("alpha.log", "2026-04-01T10:02:00 alpha second\n");
 
-    TrackedSource tracked_source(make_local_folder_source(folder.path().string()), "archive");
+    TrackedSourceFolder tracked_source(make_local_folder_source(folder.path().string()), "archive");
     expect_poll_lines(tracked_source, {"2026-04-01T10:02:00 alpha second"});
 
     folder.write_zstd_file("beta.log.zst", "2026-04-01T10:01:00 from zst\nplain zst follow-up\n");
@@ -212,18 +214,19 @@ TEST(TrackedSourceTest, FolderPollDiscoversNewlyCreatedZstdFilesOnce)
     expect_no_poll_lines(tracked_source);
 }
 
-TEST(TrackedSourceTest, FolderPollDeletedAndRecreatedZstdFileIsNotReread)
+TEST(TrackedSourceTest, FolderPollDeletedAndRecreatedZstdFileIsReread)
 {
     ScopedTestFolder folder;
     folder.write_zstd_file("archive.log.zst", "first\n");
 
-    TrackedSource tracked_source(make_local_folder_source(folder.path().string()), "archive");
+    TrackedSourceFolder tracked_source(make_local_folder_source(folder.path().string()), "archive");
     expect_poll_lines(tracked_source, {"first"});
 
     folder.remove_file("archive.log.zst");
     expect_no_poll_lines(tracked_source);
 
     folder.write_zstd_file("archive.log.zst", "second\n");
+    expect_poll_lines(tracked_source, {"second"});
     expect_no_poll_lines(tracked_source);
 }
 
@@ -233,7 +236,7 @@ TEST(TrackedSourceTest, FolderPollMergesPlainAndZstdChildResultsByTimestamp)
     folder.write_file("alpha.log", "2026-04-01T10:02:00 alpha second\n");
     folder.write_zstd_file("beta.log.zst", "2026-04-01T10:01:00 beta first\n");
 
-    TrackedSource tracked_source(make_local_folder_source(folder.path().string()), "archive");
+    TrackedSourceFolder tracked_source(make_local_folder_source(folder.path().string()), "archive");
     expect_poll_lines(tracked_source, {
                                         "2026-04-01T10:01:00 beta first",
                                         "2026-04-01T10:02:00 alpha second",
@@ -248,7 +251,7 @@ TEST(TrackedSourceTest, FolderPollMergesPlainAndZstdChildResultsByTimestamp)
 TEST(TrackedSourceTest, FolderPollMissingFolderThrows)
 {
     const auto missing_path = make_unique_test_folder();
-    TrackedSource tracked_source(make_local_folder_source(missing_path.string()), "missing");
+    TrackedSourceFolder tracked_source(make_local_folder_source(missing_path.string()), "missing");
 
     EXPECT_THROW(tracked_source.poll(), std::runtime_error);
 }

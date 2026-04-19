@@ -17,9 +17,9 @@ using LogModel = AllProcessedSources;
 namespace
 {
 
-std::vector<ObservedLogLine> numbered_lines(int count)
+std::vector<LogEntry> numbered_lines(int count)
 {
-    std::vector<ObservedLogLine> lines;
+    std::vector<LogEntry> lines;
     lines.reserve(static_cast<std::size_t>(count));
     for (int index = 1; index <= count; ++index)
     {
@@ -60,11 +60,11 @@ TEST(LogControllerTest, GoToLineCentersVisibleContentAndFailsForHiddenLine)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "info one"},
-        ObservedLogLine {"alpha.log", "error two"},
-        ObservedLogLine {"alpha.log", "info three"},
-        ObservedLogLine {"alpha.log", "info four"},
-        ObservedLogLine {"alpha.log", "error five"},
+        LogEntry {"alpha.log", "info one"},
+        LogEntry {"alpha.log", "error two"},
+        LogEntry {"alpha.log", "info three"},
+        LogEntry {"alpha.log", "info four"},
+        LogEntry {"alpha.log", "error five"},
     });
     model.add_include_filter("error");
     controller.rebuild_view(model);
@@ -81,9 +81,9 @@ TEST(LogControllerTest, FindNavigationUsesVisibleMatchesAndWraps)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error first"},
-        ObservedLogLine {"alpha.log", "error hidden"},
-        ObservedLogLine {"alpha.log", "error third"},
+        LogEntry {"alpha.log", "error first"},
+        LogEntry {"alpha.log", "error hidden"},
+        LogEntry {"alpha.log", "error third"},
     });
     model.add_exclude_filter("hidden");
     controller.rebuild_view(model);
@@ -115,9 +115,9 @@ TEST(LogControllerTest, FindNavigationRecoversWhenActiveMatchBecomesHidden)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error one"},
-        ObservedLogLine {"alpha.log", "error two"},
-        ObservedLogLine {"alpha.log", "error three"},
+        LogEntry {"alpha.log", "error one"},
+        LogEntry {"alpha.log", "error two"},
+        LogEntry {"alpha.log", "error three"},
     });
     controller.rebuild_view(model);
     controller.text_view_controller().update_viewport_line_count(1);
@@ -142,9 +142,9 @@ TEST(LogControllerTest, InvalidRegexFindKeepsExistingFindState)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error one"},
-        ObservedLogLine {"alpha.log", "error two"},
-        ObservedLogLine {"alpha.log", "info three"},
+        LogEntry {"alpha.log", "error one"},
+        LogEntry {"alpha.log", "error two"},
+        LogEntry {"alpha.log", "info three"},
     });
     controller.rebuild_view(model);
     controller.text_view_controller().update_viewport_line_count(1);
@@ -166,8 +166,8 @@ TEST(LogControllerTest, HandleEventEscapeClearsFindBeforeRequestingExit)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error one"},
-        ObservedLogLine {"alpha.log", "error two"},
+        LogEntry {"alpha.log", "error one"},
+        LogEntry {"alpha.log", "error two"},
     });
     controller.rebuild_view(model);
     controller.text_view_controller().update_viewport_line_count(1);
@@ -188,9 +188,9 @@ TEST(LogControllerTest, HandleEventLeftAndRightArrowNavigateFindResults)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error one"},
-        ObservedLogLine {"alpha.log", "error two"},
-        ObservedLogLine {"alpha.log", "error three"},
+        LogEntry {"alpha.log", "error one"},
+        LogEntry {"alpha.log", "error two"},
+        LogEntry {"alpha.log", "error three"},
     });
     controller.rebuild_view(model);
     controller.text_view_controller().update_viewport_line_count(1);
@@ -218,8 +218,8 @@ TEST(LogControllerTest, SelectionTracksBoundsAndExtractsText)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "alpha"},
-        ObservedLogLine {"alpha.log", "bravo"},
+        LogEntry {"alpha.log", "alpha"},
+        LogEntry {"alpha.log", "bravo"},
     });
     controller.rebuild_view(model);
 
@@ -282,9 +282,9 @@ TEST(LogControllerTest, FindCountsAllMatchesWhileVisibleCountRespectsFilters)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error first"},
-        ObservedLogLine {"alpha.log", "error hidden"},
-        ObservedLogLine {"alpha.log", "error third"},
+        LogEntry {"alpha.log", "error first"},
+        LogEntry {"alpha.log", "error hidden"},
+        LogEntry {"alpha.log", "error third"},
     });
     model.add_exclude_filter("hidden");
     controller.rebuild_view(model);
@@ -300,9 +300,9 @@ TEST(LogControllerTest, FindSupportsRegexWithRePrefix)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "request id=12"},
-        ObservedLogLine {"alpha.log", "request id=AB"},
-        ObservedLogLine {"alpha.log", "request id=77"},
+        LogEntry {"alpha.log", "request id=12"},
+        LogEntry {"alpha.log", "request id=AB"},
+        LogEntry {"alpha.log", "request id=77"},
     });
     controller.rebuild_view(model);
 
@@ -320,7 +320,7 @@ TEST(LogControllerTest, ClearingFindRemovesAllFindState)
     LogModel model;
     LogController controller;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "needle"},
+        LogEntry {"alpha.log", "needle"},
     });
     controller.rebuild_view(model);
 

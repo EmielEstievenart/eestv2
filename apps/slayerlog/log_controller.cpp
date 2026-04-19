@@ -371,7 +371,7 @@ void LogController::expand_find_matches(const AllProcessedSources& processed_sou
     }
 }
 
-bool LogController::entry_matches_find_query(const ObservedLogLine& entry) const
+bool LogController::entry_matches_find_query(const LogEntry& entry) const
 {
     return _find_pattern.has_value() && matches_pattern(entry.text, *_find_pattern);
 }

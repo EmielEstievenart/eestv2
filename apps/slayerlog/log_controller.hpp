@@ -72,7 +72,7 @@ private:
     std::vector<std::string>& inactive_buffer();
     void rebuild_find_matches(const AllProcessedSources& processed_sources);
     void expand_find_matches(const AllProcessedSources& processed_sources, AllLineIndex first_new_entry_index);
-    bool entry_matches_find_query(const ObservedLogLine& entry) const;
+    bool entry_matches_find_query(const LogEntry& entry) const;
 
     TextViewController _text_view_controller;
 

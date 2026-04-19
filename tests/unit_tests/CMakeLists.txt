@@ -50,12 +50,16 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/file_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/zstd_file_watcher.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_source.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/tracked_source.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/tracked_source_base.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/tracked_source_file.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/tracked_source_folder.cpp
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/tracked_source_factory.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/all_tracked_sources.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_batch.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/log_view.cpp
-   ${CMAKE_SOURCE_DIR}/apps/slayerlog/timestamp/log_timestamp.cpp
+    ${CMAKE_SOURCE_DIR}/apps/slayerlog/timestamp/source_timestamp_parser.cpp
+    ${CMAKE_SOURCE_DIR}/apps/slayerlog/timestamp/timestamp_format_catalog.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_controller.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_controller.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/master_view.cpp
@@ -65,8 +69,9 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_ini.hpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/settings_store.hpp
-   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/ssh_tail_watcher.cpp
-   ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/stream_line_buffer.cpp
+    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/ssh_tail_watcher.cpp
+    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/log_watcher_factory.cpp
+    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/stream_line_buffer.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/all_processed_sources.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/search_pattern.cpp)
 

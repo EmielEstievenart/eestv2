@@ -1,11 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <optional>
 #include <string>
 #include <utility>
 
 #include "log_batch.hpp"
-#include "timestamp/log_timestamp.hpp"
+#include "timestamp/source_timestamp_parser.hpp"
 
 namespace slayerlog
 {
@@ -13,10 +14,22 @@ namespace slayerlog
 namespace
 {
 
-LogBatchEntry make_entry(std::size_t source_index, std::string source_label, std::string text)
+LogEntry make_entry(std::size_t source_index, std::string source_label, std::string text)
 {
-    const auto timestamp = parse_log_timestamp(text);
-    return LogBatchEntry {
+    std::optional<std::chrono::system_clock::time_point> timestamp;
+
+    const auto catalog = default_timestamp_format_catalog();
+    if (catalog != nullptr)
+    {
+        SourceTimestampParser parser;
+        LogEntry raw_line(text);
+        if (parser.init(raw_line, *catalog))
+        {
+            timestamp = raw_line.metadata.timestamp;
+        }
+    }
+
+    return LogEntry {
         source_index, std::move(source_label), std::move(text), timestamp, 0,
     };
 }

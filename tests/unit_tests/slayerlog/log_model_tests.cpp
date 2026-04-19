@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -28,9 +30,9 @@ std::vector<std::string> rendered_texts(const LogModel& model)
     return lines;
 }
 
-std::vector<ObservedLogLine> numbered_lines(int count)
+std::vector<LogEntry> numbered_lines(int count)
 {
-    std::vector<ObservedLogLine> lines;
+    std::vector<LogEntry> lines;
     lines.reserve(static_cast<std::size_t>(count));
     for (int index = 1; index <= count; ++index)
     {
@@ -40,11 +42,12 @@ std::vector<ObservedLogLine> numbered_lines(int count)
     return lines;
 }
 
-LogBatchEntry make_batch_entry(std::size_t source_index, std::string source_label, std::string text, std::uint64_t sequence_number, std::optional<LogTimePoint> timestamp = std::nullopt, std::string parsed_time_text = {})
+LogEntry make_batch_entry(std::size_t source_index, std::string source_label, std::string text, std::uint64_t sequence_number,
+                         std::optional<std::chrono::system_clock::time_point> timestamp = std::nullopt, std::string parsed_time_text = {})
 {
-    LogBatchEntry entry;
-    entry.source_index           = source_index;
-    entry.source_label           = std::move(source_label);
+    LogEntry entry;
+    entry.metadata.source_index  = source_index;
+    entry.metadata.source_label  = std::move(source_label);
     entry.text                   = std::move(text);
     entry.metadata.timestamp     = timestamp;
     entry.metadata.sequence_number = sequence_number;
@@ -59,9 +62,9 @@ TEST(LogModelTest, AppendsLinesInProvidedOrder)
     LogModel model;
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "plain alpha"},
-        ObservedLogLine {"beta.log", "2026-04-01T10:01:00 beta timed"},
-        ObservedLogLine {"alpha.log", "2026-04-01T10:02:00 alpha timed"},
+        LogEntry {"alpha.log", "plain alpha"},
+        LogEntry {"beta.log", "2026-04-01T10:01:00 beta timed"},
+        LogEntry {"alpha.log", "2026-04-01T10:02:00 alpha timed"},
     });
 
     EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
@@ -77,8 +80,8 @@ TEST(LogModelTest, PausedUpdatesAppendWhenResumed)
     model.toggle_pause();
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "first"},
-        ObservedLogLine {"beta.log", "second"},
+        LogEntry {"alpha.log", "first"},
+        LogEntry {"beta.log", "second"},
     });
 
     EXPECT_EQ(model.line_count(), 0);
@@ -96,7 +99,7 @@ TEST(LogModelTest, ReplaceBatchPreservesSessionState)
     LogModel model;
     model.set_show_source_labels(true);
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error seed"},
+        LogEntry {"alpha.log", "error seed"},
     });
     model.add_include_filter("error");
     model.hide_before_line_number(2);
@@ -129,8 +132,8 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     model.set_show_source_labels(true);
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error one"},
-        ObservedLogLine {"alpha.log", "info two"},
+        LogEntry {"alpha.log", "error one"},
+        LogEntry {"alpha.log", "info two"},
     });
     model.add_include_filter("error");
     model.add_exclude_filter("ignore");
@@ -138,7 +141,7 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     model.hide_columns(2, 5);
     model.toggle_pause();
     model.append_lines({
-        ObservedLogLine {"alpha.log", "queued while paused"},
+        LogEntry {"alpha.log", "queued while paused"},
     });
 
     model.reset();
@@ -152,7 +155,7 @@ TEST(LogModelTest, ResetClearsAllLoadedAndDerivedState)
     EXPECT_FALSE(model.updates_paused());
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "post-reset"},
+        LogEntry {"alpha.log", "post-reset"},
     });
     EXPECT_EQ(model.rendered_line(0), "1 post-reset");
 }
@@ -163,7 +166,7 @@ TEST(LogModelTest, RendersSourceLabelsWhenEnabled)
     model.set_show_source_labels(true);
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "hello"},
+        LogEntry {"alpha.log", "hello"},
     });
 
     EXPECT_EQ(model.rendered_line(0), "1 [alpha.log] hello");
@@ -174,7 +177,7 @@ TEST(LogModelTest, RendersParsedTimeBeforeOriginalText)
     LogModel model;
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, "2026-04-01 10:00:00"},
+        LogEntry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, "2026-04-01 10:00:00"},
     });
 
     EXPECT_EQ(model.rendered_line(0), "1 {2026-04-01 10:00:00} INFO 2026-04-01 10:00:00 hello");
@@ -185,9 +188,9 @@ TEST(LogModelTest, RenderedLinesReturnsVisibleSlice)
     LogModel model;
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "first"},
-        ObservedLogLine {"alpha.log", "second"},
-        ObservedLogLine {"alpha.log", "third"},
+        LogEntry {"alpha.log", "first"},
+        LogEntry {"alpha.log", "second"},
+        LogEntry {"alpha.log", "third"},
     });
     model.add_exclude_filter("second");
 
@@ -202,10 +205,10 @@ TEST(LogModelTest, FiltersApplyRetroactivelyAndToNewLines)
     LogModel model;
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error critical"},
-        ObservedLogLine {"alpha.log", "warn noisy"},
-        ObservedLogLine {"alpha.log", "warn useful"},
-        ObservedLogLine {"alpha.log", "info ignored"},
+        LogEntry {"alpha.log", "error critical"},
+        LogEntry {"alpha.log", "warn noisy"},
+        LogEntry {"alpha.log", "warn useful"},
+        LogEntry {"alpha.log", "info ignored"},
     });
 
     model.add_include_filter("error");
@@ -218,8 +221,8 @@ TEST(LogModelTest, FiltersApplyRetroactivelyAndToNewLines)
                                      }));
 
     model.append_lines({
-        ObservedLogLine {"alpha.log", "warn newest"},
-        ObservedLogLine {"alpha.log", "debug newest"},
+        LogEntry {"alpha.log", "warn newest"},
+        LogEntry {"alpha.log", "debug newest"},
     });
     EXPECT_EQ(rendered_texts(model), (std::vector<std::string> {
                                          "error critical",
@@ -256,7 +259,7 @@ TEST(LogModelTest, HideColumnsRemovesDisplayedRange)
 {
     LogModel model;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "abcdef"},
+        LogEntry {"alpha.log", "abcdef"},
     });
 
     model.hide_columns(2, 4);
@@ -270,7 +273,7 @@ TEST(LogModelTest, ResetHiddenColumnsRestoresRenderedText)
 {
     LogModel model;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "abcdef"},
+        LogEntry {"alpha.log", "abcdef"},
     });
     model.hide_columns(2, 4);
 
@@ -294,9 +297,9 @@ TEST(LogModelTest, FiltersSupportRegexWithRePrefix)
 {
     LogModel model;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "status=200 ok"},
-        ObservedLogLine {"alpha.log", "status=404 missing"},
-        ObservedLogLine {"alpha.log", "status=500 error"},
+        LogEntry {"alpha.log", "status=200 ok"},
+        LogEntry {"alpha.log", "status=404 missing"},
+        LogEntry {"alpha.log", "status=500 error"},
     });
 
     model.add_include_filter("re:status=(4|5)\\d\\d");
@@ -311,8 +314,8 @@ TEST(LogModelTest, InvalidRegexFilterIsRejectedAndKeepsExistingFilters)
 {
     LogModel model;
     model.append_lines({
-        ObservedLogLine {"alpha.log", "error first"},
-        ObservedLogLine {"alpha.log", "warn second"},
+        LogEntry {"alpha.log", "error first"},
+        LogEntry {"alpha.log", "warn second"},
     });
 
     model.add_include_filter("error");

@@ -2,18 +2,15 @@
 
 #include <cstddef>
 #include <exception>
+#include <memory>
 #include <utility>
 
 #include "debug_log.hpp"
-#include "tracked_source.hpp"
+#include "tracked_source_base.hpp"
+#include "tracked_source_factory.hpp"
 
 namespace slayerlog
 {
-
-struct AllTrackedSources::SourceState
-{
-    TrackedSource tracked_source;
-};
 
 AllTrackedSources::AllTrackedSources(std::shared_ptr<const TimestampFormatCatalog> timestamp_formats) : _timestamp_formats(std::move(timestamp_formats))
 {
@@ -25,18 +22,6 @@ AllTrackedSources::AllTrackedSources(std::shared_ptr<const TimestampFormatCatalo
 
 AllTrackedSources::~AllTrackedSources() = default;
 
-std::optional<std::string> AllTrackedSources::open_source(std::string_view source_spec)
-{
-    try
-    {
-        return open_source(parse_log_source(source_spec));
-    }
-    catch (const std::exception& ex)
-    {
-        return ex.what();
-    }
-}
-
 std::optional<std::string> AllTrackedSources::open_source(const LogSource& source)
 {
     if (contains_source(source))
@@ -47,11 +32,9 @@ std::optional<std::string> AllTrackedSources::open_source(const LogSource& sourc
     try
     {
         const std::size_t source_index = _sources.size();
-        SourceState source_state {
-            TrackedSource(source, source_display_path(source), _timestamp_formats),
-        };
+        auto source_state              = create_tracked_source(source, source_display_path(source), _timestamp_formats);
 
-        source_state.tracked_source.poll();
+        source_state->poll();
 
         _sources.push_back(std::move(source_state));
         rebuild_source_labels();
@@ -75,7 +58,7 @@ std::optional<std::string> AllTrackedSources::close_source(std::size_t source_in
 
     if (closed_label != nullptr)
     {
-        *closed_label = _sources[source_index].tracked_source.source_label();
+        *closed_label = _sources[source_index]->source_label();
     }
 
     _sources.erase(_sources.begin() + static_cast<std::ptrdiff_t>(source_index));
@@ -86,31 +69,31 @@ std::optional<std::string> AllTrackedSources::close_source(std::size_t source_in
 
 std::optional<AllLineIndex> AllTrackedSources::poll()
 {
-    LogBatch batch;
+    std::vector<LogEntry> batch;
 
     for (std::size_t source_index = 0; source_index < _sources.size(); ++source_index)
     {
-        auto& source_state = _sources[source_index];
+        auto& source = _sources[source_index];
 
         try
         {
-            const std::size_t first_new_entry_index = source_state.tracked_source.entries().size();
+            const std::size_t first_new_entry_index = source->entries().size();
 
-            if (!source_state.tracked_source.poll())
+            if (!source->poll())
             {
                 continue;
             }
 
-            append_entries_to_batch(batch, source_state, source_index, first_new_entry_index);
+            append_entries_to_batch(batch, *source, source_index, first_new_entry_index);
         }
         catch (const std::exception& ex)
         {
-            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << source_display_path(source_state.tracked_source.source()) << " error=" << ex.what());
+            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << source_display_path(source->source()) << " error=" << ex.what());
             continue;
         }
         catch (...)
         {
-            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << source_display_path(source_state.tracked_source.source()) << " error=<unknown>");
+            SLAYERLOG_LOG_WARNING("Watcher poll threw for source=" << source_display_path(source->source()) << " error=<unknown>");
             continue;
         }
     }
@@ -125,7 +108,7 @@ std::optional<AllLineIndex> AllTrackedSources::poll()
     return first_new_index;
 }
 
-const IndexedVector<ObservedLogLine, AllLineIndex>& AllTrackedSources::all_lines() const
+const IndexedVector<LogEntry, AllLineIndex>& AllTrackedSources::all_lines() const
 {
     return _all_lines;
 }
@@ -149,9 +132,9 @@ std::vector<std::string> AllTrackedSources::source_labels() const
 {
     std::vector<std::string> labels;
     labels.reserve(_sources.size());
-    for (const auto& source_state : _sources)
+    for (const auto& source : _sources)
     {
-        labels.push_back(source_state.tracked_source.source_label());
+        labels.push_back(source->source_label());
     }
 
     return labels;
@@ -159,9 +142,9 @@ std::vector<std::string> AllTrackedSources::source_labels() const
 
 bool AllTrackedSources::contains_source(const LogSource& candidate_source) const
 {
-    for (const auto& source_state : _sources)
+    for (const auto& source : _sources)
     {
-        if (same_source(source_state.tracked_source.source(), candidate_source))
+        if (same_source(source->source(), candidate_source))
         {
             return true;
         }
@@ -174,15 +157,15 @@ void AllTrackedSources::rebuild_source_labels()
 {
     std::vector<LogSource> sources;
     sources.reserve(_sources.size());
-    for (const auto& source_state : _sources)
+    for (const auto& source : _sources)
     {
-        sources.push_back(source_state.tracked_source.source());
+        sources.push_back(source->source());
     }
 
     const auto labels = build_source_labels(sources);
     for (std::size_t index = 0; index < _sources.size(); ++index)
     {
-        _sources[index].tracked_source.set_source_label(labels[index]);
+        _sources[index]->set_source_label(labels[index]);
     }
 }
 
@@ -190,18 +173,18 @@ void AllTrackedSources::rebuild_all_lines()
 {
     _all_lines.clear();
 
-    LogBatch batch;
+    std::vector<LogEntry> batch;
     for (std::size_t source_index = 0; source_index < _sources.size(); ++source_index)
     {
-        append_entries_to_batch(batch, _sources[source_index], source_index, 0);
+        append_entries_to_batch(batch, *_sources[source_index], source_index, 0);
     }
 
     append_merged_lines(merge_log_batch(batch));
 }
 
-void AllTrackedSources::append_entries_to_batch(LogBatch& batch, const SourceState& source_state, std::size_t source_index, std::size_t first_entry_index) const
+void AllTrackedSources::append_entries_to_batch(std::vector<LogEntry>& batch, const TrackedSourceBase& source, std::size_t source_index, std::size_t first_entry_index) const
 {
-    const auto& entries = source_state.tracked_source.entries();
+    const auto& entries = source.entries();
     if (first_entry_index >= entries.size())
     {
         return;
@@ -210,20 +193,14 @@ void AllTrackedSources::append_entries_to_batch(LogBatch& batch, const SourceSta
     batch.reserve(batch.size() + (entries.size() - first_entry_index));
     for (std::size_t entry_index = first_entry_index; entry_index < entries.size(); ++entry_index)
     {
-        const auto& entry = entries[entry_index];
-        LogBatchEntry batch_entry;
-        batch_entry.source_index           = source_index;
-        batch_entry.source_label           = source_state.tracked_source.source_label();
-        batch_entry.text                   = entry.text;
-        batch_entry.metadata.timestamp     = entry.metadata.timestamp;
-        batch_entry.metadata.sequence_number = entry.metadata.sequence_number;
-        batch_entry.metadata.parsed_time_text    = entry.metadata.parsed_time_text;
-        batch_entry.metadata.extracted_time_text = entry.metadata.extracted_time_text;
+        LogEntry batch_entry              = entries[entry_index];
+        batch_entry.metadata.source_index = source_index;
+        batch_entry.metadata.source_label = source.source_label();
         batch.push_back(std::move(batch_entry));
     }
 }
 
-void AllTrackedSources::append_merged_lines(const std::vector<ObservedLogLine>& lines)
+void AllTrackedSources::append_merged_lines(const std::vector<LogEntry>& lines)
 {
     _all_lines.reserve(_all_lines.size() + lines.size());
     for (const auto& line : lines)

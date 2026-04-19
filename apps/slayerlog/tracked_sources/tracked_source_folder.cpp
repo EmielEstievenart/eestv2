@@ -1,14 +1,13 @@
-#include "tracked_source.hpp"
+#include "tracked_source_folder.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
-#include <memory>
 #include <stdexcept>
 #include <utility>
 
+#include "log_batch.hpp"
 #include "watchers/file_watcher.hpp"
-#include "watchers/ssh_tail_watcher.hpp"
 #include "watchers/zstd_file_watcher.hpp"
 
 namespace slayerlog
@@ -75,100 +74,18 @@ std::vector<std::filesystem::path> enumerate_regular_files(const std::string& fo
     return files;
 }
 
-std::unique_ptr<LogWatcherBase> create_single_watcher_for_source(const LogSource& source)
-{
-    if (source.kind == LogSourceKind::SshRemoteFile)
-    {
-        return std::make_unique<SshTailWatcher>(source);
-    }
-
-    if (source.kind == LogSourceKind::LocalFile)
-    {
-        return std::make_unique<FileWatcher>(source.local_path);
-    }
-
-    return nullptr;
-}
-
 } // namespace
 
-TrackedSource::TrackedSource(LogSource source, std::string source_label, std::shared_ptr<const TimestampFormatCatalog> timestamp_formats)
-    : _source(std::move(source)), _source_label(std::move(source_label)), _timestamp_formats(std::move(timestamp_formats)), _timestamp_parser(_timestamp_formats)
+TrackedSourceFolder::TrackedSourceFolder(LogSource source, std::string source_label, std::shared_ptr<const TimestampFormatCatalog> timestamp_formats)
+    : TrackedSourceBase(std::move(source), std::move(source_label), std::move(timestamp_formats))
 {
-    if (_timestamp_formats == nullptr)
-    {
-        _timestamp_formats = default_timestamp_format_catalog();
-        _timestamp_parser  = SourceTimestampParser(_timestamp_formats);
-    }
-
-    _single_watcher = create_single_watcher_for_source(_source);
 }
 
-const LogSource& TrackedSource::source() const
-{
-    return _source;
-}
-
-const std::string& TrackedSource::source_label() const
-{
-    return _source_label;
-}
-
-void TrackedSource::set_source_label(std::string source_label)
-{
-    _source_label = std::move(source_label);
-}
-
-void TrackedSource::add_entries_from_raw_strings(std::vector<std::string> lines)
-{
-    _entries.reserve(_entries.size() + lines.size());
-    for (auto& line : lines)
-    {
-        _entries.emplace_back(std::move(line));
-        auto& parsed_line = _entries.back();
-        _timestamp_parser.parse(parsed_line);
-        parsed_line.metadata.sequence_number = _next_sequence_number++;
-        parsed_line.metadata.source          = this;
-    }
-}
-
-bool TrackedSource::poll()
-{
-    if (_source.kind == LogSourceKind::LocalFolder)
-    {
-        return poll_folder();
-    }
-
-    return poll_single();
-}
-
-const std::vector<LogEntry>& TrackedSource::entries() const
-{
-    return _entries;
-}
-
-bool TrackedSource::poll_single()
-{
-    if (_single_watcher == nullptr)
-    {
-        return false;
-    }
-
-    std::vector<std::string> lines;
-    if (!_single_watcher->poll(lines) || lines.empty())
-    {
-        return false;
-    }
-
-    add_entries_from_raw_strings(std::move(lines));
-    return true;
-}
-
-bool TrackedSource::poll_folder()
+bool TrackedSourceFolder::poll()
 {
     refresh_active_children();
 
-    LogBatch batch;
+    std::vector<LogEntry> batch;
     for (std::size_t source_index = 0; source_index < _active_file_order.size(); ++source_index)
     {
         const std::string& path_key = _active_file_order[source_index];
@@ -182,31 +99,34 @@ bool TrackedSource::poll_folder()
         std::vector<std::string> child_lines;
         if (!child.watcher->poll(child_lines) || child_lines.empty())
         {
-            if (child.is_zstd)
-            {
-                _consumed_zstd_paths.insert(path_key);
-                _children.erase(child_it);
-            }
             continue;
+        }
+
+        if (!child.timestamp_parser_initialized)
+        {
+            for (const auto& line : child_lines)
+            {
+                LogEntry probe(line);
+                const auto catalog = timestamp_formats();
+                if (catalog == nullptr || !child.timestamp_parser.init(probe, *catalog))
+                {
+                    continue;
+                }
+
+                child.timestamp_parser_initialized = true;
+                break;
+            }
         }
 
         batch.reserve(batch.size() + child_lines.size());
         for (auto& line : child_lines)
         {
-            LogBatchEntry batch_entry;
-            batch_entry.source_index = source_index;
-            batch_entry.source_label = _source_label;
-            batch_entry.text         = std::move(line);
+            LogEntry batch_entry;
+            batch_entry.metadata.source_index = source_index;
+            batch_entry.metadata.source_label = source_label();
+            batch_entry.text                  = std::move(line);
             child.timestamp_parser.parse(batch_entry);
-
-            batch_entry.metadata.sequence_number = child.next_line_sequence++;
             batch.push_back(std::move(batch_entry));
-        }
-
-        if (child.is_zstd)
-        {
-            _consumed_zstd_paths.insert(path_key);
-            _children.erase(child_it);
         }
     }
 
@@ -216,29 +136,25 @@ bool TrackedSource::poll_folder()
     }
 
     auto merged = merge_log_batch(batch);
-    _entries.reserve(_entries.size() + merged.size());
+    reserve_entries(merged.size());
     for (auto& line : merged)
     {
-        _entries.emplace_back(
-            std::move(line.text),
-            std::move(line.metadata.timestamp),
-            std::move(line.metadata.extracted_time_text),
-            std::move(line.metadata.parsed_time_text));
-
-        auto& entry                      = _entries.back();
-        entry.metadata.sequence_number   = _next_sequence_number++;
-        entry.metadata.source            = this;
+        LogEntry& entry                    = append_entry();
+        entry.text                         = std::move(line.text);
+        entry.metadata.timestamp           = std::move(line.metadata.timestamp);
+        entry.metadata.extracted_time_text = std::move(line.metadata.extracted_time_text);
+        entry.metadata.parsed_time_text    = std::move(line.metadata.parsed_time_text);
     }
 
     return true;
 }
 
-void TrackedSource::refresh_active_children()
+void TrackedSourceFolder::refresh_active_children()
 {
     _active_file_order.clear();
     _active_file_paths.clear();
 
-    for (const auto& file_path : enumerate_regular_files(_source.local_folder_path))
+    for (const auto& file_path : enumerate_regular_files(source().local_folder_path))
     {
         const std::string path_key = normalize_file_path_for_key(file_path);
         _active_file_order.push_back(path_key);
@@ -250,14 +166,8 @@ void TrackedSource::refresh_active_children()
         }
 
         const bool is_zstd = has_zstd_extension(file_path);
-        if (is_zstd && _consumed_zstd_paths.find(path_key) != _consumed_zstd_paths.end())
-        {
-            continue;
-        }
 
         ChildState child;
-        child.is_zstd          = is_zstd;
-        child.timestamp_parser = SourceTimestampParser(_timestamp_formats);
         if (is_zstd)
         {
             child.watcher = std::make_unique<ZstdFileWatcher>(file_path.string());
@@ -273,7 +183,7 @@ void TrackedSource::refresh_active_children()
     remove_inactive_children();
 }
 
-void TrackedSource::remove_inactive_children()
+void TrackedSourceFolder::remove_inactive_children()
 {
     for (auto child_it = _children.begin(); child_it != _children.end();)
     {

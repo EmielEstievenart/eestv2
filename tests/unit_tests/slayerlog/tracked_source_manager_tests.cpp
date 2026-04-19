@@ -124,7 +124,7 @@ TEST(AllTrackedSourcesTest, OpenSourceLoadsInitialContentsAndPollReturnsOnlyNewL
     file.write("first\n");
 
     AllTrackedSources tracked_sources;
-    ASSERT_FALSE(tracked_sources.open_source(path.string()).has_value());
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(path.string())).has_value());
 
     EXPECT_EQ(all_texts(tracked_sources), (std::vector<std::string> {"first"}));
 
@@ -151,8 +151,8 @@ TEST(AllTrackedSourcesTest, RebuildsSourceLabelsWhenBasenameCollisionsChange)
     ScopedTestFile second_file(second_path);
 
     AllTrackedSources tracked_sources;
-    ASSERT_FALSE(tracked_sources.open_source(first_path.string()).has_value());
-    ASSERT_FALSE(tracked_sources.open_source(second_path.string()).has_value());
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(first_path.string())).has_value());
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(second_path.string())).has_value());
 
     const auto labels_with_collision = tracked_sources.source_labels();
     ASSERT_EQ(labels_with_collision.size(), 2U);

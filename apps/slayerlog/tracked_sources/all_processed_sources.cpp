@@ -90,7 +90,7 @@ void AllProcessedSources::reset()
     _show_source_labels = false;
 }
 
-void AllProcessedSources::append_lines(const std::vector<ObservedLogLine>& lines)
+void AllProcessedSources::append_lines(const std::vector<LogEntry>& lines)
 {
     if (_updates_paused)
     {
@@ -102,12 +102,12 @@ void AllProcessedSources::append_lines(const std::vector<ObservedLogLine>& lines
     }
 }
 
-void AllProcessedSources::append_batch(const LogBatch& batch)
+void AllProcessedSources::append_batch(const std::vector<LogEntry>& batch)
 {
     append_lines(merge_log_batch(batch));
 }
 
-void AllProcessedSources::replace_batch(const LogBatch& batch)
+void AllProcessedSources::replace_batch(const std::vector<LogEntry>& batch)
 {
     const auto merged_lines = merge_log_batch(batch);
 
@@ -132,7 +132,7 @@ void AllProcessedSources::append_from_sources(const AllTrackedSources& tracked_s
         return;
     }
 
-    std::vector<ObservedLogLine> appended_lines;
+    std::vector<LogEntry> appended_lines;
     appended_lines.reserve(lines.size() - static_cast<std::size_t>(first_new_entry_index.value));
     for (int index = first_new_entry_index.value; index < static_cast<int>(lines.size()); ++index)
     {
@@ -351,7 +351,7 @@ std::optional<HiddenColumnRange> AllProcessedSources::hidden_columns() const
     return _hidden_columns;
 }
 
-const ObservedLogLine& AllProcessedSources::entry_at(AllLineIndex entry_index) const
+const LogEntry& AllProcessedSources::entry_at(AllLineIndex entry_index) const
 {
     return _all_entries[entry_index];
 }
@@ -467,14 +467,14 @@ std::string AllProcessedSources::render_entry(AllLineIndex entry_index) const
 
     if (_show_source_labels)
     {
-        output << "[" << entry.source_label << "] ";
+        output << "[" << entry.metadata.source_label << "] ";
     }
 
     output << entry.text;
     return apply_hidden_columns(output.str());
 }
 
-void AllProcessedSources::append_lines_immediately(const std::vector<ObservedLogLine>& lines)
+void AllProcessedSources::append_lines_immediately(const std::vector<LogEntry>& lines)
 {
     const AllLineIndex first_new_entry_index {static_cast<int>(_all_entries.size())};
 
@@ -530,9 +530,9 @@ void AllProcessedSources::expand_visible_entries(AllLineIndex first_new_entry_in
     }
 }
 
-bool AllProcessedSources::entry_matches_filters(const ObservedLogLine& entry) const
+bool AllProcessedSources::entry_matches_filters(const LogEntry& entry) const
 {
-    const std::string searchable_text = entry.source_label + "\n" + entry.text;
+    const std::string searchable_text = entry.metadata.source_label + "\n" + entry.text;
     const bool matches_include        = _include_filter_patterns.empty() || matches_any_pattern(searchable_text, _include_filter_patterns);
     const bool matches_exclude        = matches_any_pattern(searchable_text, _exclude_filter_patterns);
     return matches_include && !matches_exclude;

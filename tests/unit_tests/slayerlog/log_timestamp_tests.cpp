@@ -1,26 +1,60 @@
 #include <gtest/gtest.h>
 
-#include "timestamp/log_timestamp.hpp"
+#include "timestamp/source_timestamp_parser.hpp"
 
 namespace slayerlog
 {
 
+namespace
+{
+
+std::optional<LogEntryMetadata> parse_timestamp_details(const std::string& line)
+{
+    const auto catalog = default_timestamp_format_catalog();
+    if (catalog == nullptr)
+    {
+        return std::nullopt;
+    }
+
+    SourceTimestampParser parser;
+    LogEntry raw_line(line);
+    if (!parser.init(raw_line, *catalog))
+    {
+        return std::nullopt;
+    }
+
+    return raw_line.metadata;
+}
+
+std::optional<std::chrono::system_clock::time_point> parse_timestamp(const std::string& line)
+{
+    const auto parsed = parse_timestamp_details(line);
+    if (!parsed.has_value())
+    {
+        return std::nullopt;
+    }
+
+    return parsed->timestamp;
+}
+
+} // namespace
+
 TEST(LogTimestampTest, ParsesBracketedIsoTimestamp)
 {
-    const auto parsed = parse_log_timestamp("[2026-04-01T12:34:56] hello");
+    const auto parsed = parse_timestamp("[2026-04-01T12:34:56] hello");
     EXPECT_TRUE(parsed.has_value());
 }
 
 TEST(LogTimestampTest, ParsesSpaceSeparatedTimestampWithFraction)
 {
-    const auto parsed = parse_log_timestamp("2026-04-01 12:34:56.123 details");
+    const auto parsed = parse_timestamp("2026-04-01 12:34:56.123 details");
     EXPECT_TRUE(parsed.has_value());
 }
 
 TEST(LogTimestampTest, NormalizesZuluAndOffsetTimestamps)
 {
-    const auto zulu   = parse_log_timestamp("2026-04-01T10:34:56Z event");
-    const auto offset = parse_log_timestamp("2026-04-01T12:34:56+0200 event");
+    const auto zulu   = parse_timestamp("2026-04-01T10:34:56Z event");
+    const auto offset = parse_timestamp("2026-04-01T12:34:56+0200 event");
 
     ASSERT_TRUE(zulu.has_value());
     ASSERT_TRUE(offset.has_value());
@@ -29,8 +63,8 @@ TEST(LogTimestampTest, NormalizesZuluAndOffsetTimestamps)
 
 TEST(LogTimestampTest, ParsesColonSeparatedTimezoneOffset)
 {
-    const auto earlier = parse_log_timestamp("2026-04-01T12:34:56+02:00 first");
-    const auto later   = parse_log_timestamp("2026-04-01T12:35:56+02:00 second");
+    const auto earlier = parse_timestamp("2026-04-01T12:34:56+02:00 first");
+    const auto later   = parse_timestamp("2026-04-01T12:35:56+02:00 second");
 
     ASSERT_TRUE(earlier.has_value());
     ASSERT_TRUE(later.has_value());
@@ -39,19 +73,19 @@ TEST(LogTimestampTest, ParsesColonSeparatedTimezoneOffset)
 
 TEST(LogTimestampTest, RejectsUnsupportedStrings)
 {
-    EXPECT_FALSE(parse_log_timestamp("INFO no timestamp here").has_value());
-    EXPECT_FALSE(parse_log_timestamp("12:34:56 time only").has_value());
-    EXPECT_FALSE(parse_log_timestamp("[2026-04-01T12:34:56 missing bracket").has_value());
+    EXPECT_FALSE(parse_timestamp("INFO no timestamp here").has_value());
+    EXPECT_FALSE(parse_timestamp("12:34:56 time only").has_value());
+    EXPECT_FALSE(parse_timestamp("[2026-04-01T12:34:56 missing bracket").has_value());
 }
 
 TEST(LogTimestampTest, DetectsTimestampAfterPrefixAndKeepsCompiledParser)
 {
     auto formats = std::make_shared<const TimestampFormatCatalog>(std::vector<std::string> {"YYYY-MM-DD hh:mm:ss"});
-    SourceTimestampParser parser(formats);
-    RawLogLine first_line("INFO 2026-04-01 12:34:56 first");
-    RawLogLine second_line("WARN 2026-04-01 12:35:56 second");
+    SourceTimestampParser parser;
+    LogEntry first_line("INFO 2026-04-01 12:34:56 first");
+    LogEntry second_line("WARN 2026-04-01 12:35:56 second");
 
-    const bool first_parsed  = parser.parse(first_line);
+    const bool first_parsed  = parser.init(first_line, *formats);
     const bool second_parsed = parser.parse(second_line);
 
     ASSERT_TRUE(first_parsed);
@@ -64,7 +98,7 @@ TEST(LogTimestampTest, DetectsTimestampAfterPrefixAndKeepsCompiledParser)
 
 TEST(LogTimestampTest, FormatsTimezoneInDisplayText)
 {
-    const auto parsed = parse_log_timestamp_details("2026-04-01T12:34:56+0200 event");
+    const auto parsed = parse_timestamp_details("2026-04-01T12:34:56+0200 event");
     ASSERT_TRUE(parsed.has_value());
     EXPECT_EQ(parsed->parsed_time_text, "2026-04-01 12:34:56+02:00");
 }

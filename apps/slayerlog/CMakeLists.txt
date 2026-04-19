@@ -5,8 +5,14 @@ add_executable(
   main.cpp
   tracked_sources/all_tracked_sources.cpp
   tracked_sources/all_tracked_sources.hpp
-  tracked_sources/tracked_source.cpp
-  tracked_sources/tracked_source.hpp
+  tracked_sources/tracked_source_base.cpp
+  tracked_sources/tracked_source_base.hpp
+  tracked_sources/tracked_source_file.cpp
+  tracked_sources/tracked_source_file.hpp
+  tracked_sources/tracked_source_folder.cpp
+  tracked_sources/tracked_source_folder.hpp
+  tracked_sources/tracked_source_factory.cpp
+  tracked_sources/tracked_source_factory.hpp
   command_line_parser.cpp
   command_line_parser.hpp
   debug_log.hpp
@@ -24,8 +30,10 @@ add_executable(
   master_controller.hpp
   master_view.cpp
   master_view.hpp
-   timestamp/log_timestamp.cpp
-   timestamp/log_timestamp.hpp
+   timestamp/source_timestamp_parser.cpp
+   timestamp/timestamp_format_catalog.cpp
+   timestamp/source_timestamp_parser.hpp
+   timestamp/timestamp_format_catalog.hpp
   log_types.hpp
   settings_ini.cpp
   settings_ini.hpp
@@ -55,6 +63,8 @@ add_executable(
   watchers/stream_line_buffer.cpp
   watchers/stream_line_buffer.hpp
   watchers/log_watcher_base.hpp
+  watchers/log_watcher_factory.cpp
+  watchers/log_watcher_factory.hpp
   watchers/file_watcher.cpp
   watchers/file_watcher.hpp
   watchers/zstd_file_watcher.cpp

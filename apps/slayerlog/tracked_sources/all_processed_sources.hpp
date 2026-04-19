@@ -27,9 +27,9 @@ public:
 
     void reset();
 
-    void append_lines(const std::vector<ObservedLogLine>& lines);
-    void append_batch(const LogBatch& batch);
-    void replace_batch(const LogBatch& batch);
+    void append_lines(const std::vector<LogEntry>& lines);
+    void append_batch(const std::vector<LogEntry>& batch);
+    void replace_batch(const std::vector<LogEntry>& batch);
 
     void append_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_new_entry_index);
     void rebuild_from_sources(const AllTrackedSources& tracked_sources);
@@ -50,7 +50,7 @@ public:
     void reset_hidden_columns();
     std::optional<HiddenColumnRange> hidden_columns() const;
 
-    const ObservedLogLine& entry_at(AllLineIndex entry_index) const;
+    const LogEntry& entry_at(AllLineIndex entry_index) const;
     std::optional<AllLineIndex> entry_index_for_visible_line(VisibleLineIndex visible_line_index) const;
     std::optional<VisibleLineIndex> visible_line_index_for_entry(AllLineIndex entry_index) const;
     std::optional<int> line_number_for_visible_line(VisibleLineIndex visible_line_index) const;
@@ -65,16 +65,16 @@ public:
 
 private:
     std::string render_entry(AllLineIndex entry_index) const;
-    void append_lines_immediately(const std::vector<ObservedLogLine>& lines);
+    void append_lines_immediately(const std::vector<LogEntry>& lines);
     void flush_paused_updates();
     void rebuild_visible_entries();
     void expand_visible_entries(AllLineIndex first_new_entry_index);
-    bool entry_matches_filters(const ObservedLogLine& entry) const;
+    bool entry_matches_filters(const LogEntry& entry) const;
     std::string apply_hidden_columns(std::string text) const;
 
-    IndexedVector<ObservedLogLine, AllLineIndex> _all_entries;
+    IndexedVector<LogEntry, AllLineIndex> _all_entries;
     IndexedVector<AllLineIndex, VisibleLineIndex> _visible_entry_indices;
-    std::vector<ObservedLogLine> _paused_updates;
+    std::vector<LogEntry> _paused_updates;
 
     std::vector<std::string> _include_filters;
     std::vector<std::string> _exclude_filters;
