@@ -98,7 +98,7 @@ std::vector<std::string> all_texts(const AllTrackedSources& tracked_sources)
     texts.reserve(tracked_sources.all_lines().size());
     for (const auto& line : tracked_sources.all_lines())
     {
-        texts.push_back(line.text);
+        texts.push_back(line->text);
     }
 
     return texts;
@@ -109,7 +109,7 @@ std::vector<std::string> delta_texts(const AllTrackedSources& tracked_sources, A
     std::vector<std::string> texts;
     for (int index = first_new_line_index.value; index < tracked_sources.line_count(); ++index)
     {
-        texts.push_back(tracked_sources.all_lines()[AllLineIndex {index}].text);
+        texts.push_back(tracked_sources.all_lines()[AllLineIndex {index}]->text);
     }
 
     return texts;

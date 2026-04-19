@@ -27,7 +27,7 @@ public:
 
     std::optional<AllLineIndex> poll();
 
-    const IndexedVector<LogEntry, AllLineIndex>& all_lines() const;
+    const IndexedVector<std::shared_ptr<LogEntry>, AllLineIndex>& all_lines() const;
     int line_count() const;
 
     std::size_t source_count() const;
@@ -38,11 +38,11 @@ private:
     bool contains_source(const LogSource& candidate_source) const;
     void rebuild_source_labels();
     void rebuild_all_lines();
-    void append_entries_to_batch(std::vector<LogEntry>& batch, const TrackedSourceBase& source, std::size_t source_index, std::size_t first_entry_index) const;
-    void append_merged_lines(const std::vector<LogEntry>& lines);
+    void append_entries_to_batch(std::vector<std::shared_ptr<LogEntry>>& batch, const TrackedSourceBase& source, std::size_t source_index, std::size_t first_entry_index) const;
+    void append_merged_lines(const std::vector<std::shared_ptr<LogEntry>>& lines);
 
     std::vector<std::unique_ptr<TrackedSourceBase>> _sources;
-    IndexedVector<LogEntry, AllLineIndex> _all_lines;
+    IndexedVector<std::shared_ptr<LogEntry>, AllLineIndex> _all_lines;
     std::shared_ptr<const TimestampFormatCatalog> _timestamp_formats;
 };
 

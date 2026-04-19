@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "tracked_source_base.hpp"
-#include "watchers/log_watcher_base.hpp"
+#include "tracked_source_file.hpp"
 
 namespace slayerlog
 {
@@ -22,9 +22,7 @@ public:
 private:
     struct ChildState
     {
-        std::unique_ptr<LogWatcherBase> watcher;
-        bool timestamp_parser_initialized = false;
-        SourceTimestampParser timestamp_parser;
+        std::unique_ptr<TrackedSourceFile> tracked_source;
     };
 
     void refresh_active_children();

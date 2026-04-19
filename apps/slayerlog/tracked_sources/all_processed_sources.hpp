@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -27,8 +28,11 @@ public:
 
     void reset();
 
+    void append_lines(const std::vector<std::shared_ptr<LogEntry>>& lines);
     void append_lines(const std::vector<LogEntry>& lines);
+    void append_batch(const std::vector<std::shared_ptr<LogEntry>>& batch);
     void append_batch(const std::vector<LogEntry>& batch);
+    void replace_batch(const std::vector<std::shared_ptr<LogEntry>>& batch);
     void replace_batch(const std::vector<LogEntry>& batch);
 
     void append_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_new_entry_index);
@@ -65,16 +69,16 @@ public:
 
 private:
     std::string render_entry(AllLineIndex entry_index) const;
-    void append_lines_immediately(const std::vector<LogEntry>& lines);
+    void append_lines_immediately(const std::vector<std::shared_ptr<LogEntry>>& lines);
     void flush_paused_updates();
     void rebuild_visible_entries();
     void expand_visible_entries(AllLineIndex first_new_entry_index);
-    bool entry_matches_filters(const LogEntry& entry) const;
+    bool entry_matches_filters(const std::shared_ptr<LogEntry>& entry) const;
     std::string apply_hidden_columns(std::string text) const;
 
-    IndexedVector<LogEntry, AllLineIndex> _all_entries;
+    IndexedVector<std::shared_ptr<LogEntry>, AllLineIndex> _all_entries;
     IndexedVector<AllLineIndex, VisibleLineIndex> _visible_entry_indices;
-    std::vector<LogEntry> _paused_updates;
+    std::vector<std::shared_ptr<LogEntry>> _paused_updates;
 
     std::vector<std::string> _include_filters;
     std::vector<std::string> _exclude_filters;

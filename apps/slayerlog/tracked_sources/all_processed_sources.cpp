@@ -51,6 +51,18 @@ std::optional<int> parse_non_negative_integer(std::string_view text)
     return value;
 }
 
+std::vector<std::shared_ptr<LogEntry>> make_shared_entries(const std::vector<LogEntry>& lines)
+{
+    std::vector<std::shared_ptr<LogEntry>> shared_lines;
+    shared_lines.reserve(lines.size());
+    for (const auto& line : lines)
+    {
+        shared_lines.push_back(std::make_shared<LogEntry>(line));
+    }
+
+    return shared_lines;
+}
+
 } // namespace
 
 std::optional<HiddenColumnRange> parse_hidden_column_range(std::string_view text)
@@ -90,7 +102,7 @@ void AllProcessedSources::reset()
     _show_source_labels = false;
 }
 
-void AllProcessedSources::append_lines(const std::vector<LogEntry>& lines)
+void AllProcessedSources::append_lines(const std::vector<std::shared_ptr<LogEntry>>& lines)
 {
     if (_updates_paused)
     {
@@ -102,12 +114,22 @@ void AllProcessedSources::append_lines(const std::vector<LogEntry>& lines)
     }
 }
 
-void AllProcessedSources::append_batch(const std::vector<LogEntry>& batch)
+void AllProcessedSources::append_lines(const std::vector<LogEntry>& lines)
+{
+    append_lines(make_shared_entries(lines));
+}
+
+void AllProcessedSources::append_batch(const std::vector<std::shared_ptr<LogEntry>>& batch)
 {
     append_lines(merge_log_batch(batch));
 }
 
-void AllProcessedSources::replace_batch(const std::vector<LogEntry>& batch)
+void AllProcessedSources::append_batch(const std::vector<LogEntry>& batch)
+{
+    append_batch(make_shared_entries(batch));
+}
+
+void AllProcessedSources::replace_batch(const std::vector<std::shared_ptr<LogEntry>>& batch)
 {
     const auto merged_lines = merge_log_batch(batch);
 
@@ -124,6 +146,11 @@ void AllProcessedSources::replace_batch(const std::vector<LogEntry>& batch)
     rebuild_visible_entries();
 }
 
+void AllProcessedSources::replace_batch(const std::vector<LogEntry>& batch)
+{
+    replace_batch(make_shared_entries(batch));
+}
+
 void AllProcessedSources::append_from_sources(const AllTrackedSources& tracked_sources, AllLineIndex first_new_entry_index)
 {
     const auto& lines = tracked_sources.all_lines();
@@ -132,7 +159,7 @@ void AllProcessedSources::append_from_sources(const AllTrackedSources& tracked_s
         return;
     }
 
-    std::vector<LogEntry> appended_lines;
+    std::vector<std::shared_ptr<LogEntry>> appended_lines;
     appended_lines.reserve(lines.size() - static_cast<std::size_t>(first_new_entry_index.value));
     for (int index = first_new_entry_index.value; index < static_cast<int>(lines.size()); ++index)
     {
@@ -353,7 +380,7 @@ std::optional<HiddenColumnRange> AllProcessedSources::hidden_columns() const
 
 const LogEntry& AllProcessedSources::entry_at(AllLineIndex entry_index) const
 {
-    return _all_entries[entry_index];
+    return *_all_entries[entry_index];
 }
 
 std::optional<AllLineIndex> AllProcessedSources::entry_index_for_visible_line(VisibleLineIndex visible_line_index) const
@@ -458,7 +485,7 @@ int AllProcessedSources::max_rendered_line_width() const
 std::string AllProcessedSources::render_entry(AllLineIndex entry_index) const
 {
     std::ostringstream output;
-    const auto& entry = _all_entries[entry_index];
+    const auto& entry = *_all_entries[entry_index];
     output << entry_index.value + 1 << " ";
     if (!entry.metadata.parsed_time_text.empty())
     {
@@ -474,7 +501,7 @@ std::string AllProcessedSources::render_entry(AllLineIndex entry_index) const
     return apply_hidden_columns(output.str());
 }
 
-void AllProcessedSources::append_lines_immediately(const std::vector<LogEntry>& lines)
+void AllProcessedSources::append_lines_immediately(const std::vector<std::shared_ptr<LogEntry>>& lines)
 {
     const AllLineIndex first_new_entry_index {static_cast<int>(_all_entries.size())};
 
@@ -530,9 +557,9 @@ void AllProcessedSources::expand_visible_entries(AllLineIndex first_new_entry_in
     }
 }
 
-bool AllProcessedSources::entry_matches_filters(const LogEntry& entry) const
+bool AllProcessedSources::entry_matches_filters(const std::shared_ptr<LogEntry>& entry) const
 {
-    const std::string searchable_text = entry.metadata.source_label + "\n" + entry.text;
+    const std::string searchable_text = entry->metadata.source_label + "\n" + entry->text;
     const bool matches_include        = _include_filter_patterns.empty() || matches_any_pattern(searchable_text, _include_filter_patterns);
     const bool matches_exclude        = matches_any_pattern(searchable_text, _exclude_filter_patterns);
     return matches_include && !matches_exclude;

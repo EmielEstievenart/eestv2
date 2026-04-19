@@ -7,8 +7,6 @@
 #include <utility>
 
 #include "log_batch.hpp"
-#include "watchers/file_watcher.hpp"
-#include "watchers/zstd_file_watcher.hpp"
 
 namespace slayerlog
 {
@@ -39,13 +37,6 @@ std::string normalize_file_path_for_key(const std::filesystem::path& path)
     std::transform(normalized_text.begin(), normalized_text.end(), normalized_text.begin(), [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
 #endif
     return normalized_text;
-}
-
-bool has_zstd_extension(const std::filesystem::path& path)
-{
-    std::string extension = path.extension().string();
-    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
-    return extension == ".zst";
 }
 
 std::vector<std::filesystem::path> enumerate_regular_files(const std::string& folder_path)
@@ -85,7 +76,7 @@ bool TrackedSourceFolder::poll()
 {
     refresh_active_children();
 
-    std::vector<LogEntry> batch;
+    std::vector<std::shared_ptr<LogEntry>> batch;
     for (std::size_t source_index = 0; source_index < _active_file_order.size(); ++source_index)
     {
         const std::string& path_key = _active_file_order[source_index];
@@ -96,36 +87,25 @@ bool TrackedSourceFolder::poll()
         }
 
         auto& child = child_it->second;
-        std::vector<std::string> child_lines;
-        if (!child.watcher->poll(child_lines) || child_lines.empty())
+        TrackedSourceFile& child_source     = *child.tracked_source;
+        const std::size_t first_new_entry_index = child_source.entries().size();
+        if (!child_source.poll())
         {
             continue;
         }
 
-        if (!child.timestamp_parser_initialized)
+        const auto& child_entries = child_source.entries();
+        if (first_new_entry_index >= child_entries.size())
         {
-            for (const auto& line : child_lines)
-            {
-                LogEntry probe(line);
-                const auto catalog = timestamp_formats();
-                if (catalog == nullptr || !child.timestamp_parser.init(probe, *catalog))
-                {
-                    continue;
-                }
-
-                child.timestamp_parser_initialized = true;
-                break;
-            }
+            continue;
         }
 
-        batch.reserve(batch.size() + child_lines.size());
-        for (auto& line : child_lines)
+        batch.reserve(batch.size() + (child_entries.size() - first_new_entry_index));
+        for (std::size_t entry_index = first_new_entry_index; entry_index < child_entries.size(); ++entry_index)
         {
-            LogEntry batch_entry;
-            batch_entry.metadata.source_index = source_index;
-            batch_entry.metadata.source_label = source_label();
-            batch_entry.text                  = std::move(line);
-            child.timestamp_parser.parse(batch_entry);
+            auto batch_entry = std::make_shared<LogEntry>(*child_entries[entry_index]);
+            batch_entry->metadata.source_index = source_index;
+            batch_entry->metadata.source_label = source_label();
             batch.push_back(std::move(batch_entry));
         }
     }
@@ -137,13 +117,13 @@ bool TrackedSourceFolder::poll()
 
     auto merged = merge_log_batch(batch);
     reserve_entries(merged.size());
-    for (auto& line : merged)
+    for (const auto& line : merged)
     {
         LogEntry& entry                    = append_entry();
-        entry.text                         = std::move(line.text);
-        entry.metadata.timestamp           = std::move(line.metadata.timestamp);
-        entry.metadata.extracted_time_text = std::move(line.metadata.extracted_time_text);
-        entry.metadata.parsed_time_text    = std::move(line.metadata.parsed_time_text);
+        entry.text                         = line->text;
+        entry.metadata.timestamp           = line->metadata.timestamp;
+        entry.metadata.extracted_time_text = line->metadata.extracted_time_text;
+        entry.metadata.parsed_time_text    = line->metadata.parsed_time_text;
     }
 
     return true;
@@ -165,17 +145,8 @@ void TrackedSourceFolder::refresh_active_children()
             continue;
         }
 
-        const bool is_zstd = has_zstd_extension(file_path);
-
         ChildState child;
-        if (is_zstd)
-        {
-            child.watcher = std::make_unique<ZstdFileWatcher>(file_path.string());
-        }
-        else
-        {
-            child.watcher = std::make_unique<FileWatcher>(file_path.string());
-        }
+        child.tracked_source = std::make_unique<TrackedSourceFile>(parse_log_source(file_path.string()), file_path.filename().string(), timestamp_formats());
 
         _children.emplace(path_key, std::move(child));
     }

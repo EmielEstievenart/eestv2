@@ -25,7 +25,7 @@ public:
 
     virtual bool poll() = 0;
 
-    const std::vector<LogEntry>& entries() const;
+    const std::vector<std::shared_ptr<LogEntry>>& entries() const;
 
 protected:
     const std::shared_ptr<const TimestampFormatCatalog>& timestamp_formats() const;
@@ -35,7 +35,7 @@ protected:
 private:
     LogSource _source;
     std::string _source_label;
-    std::vector<LogEntry> _entries;
+    std::vector<std::shared_ptr<LogEntry>> _entries;
     std::uint64_t _next_sequence_number = 0;
     std::shared_ptr<const TimestampFormatCatalog> _timestamp_formats;
 };
