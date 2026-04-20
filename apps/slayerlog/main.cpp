@@ -176,7 +176,7 @@ int main(int argc, char** argv)
         [&]
         {
             std::lock_guard lock(model_mutex);
-            return master_view.render(processed_sources, controller, header_text, screen.dimy(), command_palette_controller.model());
+            return master_view.render(processed_sources, controller, header_text, screen.dimy(), command_palette_controller);
         });
 
     viewer |= ftxui::CatchEvent(

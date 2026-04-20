@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -97,6 +98,21 @@ std::string normalize_command_name(std::string_view name)
     }
 
     return normalized;
+}
+
+bool is_result_scroll_event(ftxui::Event event)
+{
+    if (event == ftxui::Event::ArrowLeftCtrl || event == ftxui::Event::ArrowRightCtrl || event == ftxui::Event::PageUp || event == ftxui::Event::PageDown)
+    {
+        return true;
+    }
+
+    if (!event.is_mouse())
+    {
+        return false;
+    }
+
+    return event.mouse().button == ftxui::Mouse::WheelUp || event.mouse().button == ftxui::Mouse::WheelDown;
 }
 
 } // namespace
@@ -209,14 +225,19 @@ void CommandPaletteController::close()
 
 bool CommandPaletteController::handle_event(const ftxui::Event& event)
 {
-    // if (event == ftxui::Event::k)
-    // {
-    //     int i = 0;
-    // }
     if (event == ftxui::Event::Escape)
     {
         close();
         return true;
+    }
+
+    if (is_result_scroll_event(event))
+    {
+        const auto result = _result_text_view_controller.parse_event(event);
+        if (result.handled)
+        {
+            return true;
+        }
     }
 
     const bool close_open_file_mode = _model.mode == CommandPaletteMode::CloseOpenFile;
@@ -252,6 +273,8 @@ bool CommandPaletteController::handle_event(const ftxui::Event& event)
             entry.selected = !entry.selected;
             _model.status_message.clear();
             _model.status_is_error = false;
+            rebuild_result_lines();
+            ensure_selected_result_visible();
         }
 
         return true;
@@ -440,11 +463,62 @@ void CommandPaletteController::refresh_matches()
     {
         _model.selected_index = 0;
         refresh_hidden_column_preview();
+        rebuild_result_lines();
         return;
     }
 
     _model.selected_index = std::clamp(_model.selected_index, 0, static_cast<int>(active_match_count()) - 1);
     refresh_hidden_column_preview();
+    rebuild_result_lines();
+    ensure_selected_result_visible();
+}
+
+TextViewController& CommandPaletteController::result_text_view_controller()
+{
+    return _result_text_view_controller;
+}
+
+const TextViewController& CommandPaletteController::result_text_view_controller() const
+{
+    return _result_text_view_controller;
+}
+
+const std::vector<std::string>& CommandPaletteController::result_lines() const
+{
+    return _result_lines;
+}
+
+std::optional<std::pair<int, int>> CommandPaletteController::selected_result_line_range() const
+{
+    if (_model.selected_index < 0)
+    {
+        return std::nullopt;
+    }
+
+    int first_line = -1;
+    int last_line  = -1;
+
+    for (std::size_t line_index = 0; line_index < _result_line_to_entry_index.size(); ++line_index)
+    {
+        if (_result_line_to_entry_index[line_index] != _model.selected_index)
+        {
+            continue;
+        }
+
+        if (first_line < 0)
+        {
+            first_line = static_cast<int>(line_index);
+        }
+
+        last_line = static_cast<int>(line_index) + 1;
+    }
+
+    if (first_line < 0 || last_line <= first_line)
+    {
+        return std::nullopt;
+    }
+
+    return std::pair<int, int> {first_line, last_line};
 }
 
 void CommandPaletteController::refresh_hidden_column_preview()
@@ -500,6 +574,119 @@ void CommandPaletteController::move_selection(int delta)
 
     const int last_index  = static_cast<int>(match_count) - 1;
     _model.selected_index = std::clamp(_model.selected_index + delta, 0, last_index);
+    ensure_selected_result_visible();
+}
+
+void CommandPaletteController::rebuild_result_lines()
+{
+    _result_lines.clear();
+    _result_line_to_entry_index.clear();
+
+    auto push_line = [this](std::string line, int entry_index)
+    {
+        _result_lines.push_back(std::move(line));
+        _result_line_to_entry_index.push_back(entry_index);
+    };
+
+    if (_model.mode == CommandPaletteMode::History)
+    {
+        if (_model.matching_history_entries.empty())
+        {
+            const std::string empty_message = _model.query.empty() ? "No previously run commands" : "No matching history commands";
+            push_line(empty_message, -1);
+        }
+        else
+        {
+            for (std::size_t index = 0; index < _model.matching_history_entries.size(); ++index)
+            {
+                push_line(_model.matching_history_entries[index], static_cast<int>(index));
+            }
+        }
+    }
+    else if (_model.mode == CommandPaletteMode::CloseOpenFile)
+    {
+        if (_model.open_files.empty())
+        {
+            push_line("No open files", -1);
+        }
+        else
+        {
+            for (std::size_t index = 0; index < _model.open_files.size(); ++index)
+            {
+                push_line(_model.open_files[index], static_cast<int>(index));
+            }
+        }
+    }
+    else if (_model.mode == CommandPaletteMode::DeleteFilters)
+    {
+        if (_model.filter_picker_entries.empty())
+        {
+            push_line("No filters configured", -1);
+        }
+        else
+        {
+            for (std::size_t index = 0; index < _model.filter_picker_entries.size(); ++index)
+            {
+                const auto& entry        = _model.filter_picker_entries[index];
+                const std::string prefix = entry.selected ? "[x] " : "[ ] ";
+                const std::string tag    = entry.include ? "(in) " : "(out) ";
+                push_line(prefix + tag + entry.label, static_cast<int>(index));
+            }
+        }
+    }
+    else
+    {
+        if (_model.matching_commands.empty())
+        {
+            push_line("No matching commands", -1);
+        }
+        else
+        {
+            for (std::size_t index = 0; index < _model.matching_commands.size(); ++index)
+            {
+                const auto& command = _model.matching_commands[index];
+                push_line(command.name + " - " + command.summary, static_cast<int>(index));
+                push_line(command.usage, static_cast<int>(index));
+            }
+        }
+    }
+
+    int max_line_width = 0;
+    for (const auto& line : _result_lines)
+    {
+        max_line_width = std::max(max_line_width, static_cast<int>(line.size()));
+    }
+
+    _result_text_view_controller.set_content(static_cast<int>(_result_lines.size()), max_line_width,
+                                             [this](int index) -> const std::string& { return _result_lines[static_cast<std::size_t>(index)]; });
+    _result_text_view_controller.scroll_to_top();
+    _result_text_view_controller.scroll_left((std::numeric_limits<int>::max)());
+}
+
+void CommandPaletteController::ensure_selected_result_visible()
+{
+    const auto selected_range = selected_result_line_range();
+    if (!selected_range.has_value())
+    {
+        return;
+    }
+
+    const int viewport_lines = std::max(1, _result_text_view_controller.viewport_line_count());
+    const int visible_first  = _result_text_view_controller.first_visible_line();
+    const int visible_last   = visible_first + viewport_lines - 1;
+    const int selected_first = selected_range->first;
+    const int selected_last  = selected_range->second - 1;
+
+    if (selected_first < visible_first)
+    {
+        _result_text_view_controller.scroll_up(visible_first - selected_first);
+        return;
+    }
+
+    if (selected_last > visible_last)
+    {
+        _result_text_view_controller.scroll_down(selected_last - visible_last);
+    }
 }
 
 bool CommandPaletteController::copy_selected_history_entry_to_query()

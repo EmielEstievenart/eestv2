@@ -220,6 +220,72 @@ TEST(CommandPaletteControllerTest, TabClearsStatusMessage)
     EXPECT_FALSE(controller.model().status_is_error);
 }
 
+TEST(CommandPaletteControllerTest, CtrlArrowKeysScrollResultViewportHorizontally)
+{
+    CommandManager manager;
+    manager.register_command({"very-long-command-name", "Summary", "very-long-command-name with long arguments and values"}, [](std::string_view) { return CommandResult {true, "ok"}; });
+
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+    controller.open();
+    controller.result_text_view_controller().update_viewport_col_count(12);
+
+    EXPECT_EQ(controller.result_text_view_controller().first_visible_col(), 0);
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::ArrowRightCtrl));
+    EXPECT_GT(controller.result_text_view_controller().first_visible_col(), 0);
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::ArrowLeftCtrl));
+    EXPECT_EQ(controller.result_text_view_controller().first_visible_col(), 0);
+}
+
+TEST(CommandPaletteControllerTest, ArrowSelectionKeepsSelectedResultVisible)
+{
+    CommandManager manager;
+    for (int index = 0; index < 10; ++index)
+    {
+        const std::string name = "command-" + std::to_string(index);
+        manager.register_command({name, "summary", name + " <argument>"}, [](std::string_view) { return CommandResult {true, "ok"}; });
+    }
+
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+    controller.open();
+    controller.result_text_view_controller().update_viewport_line_count(3);
+
+    for (int index = 0; index < 7; ++index)
+    {
+        ASSERT_TRUE(controller.handle_event(ftxui::Event::ArrowDown));
+    }
+
+    EXPECT_EQ(controller.model().selected_index, 7);
+    EXPECT_GT(controller.result_text_view_controller().first_visible_line(), 0);
+}
+
+TEST(CommandPaletteControllerTest, OpenResetsResultViewportScrollOffsets)
+{
+    CommandManager manager;
+    for (int index = 0; index < 8; ++index)
+    {
+        const std::string name = "command-" + std::to_string(index);
+        manager.register_command({name, "summary", name + " with-very-long-argument-value"}, [](std::string_view) { return CommandResult {true, "ok"}; });
+    }
+
+    CommandPaletteModel model;
+    CommandPaletteController controller(model, manager);
+    controller.open();
+    controller.result_text_view_controller().update_viewport_line_count(3);
+    controller.result_text_view_controller().update_viewport_col_count(8);
+
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::PageDown));
+    ASSERT_TRUE(controller.handle_event(ftxui::Event::ArrowRightCtrl));
+    EXPECT_GT(controller.result_text_view_controller().first_visible_line(), 0);
+    EXPECT_GT(controller.result_text_view_controller().first_visible_col(), 0);
+
+    controller.open();
+    EXPECT_EQ(controller.result_text_view_controller().first_visible_line(), 0);
+    EXPECT_EQ(controller.result_text_view_controller().first_visible_col(), 0);
+}
+
 TEST(CommandPaletteControllerTest, HideColumnsPreviewActivatesForValidRange)
 {
     CommandManager manager;

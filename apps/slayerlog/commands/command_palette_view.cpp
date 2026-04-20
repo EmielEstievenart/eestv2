@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace slayerlog
 {
@@ -42,82 +44,6 @@ ftxui::Element render_command_palette_query(const CommandPaletteModel& command_p
     return ftxui::hbox(std::move(row)) | ftxui::focusPosition(static_cast<int>(cursor_position) + 2, 0) | ftxui::xframe;
 }
 
-ftxui::Elements render_selectable_list(const std::vector<std::string>& items, int selected_index, const std::string& empty_message)
-{
-    ftxui::Elements rows;
-    if (items.empty())
-    {
-        rows.push_back(ftxui::text(empty_message) | ftxui::color(theme::muted));
-        return rows;
-    }
-
-    for (std::size_t index = 0; index < items.size(); ++index)
-    {
-        auto row = ftxui::text(items[index]);
-        if (static_cast<int>(index) == selected_index)
-        {
-            row |= ftxui::inverted;
-        }
-        rows.push_back(std::move(row));
-    }
-
-    return rows;
-}
-
-ftxui::Elements render_filter_picker_list(const std::vector<CommandPaletteModel::FilterPickerEntry>& entries, int selected_index)
-{
-    ftxui::Elements rows;
-    if (entries.empty())
-    {
-        rows.push_back(ftxui::text("No filters configured") | ftxui::color(theme::muted));
-        return rows;
-    }
-
-    for (std::size_t index = 0; index < entries.size(); ++index)
-    {
-        const auto& entry        = entries[index];
-        const std::string prefix = entry.selected ? "[x] " : "[ ] ";
-        const std::string tag    = entry.include ? "(in) " : "(out) ";
-        auto row                 = ftxui::text(prefix + tag + entry.label);
-        if (static_cast<int>(index) == selected_index)
-        {
-            row |= ftxui::inverted;
-        }
-
-        rows.push_back(std::move(row));
-    }
-
-    return rows;
-}
-
-ftxui::Elements render_command_list(const std::vector<CommandDescriptor>& commands, int selected_index)
-{
-    ftxui::Elements rows;
-    if (commands.empty())
-    {
-        rows.push_back(ftxui::text("No matching commands") | ftxui::color(theme::muted));
-        return rows;
-    }
-
-    for (std::size_t index = 0; index < commands.size(); ++index)
-    {
-        const auto& command = commands[index];
-        auto row            = ftxui::vbox({
-            ftxui::text(command.name + " - " + command.summary),
-            ftxui::text(command.usage) | ftxui::color(theme::muted),
-        });
-
-        if (static_cast<int>(index) == selected_index)
-        {
-            row |= ftxui::inverted;
-        }
-
-        rows.push_back(std::move(row));
-    }
-
-    return rows;
-}
-
 ftxui::Element build_palette_help(CommandPaletteMode mode)
 {
     auto sep = []() { return ftxui::text("  "); };
@@ -131,6 +57,10 @@ ftxui::Element build_palette_help(CommandPaletteMode mode)
             sep(),
             theme::key_hint("Ctrl+R", "commands"),
             sep(),
+            theme::key_hint("PgUp/PgDn", "scroll"),
+            sep(),
+            theme::key_hint("Ctrl+Left/Right", "h-scroll"),
+            sep(),
             theme::key_hint("Esc", "close"),
         });
     }
@@ -138,9 +68,13 @@ ftxui::Element build_palette_help(CommandPaletteMode mode)
     if (mode == CommandPaletteMode::CloseOpenFile)
     {
         return ftxui::hbox({
-            theme::key_hint("\xe2\x86\x91\xe2\x86\x93", "select"),
+            theme::key_hint("Up/Down", "select"),
             sep(),
             theme::key_hint("Enter", "close file"),
+            sep(),
+            theme::key_hint("PgUp/PgDn", "scroll"),
+            sep(),
+            theme::key_hint("Ctrl+Left/Right", "h-scroll"),
             sep(),
             theme::key_hint("Esc", "cancel"),
         });
@@ -149,11 +83,15 @@ ftxui::Element build_palette_help(CommandPaletteMode mode)
     if (mode == CommandPaletteMode::DeleteFilters)
     {
         return ftxui::hbox({
-            theme::key_hint("\xe2\x86\x91\xe2\x86\x93", "select"),
+            theme::key_hint("Up/Down", "select"),
             sep(),
             theme::key_hint("Space", "toggle"),
             sep(),
             theme::key_hint("Enter", "delete marked"),
+            sep(),
+            theme::key_hint("PgUp/PgDn", "scroll"),
+            sep(),
+            theme::key_hint("Ctrl+Left/Right", "h-scroll"),
             sep(),
             theme::key_hint("Esc", "cancel"),
         });
@@ -166,32 +104,78 @@ ftxui::Element build_palette_help(CommandPaletteMode mode)
         sep(),
         theme::key_hint("Ctrl+R", "history"),
         sep(),
+        theme::key_hint("PgUp/PgDn", "scroll"),
+        sep(),
+        theme::key_hint("Ctrl+Left/Right", "h-scroll"),
+        sep(),
         theme::key_hint("Esc", "close"),
     });
 }
 
+int estimate_result_viewport_col_count(int measured_col_count)
+{
+    if (measured_col_count > 1)
+    {
+        return measured_col_count;
+    }
+
+    return 68;
+}
+
 } // namespace
 
-ftxui::Element CommandPaletteView::render(const CommandPaletteModel& command_palette) const
+ftxui::Element CommandPaletteView::render(CommandPaletteController& command_palette_controller, int preferred_result_height)
 {
-    ftxui::Elements command_rows;
-    if (command_palette.mode == CommandPaletteMode::History)
+    const CommandPaletteModel& command_palette = command_palette_controller.model();
+
+    const int effective_height = std::max(1, preferred_result_height);
+    const int effective_width  = estimate_result_viewport_col_count(_result_text_view.viewport_col_count());
+    command_palette_controller.result_text_view_controller().update_viewport_line_count(effective_height);
+    command_palette_controller.result_text_view_controller().update_viewport_col_count(effective_width);
+
+    auto result_data                         = command_palette_controller.result_text_view_controller().render_data();
+    const std::vector<std::string> result_lines = command_palette_controller.result_lines();
+
+    if (const auto selected_range = command_palette_controller.selected_result_line_range(); selected_range.has_value())
     {
-        const std::string empty_msg = command_palette.query.empty() ? "No previously run commands" : "No matching history commands";
-        command_rows                = render_selectable_list(command_palette.matching_history_entries, command_palette.selected_index, empty_msg);
+        for (int line_index = selected_range->first; line_index < selected_range->second; ++line_index)
+        {
+            if (line_index < 0 || line_index >= static_cast<int>(result_lines.size()))
+            {
+                continue;
+            }
+
+            TextViewRangeDecoration decoration;
+            decoration.line_index     = line_index;
+            decoration.col_start      = 0;
+            decoration.col_end        = static_cast<int>(result_lines[static_cast<std::size_t>(line_index)].size());
+            decoration.style.inverted = true;
+            result_data.range_decorations.push_back(std::move(decoration));
+        }
     }
-    else if (command_palette.mode == CommandPaletteMode::CloseOpenFile)
+
+    const auto draw_results = [result_lines](ftxui::Canvas& canvas, int first_line, int line_count, int first_col, int col_count)
     {
-        command_rows = render_selectable_list(command_palette.open_files, command_palette.selected_index, "No open files");
-    }
-    else if (command_palette.mode == CommandPaletteMode::DeleteFilters)
-    {
-        command_rows = render_filter_picker_list(command_palette.filter_picker_entries, command_palette.selected_index);
-    }
-    else
-    {
-        command_rows = render_command_list(command_palette.matching_commands, command_palette.selected_index);
-    }
+        const int max_line_count = std::max(0, std::min(line_count, static_cast<int>(result_lines.size()) - first_line));
+        for (int row = 0; row < max_line_count; ++row)
+        {
+            const int line_index = first_line + row;
+            if (line_index < 0 || line_index >= static_cast<int>(result_lines.size()))
+            {
+                continue;
+            }
+
+            const auto& line = result_lines[static_cast<std::size_t>(line_index)];
+            if (first_col >= static_cast<int>(line.size()))
+            {
+                continue;
+            }
+
+            canvas.DrawText(0, row * 4, line.substr(static_cast<std::size_t>(first_col), static_cast<std::size_t>(col_count)));
+        }
+    };
+
+    auto results = _result_text_view.render(result_data, draw_results) | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, effective_height) | ftxui::flex;
 
     ftxui::Element status = build_palette_help(command_palette.mode);
     if (!command_palette.status_message.empty())
@@ -202,7 +186,7 @@ ftxui::Element CommandPaletteView::render(const CommandPaletteModel& command_pal
     const std::string title = command_palette.mode == CommandPaletteMode::History         ? "Command History"
                               : command_palette.mode == CommandPaletteMode::CloseOpenFile ? "Close Open File"
                               : command_palette.mode == CommandPaletteMode::DeleteFilters ? "Delete Filters"
-                                                                                          : "Command Palette";
+                                                                                           : "Command Palette";
 
     ftxui::Elements body;
     if (command_palette.mode == CommandPaletteMode::CloseOpenFile)
@@ -218,7 +202,7 @@ ftxui::Element CommandPaletteView::render(const CommandPaletteModel& command_pal
         body.push_back(render_command_palette_query(command_palette));
     }
     body.push_back(ftxui::separator());
-    body.push_back(ftxui::vbox(std::move(command_rows)));
+    body.push_back(std::move(results));
     body.push_back(ftxui::separator());
     body.push_back(status);
 

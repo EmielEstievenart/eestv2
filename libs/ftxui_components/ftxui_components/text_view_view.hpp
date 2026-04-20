@@ -15,7 +15,7 @@ class TextViewView
 public:
     using RenderCallback = std::function<void(ftxui::Canvas& canvas, int first_line_index, int line_count, int first_column, int column_count)>;
 
-    TextViewView() = default;
+    TextViewView();
 
     [[nodiscard]] ftxui::Element render(const TextViewRenderData& data, const RenderCallback& draw_content);
     [[nodiscard]] int viewport_line_count() const;

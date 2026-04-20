@@ -8,6 +8,14 @@
 namespace
 {
 
+void invalidate_box(ftxui::Box& box)
+{
+    box.x_min = 0;
+    box.x_max = -1;
+    box.y_min = 0;
+    box.y_max = -1;
+}
+
 int effective_viewport_line_count(const TextViewRenderData& data)
 {
     return std::max(1, data.viewport_line_count);
@@ -135,6 +143,12 @@ ftxui::Element render_content(const TextViewRenderData& data, const TextViewView
 }
 
 } // namespace
+
+TextViewView::TextViewView()
+{
+    invalidate_box(_box);
+    invalidate_box(_content_box);
+}
 
 ftxui::Element TextViewView::render_scrollbar(const TextViewRenderData& data)
 {
