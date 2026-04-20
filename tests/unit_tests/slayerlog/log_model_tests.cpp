@@ -187,7 +187,7 @@ TEST(LogModelTest, HidesDetectedTimestampTextByDefault)
 {
     LogModel model;
 
-    LogEntry entry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, "2026-04-01 10:00:00"};
+    LogEntry entry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, {}, "2026-04-01 10:00:00"};
     entry.metadata.extracted_time_start = 5;
     entry.metadata.extracted_time_end   = 24;
 
@@ -200,7 +200,7 @@ TEST(LogModelTest, ShowsDetectedTimestampTextWhenEnabled)
 {
     LogModel model;
 
-    LogEntry entry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, "2026-04-01 10:00:00"};
+    LogEntry entry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, {}, "2026-04-01 10:00:00"};
     entry.metadata.extracted_time_start = 5;
     entry.metadata.extracted_time_end   = 24;
 
@@ -255,7 +255,7 @@ TEST(LogModelTest, ReservesTimestampColumnWidthForRowsWithoutTimestamp)
     model.set_show_source_labels(true);
 
     model.append_lines({
-        LogEntry {"alpha.log", "with timestamp", std::nullopt, "2026-04-01 10:00:00"},
+        LogEntry {"alpha.log", "with timestamp", std::nullopt, {}, "2026-04-01 10:00:00"},
         LogEntry {"alpha.log", "without timestamp"},
     });
 
@@ -278,7 +278,7 @@ TEST(LogModelTest, ColumnWidthsGrowDynamicallyAndResetWhenModelBecomesEmpty)
     model.set_show_source_labels(true);
 
     model.append_lines({
-        LogEntry {"alpha.log", "first", std::nullopt, "2026-04-01 10:00:00"},
+        LogEntry {"alpha.log", "first", std::nullopt, {}, "2026-04-01 10:00:00"},
         LogEntry {123, "omega.log", "second"},
     });
 

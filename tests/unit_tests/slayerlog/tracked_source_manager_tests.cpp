@@ -186,6 +186,34 @@ TEST(AllTrackedSourcesTest, PollRewritesTailWhenNewTimestampWouldSortBeforeCurre
                                            }));
 }
 
+TEST(AllTrackedSourcesTest, SynchroniseSourceToEntryAppliesOffsetAcrossSource)
+{
+    const auto root      = make_unique_test_path("");
+    const auto alpha_log = root / "alpha.log";
+    const auto beta_log  = root / "beta.log";
+    ScopedTestFile alpha_file(alpha_log);
+    ScopedTestFile beta_file(beta_log);
+    alpha_file.write("2026-04-01T10:00:00 alpha first\n2026-04-01T10:01:00 alpha second\n");
+    beta_file.write("2026-04-01T10:10:00 beta first\n");
+
+    AllTrackedSources tracked_sources;
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(alpha_log.string())).has_value());
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(beta_log.string())).has_value());
+
+    std::chrono::system_clock::duration applied_offset {};
+    const auto& source_entry = *tracked_sources.all_lines()[AllLineIndex {0}];
+    const auto& destination_entry = *tracked_sources.all_lines()[AllLineIndex {2}];
+    ASSERT_FALSE(tracked_sources.synchronise_source_to_entry(source_entry, destination_entry, &applied_offset).has_value());
+
+    EXPECT_EQ(applied_offset, std::chrono::minutes(10));
+    ASSERT_EQ(tracked_sources.line_count(), 3);
+    EXPECT_EQ(tracked_sources.all_lines()[AllLineIndex {0}]->text, "2026-04-01T10:00:00 alpha first");
+    EXPECT_EQ(tracked_sources.all_lines()[AllLineIndex {1}]->text, "2026-04-01T10:10:00 beta first");
+    EXPECT_EQ(tracked_sources.all_lines()[AllLineIndex {2}]->text, "2026-04-01T10:01:00 alpha second");
+    EXPECT_EQ(tracked_sources.all_lines()[AllLineIndex {0}]->metadata.time_offset, std::chrono::minutes(10));
+    EXPECT_EQ(tracked_sources.all_lines()[AllLineIndex {2}]->metadata.time_offset, std::chrono::minutes(10));
+}
+
 TEST(AllProcessedSourcesTest, ReplaceFromSourcesUpdatesOnlyChangedSuffix)
 {
     const auto root      = make_unique_test_path("");

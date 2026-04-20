@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <stdexcept>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,7 @@ namespace slayerlog
 {
 
 using LogModel = AllProcessedSources;
+using namespace std::chrono_literals;
 
 namespace
 {
@@ -303,6 +305,78 @@ TEST(LogControllerTest, ResetClearsControllerState)
     EXPECT_FALSE(controller.text_view_controller().selection_in_progress());
     EXPECT_FALSE(controller.text_view_controller().selection_bounds().has_value());
     EXPECT_TRUE(controller.text_view_controller().selection_text().empty());
+}
+
+TEST(LogControllerTest, SyncSelectionMovesBetweenSelectableRowsAndCancelsWithEscape)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        LogEntry {"alpha.log", "plain without timestamp"},
+        LogEntry {"alpha.log", "2026-04-01T10:00:00 source"},
+        LogEntry {"beta.log", "2026-04-01T10:10:00 destination"},
+    });
+    const_cast<LogEntry&>(model.entry_at(AllLineIndex {1})).metadata.timestamp = std::chrono::system_clock::time_point(10s);
+    const_cast<LogEntry&>(model.entry_at(AllLineIndex {2})).metadata.timestamp = std::chrono::system_clock::time_point(20s);
+    for (int index = 0; index < model.total_line_count(); ++index)
+    {
+        const_cast<LogEntry&>(model.entry_at(AllLineIndex {index})).metadata.source = reinterpret_cast<TrackedSourceBase*>(0x1 + index);
+    }
+
+    controller.rebuild_view(model);
+    controller.text_view_controller().update_viewport_line_count(1);
+
+    std::string message;
+    ASSERT_TRUE(controller.start_sync_selection(model, [](const LogEntry&, const LogEntry&) { return SyncApplyResult {true, "ok"}; }, message));
+    ASSERT_TRUE(controller.sync_selection_active());
+    ASSERT_TRUE(controller.sync_target_visible_index().has_value());
+    EXPECT_EQ(controller.sync_target_visible_index()->value, 1);
+
+    const auto down_result = controller.handle_event(model, ftxui::Event::ArrowDown, {});
+    EXPECT_TRUE(down_result.handled);
+    ASSERT_TRUE(controller.sync_target_visible_index().has_value());
+    EXPECT_EQ(controller.sync_target_visible_index()->value, 2);
+
+    const auto escape_result = controller.handle_event(model, ftxui::Event::Escape, {});
+    EXPECT_TRUE(escape_result.handled);
+    EXPECT_FALSE(controller.sync_selection_active());
+    EXPECT_EQ(controller.status_message(), "Synchronise mode cancelled");
+}
+
+TEST(LogControllerTest, SyncSelectionAppliesAfterPickingSourceAndDestination)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        LogEntry {"alpha.log", "2026-04-01T10:00:00 source"},
+        LogEntry {"beta.log", "2026-04-01T10:10:00 destination"},
+    });
+    const_cast<LogEntry&>(model.entry_at(AllLineIndex {0})).metadata.timestamp = std::chrono::system_clock::time_point(10s);
+    const_cast<LogEntry&>(model.entry_at(AllLineIndex {1})).metadata.timestamp = std::chrono::system_clock::time_point(20s);
+    for (int index = 0; index < model.total_line_count(); ++index)
+    {
+        const_cast<LogEntry&>(model.entry_at(AllLineIndex {index})).metadata.source = reinterpret_cast<TrackedSourceBase*>(0x10 + index);
+    }
+
+    controller.rebuild_view(model);
+
+    bool applied = false;
+    std::string message;
+    ASSERT_TRUE(controller.start_sync_selection(model,
+                                                [&](const LogEntry& source_entry, const LogEntry& destination_entry)
+                                                {
+                                                    applied = source_entry.text == "2026-04-01T10:00:00 source" && destination_entry.text == "2026-04-01T10:10:00 destination";
+                                                    return SyncApplyResult {true, "aligned"};
+                                                },
+                                                message));
+
+    EXPECT_TRUE(controller.handle_event(model, ftxui::Event::Return, {}).handled);
+    EXPECT_TRUE(controller.handle_event(model, ftxui::Event::ArrowDown, {}).handled);
+    EXPECT_TRUE(controller.handle_event(model, ftxui::Event::Return, {}).handled);
+
+    EXPECT_TRUE(applied);
+    EXPECT_FALSE(controller.sync_selection_active());
+    EXPECT_EQ(controller.status_message(), "aligned");
 }
 
 TEST(LogControllerTest, FindCountsAllMatchesWhileVisibleCountRespectsFilters)

@@ -92,6 +92,19 @@ TEST(LogBatchTest, KeepsOriginalSourceOrderForEqualTimestamps)
     EXPECT_EQ(merged[1].text, "2026-04-01T10:00:00 beta second");
 }
 
+TEST(LogBatchTest, SortsUsingEffectiveTimestampWhenOffsetIsApplied)
+{
+    auto alpha = make_entry(0, "alpha.log", "2026-04-01T10:05:00 alpha");
+    auto beta  = make_entry(1, "beta.log", "2026-04-01T10:02:00 beta");
+    beta.metadata.time_offset = std::chrono::minutes(5);
+
+    const auto merged = merge_log_batch({alpha, beta});
+
+    ASSERT_EQ(merged.size(), 2U);
+    EXPECT_EQ(merged[0].text, "2026-04-01T10:05:00 alpha");
+    EXPECT_EQ(merged[1].text, "2026-04-01T10:02:00 beta");
+}
+
 TEST(LogBatchTest, EmitsUntimestampedLinesWhenTheyReachTheFront)
 {
     const auto merged = merge_log_batch({

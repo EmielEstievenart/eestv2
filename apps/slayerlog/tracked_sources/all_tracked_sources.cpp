@@ -27,14 +27,15 @@ std::optional<std::chrono::system_clock::time_point> earliest_new_timestamp(cons
         }
 
         const auto& entry = (*source_range.entries)[source_range.first_entry_index];
-        if (!entry->metadata.timestamp.has_value())
+        const auto entry_timestamp = effective_timestamp(entry->metadata);
+        if (!entry_timestamp.has_value())
         {
             continue;
         }
 
-        if (!earliest_timestamp.has_value() || entry->metadata.timestamp.value() < earliest_timestamp.value())
+        if (!earliest_timestamp.has_value() || entry_timestamp.value() < earliest_timestamp.value())
         {
-            earliest_timestamp = entry->metadata.timestamp;
+            earliest_timestamp = entry_timestamp;
         }
     }
 
@@ -47,12 +48,13 @@ std::size_t find_rewrite_start_index(const IndexedVector<std::shared_ptr<LogEntr
     for (std::size_t line_index = 0; line_index < all_lines.size(); ++line_index)
     {
         const auto& line = all_lines[AllLineIndex {static_cast<int>(line_index)}];
-        if (!line->metadata.timestamp.has_value())
+        const auto line_timestamp = effective_timestamp(line->metadata);
+        if (!line_timestamp.has_value())
         {
             continue;
         }
 
-        if (line->metadata.timestamp.value() >= earliest_timestamp)
+        if (line_timestamp.value() >= earliest_timestamp)
         {
             return line_index;
         }
@@ -88,6 +90,7 @@ std::optional<std::string> AllTrackedSources::open_source(const LogSource& sourc
         source_state->poll();
 
         _sources.push_back(std::move(source_state));
+        _source_time_offsets.push_back(std::chrono::system_clock::duration {});
         rebuild_source_labels();
         rebuild_all_lines();
 
@@ -113,8 +116,48 @@ std::optional<std::string> AllTrackedSources::close_source(std::size_t source_in
     }
 
     _sources.erase(_sources.begin() + static_cast<std::ptrdiff_t>(source_index));
+    _source_time_offsets.erase(_source_time_offsets.begin() + static_cast<std::ptrdiff_t>(source_index));
     rebuild_source_labels();
     rebuild_all_lines();
+    return std::nullopt;
+}
+
+std::optional<std::string> AllTrackedSources::synchronise_source_to_entry(const LogEntry& source_entry, const LogEntry& destination_entry,
+                                                                          std::chrono::system_clock::duration* applied_offset)
+{
+    const auto source_index = source_index_for_entry(source_entry);
+    if (!source_index.has_value())
+    {
+        return "Selected source entry is no longer attached to an open source";
+    }
+
+    const auto destination_index = source_index_for_entry(destination_entry);
+    if (!destination_index.has_value())
+    {
+        return "Selected destination entry is no longer attached to an open source";
+    }
+
+    if (*source_index == *destination_index)
+    {
+        return "Select two lines from different sources";
+    }
+
+    const auto source_timestamp      = source_entry.metadata.timestamp;
+    const auto destination_timestamp = destination_entry.metadata.timestamp;
+    if (!source_timestamp.has_value() || !destination_timestamp.has_value())
+    {
+        return "Both selected lines need a parsed timestamp";
+    }
+
+    const auto offset = destination_timestamp.value() + destination_entry.metadata.time_offset - source_timestamp.value();
+    _source_time_offsets[*source_index] = offset;
+    rebuild_all_lines();
+
+    if (applied_offset != nullptr)
+    {
+        *applied_offset = offset;
+    }
+
     return std::nullopt;
 }
 
@@ -263,6 +306,24 @@ std::vector<std::string> AllTrackedSources::source_labels() const
     return labels;
 }
 
+std::optional<std::size_t> AllTrackedSources::source_index_for_entry(const LogEntry& entry) const
+{
+    if (entry.metadata.source == nullptr)
+    {
+        return std::nullopt;
+    }
+
+    for (std::size_t index = 0; index < _sources.size(); ++index)
+    {
+        if (_sources[index].get() == entry.metadata.source)
+        {
+            return index;
+        }
+    }
+
+    return std::nullopt;
+}
+
 bool AllTrackedSources::contains_source(const LogSource& candidate_source) const
 {
     for (const auto& source : _sources)
@@ -317,6 +378,12 @@ void AllTrackedSources::append_source_range(std::vector<LogBatchSourceRange>& so
         return;
     }
 
+    const auto time_offset = source_index < _source_time_offsets.size() ? _source_time_offsets[source_index] : std::chrono::system_clock::duration {};
+    for (std::size_t entry_index = first_entry_index; entry_index < entries.size(); ++entry_index)
+    {
+        entries[entry_index]->metadata.time_offset = time_offset;
+    }
+
     source_ranges.push_back({
         &entries,
         first_entry_index,
@@ -331,6 +398,18 @@ void AllTrackedSources::append_merged_lines(const std::vector<std::shared_ptr<Lo
     for (const auto& line : lines)
     {
         _all_lines.push_back(line);
+    }
+
+    for (const auto& line : _all_lines)
+    {
+        const auto source_index = source_index_for_entry(*line);
+        if (!source_index.has_value() || *source_index >= _source_time_offsets.size())
+        {
+            line->metadata.time_offset = std::chrono::system_clock::duration {};
+            continue;
+        }
+
+        line->metadata.time_offset = _source_time_offsets[*source_index];
     }
 }
 

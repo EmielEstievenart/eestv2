@@ -18,6 +18,10 @@ inline const auto find_match_fg             = ftxui::Color::White;
 inline const auto find_active_bg            = ftxui::Color::Yellow;
 inline const auto find_active_fg            = ftxui::Color::Black;
 inline const auto hidden_columns_preview_bg = ftxui::Color::Cyan;
+inline const auto sync_target_bg            = ftxui::Color::Magenta;
+inline const auto sync_target_fg            = ftxui::Color::White;
+inline const auto sync_source_bg            = ftxui::Color::Green;
+inline const auto sync_source_fg            = ftxui::Color::Black;
 
 // Status messages
 inline const auto success_fg = ftxui::Color::GreenLight;
@@ -27,6 +31,7 @@ inline const auto error_fg   = ftxui::Color::Red;
 inline const auto label_filter_fg = ftxui::Color::Cyan;
 inline const auto label_find_fg   = ftxui::Color::Yellow;
 inline const auto label_key_fg    = ftxui::Color::White;
+inline const auto label_sync_fg   = ftxui::Color::MagentaLight;
 inline const auto paused_fg       = ftxui::Color::Yellow;
 
 inline ftxui::Color source_tag_color(std::size_t source_index)

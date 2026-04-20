@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
@@ -24,6 +25,7 @@ public:
 
     std::optional<std::string> open_source(const LogSource& source);
     std::optional<std::string> close_source(std::size_t source_index, std::string* closed_label = nullptr);
+    std::optional<std::string> synchronise_source_to_entry(const LogEntry& source_entry, const LogEntry& destination_entry, std::chrono::system_clock::duration* applied_offset = nullptr);
 
     std::optional<AllLineIndex> poll();
 
@@ -33,6 +35,7 @@ public:
     std::size_t source_count() const;
     bool empty() const;
     std::vector<std::string> source_labels() const;
+    std::optional<std::size_t> source_index_for_entry(const LogEntry& entry) const;
 
 private:
     bool contains_source(const LogSource& candidate_source) const;
@@ -42,6 +45,7 @@ private:
     void append_merged_lines(const std::vector<std::shared_ptr<LogEntry>>& lines);
 
     std::vector<std::unique_ptr<TrackedSourceBase>> _sources;
+    std::vector<std::chrono::system_clock::duration> _source_time_offsets;
     IndexedVector<std::shared_ptr<LogEntry>, AllLineIndex> _all_lines;
     std::shared_ptr<const TimestampFormatCatalog> _timestamp_formats;
 };

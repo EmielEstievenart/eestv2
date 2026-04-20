@@ -49,6 +49,12 @@ bool MasterController::handle_event(const ftxui::Event& event)
 {
     _exit_requested = false;
 
+    if (_log_controller.sync_selection_active())
+    {
+        const auto result = _log_controller.handle_event(_processed_sources, event, [this](const ftxui::Mouse& mouse) { return _log_view.mouse_to_text_position(_log_controller, mouse); });
+        return result.handled;
+    }
+
     if (event == ftxui::Event::CtrlP)
     {
         _command_palette_controller.open();

@@ -29,6 +29,12 @@ std::filesystem::path make_temp_export_path()
     return std::filesystem::temp_directory_path() / ("slayerlog_visible_export_" + unique_suffix + ".txt");
 }
 
+std::filesystem::path make_temp_log_path(const std::string& stem)
+{
+    const auto unique_suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    return std::filesystem::temp_directory_path() / (stem + "_" + unique_suffix + ".log");
+}
+
 void remove_temp_export_file(const std::filesystem::path& export_path)
 {
     std::error_code error_code;
@@ -95,7 +101,7 @@ TEST(CommandRegistrarTest, ExportVisibleTextWritesAllVisibleRenderedLines)
 TEST(CommandRegistrarTest, ShowAndHideOriginalTimeCommandsToggleRenderedMessage)
 {
     AllProcessedSources processed_sources;
-    LogEntry entry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, "2026-04-01 10:00:00"};
+    LogEntry entry {"alpha.log", "INFO 2026-04-01 10:00:00 hello", std::nullopt, {}, "2026-04-01 10:00:00"};
     entry.metadata.extracted_time_start = 5;
     entry.metadata.extracted_time_end   = 24;
     processed_sources.append_lines({entry});
@@ -228,6 +234,43 @@ TEST(CommandRegistrarTest, DeleteFiltersCommandFailsWhenNoFiltersExist)
 
     EXPECT_FALSE(result.success);
     EXPECT_EQ(result.message, "No filters to delete");
+}
+
+TEST(CommandRegistrarTest, SynchroniseSourcesCommandStartsInteractiveSelectionMode)
+{
+    const auto alpha_path = make_temp_log_path("slayerlog_sync_alpha");
+    const auto beta_path  = make_temp_log_path("slayerlog_sync_beta");
+    {
+        std::ofstream alpha(alpha_path);
+        std::ofstream beta(beta_path);
+        ASSERT_TRUE(alpha.is_open());
+        ASSERT_TRUE(beta.is_open());
+        alpha << "2026-04-01T10:00:00 alpha\n";
+        beta << "2026-04-01T10:00:05 beta\n";
+    }
+
+    AllProcessedSources processed_sources;
+
+    CommandManager command_manager;
+    LogController controller;
+    CommandPaletteModel command_palette_model;
+    CommandPaletteController command_palette_controller(command_palette_model, command_manager);
+    std::string header_text;
+    auto screen = ftxui::ScreenInteractive::FixedSize(80, 24);
+    AllTrackedSources tracked_sources;
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(alpha_path.string())).has_value());
+    ASSERT_FALSE(tracked_sources.open_source(parse_log_source(beta_path.string())).has_value());
+    reload_processed_sources(tracked_sources, header_text, processed_sources, controller, screen);
+    register_commands(command_manager, processed_sources, controller, command_palette_controller, header_text, screen, tracked_sources);
+
+    const auto result = command_manager.execute("synchronise-sources");
+
+    EXPECT_TRUE(result.success);
+    EXPECT_EQ(result.message, "Select the source line with Up/Down and Enter");
+    EXPECT_TRUE(controller.sync_selection_active());
+
+    remove_temp_export_file(alpha_path);
+    remove_temp_export_file(beta_path);
 }
 
 } // namespace slayerlog

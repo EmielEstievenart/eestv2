@@ -1,10 +1,12 @@
 #include "command_registrar.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -112,6 +114,61 @@ std::optional<int> highest_shown_line_number(const AllProcessedSources& processe
     const int first_visible_line  = controller.text_view_controller().first_visible_line();
     const int last_visible_line   = std::min(processed_sources.line_count() - 1, first_visible_line + viewport_line_count - 1);
     return processed_sources.line_number_for_visible_line(VisibleLineIndex {last_visible_line});
+}
+
+std::string format_duration_for_status(std::chrono::system_clock::duration duration)
+{
+    using namespace std::chrono;
+
+    const bool negative = duration < system_clock::duration::zero();
+    if (negative)
+    {
+        duration = -duration;
+    }
+
+    const auto total_milliseconds = duration_cast<milliseconds>(duration).count();
+    const auto hours = total_milliseconds / (1000LL * 60LL * 60LL);
+    const auto minutes = (total_milliseconds / (1000LL * 60LL)) % 60LL;
+    const auto seconds = (total_milliseconds / 1000LL) % 60LL;
+    const auto milliseconds_part = total_milliseconds % 1000LL;
+
+    std::ostringstream output;
+    output << (negative ? "-" : "+") << hours << ':' << std::setw(2) << std::setfill('0') << minutes << ':' << std::setw(2) << std::setfill('0') << seconds << '.' << std::setw(3)
+           << std::setfill('0') << milliseconds_part;
+    return output.str();
+}
+
+CommandResult synchronise_sources_command(AllTrackedSources& tracked_sources, AllProcessedSources& processed_sources, LogController& controller, std::string& header_text, ftxui::ScreenInteractive& screen)
+{
+    if (tracked_sources.source_count() < 2)
+    {
+        return CommandResult {false, "Open at least two sources before synchronising"};
+    }
+
+    std::string start_message;
+    if (!controller.start_sync_selection(
+            processed_sources,
+            [&](const LogEntry& source_entry, const LogEntry& destination_entry) -> SyncApplyResult
+            {
+                std::chrono::system_clock::duration applied_offset {};
+                const auto error = tracked_sources.synchronise_source_to_entry(source_entry, destination_entry, &applied_offset);
+                if (error.has_value())
+                {
+                    return {false, *error};
+                }
+
+                reload_processed_sources(tracked_sources, header_text, processed_sources, controller, screen);
+                return {
+                    true,
+                    "Aligned " + source_entry.metadata.source_label + " to " + destination_entry.metadata.source_label + " with offset " + format_duration_for_status(applied_offset),
+                };
+            },
+            start_message))
+    {
+        return CommandResult {false, start_message};
+    }
+
+    return CommandResult {true, start_message};
 }
 
 CommandResult open_file_command(std::string_view file_path, AllTrackedSources& tracked_sources, std::string& header_text, AllProcessedSources& processed_sources, LogController& controller, ftxui::ScreenInteractive& screen)
@@ -559,7 +616,25 @@ void register_commands(CommandManager& command_manager, AllProcessedSources& pro
                                              return CommandResult {false, "Usage: close-open-file"};
                                          }
 
-                                         return close_open_file_command(command_palette_controller, tracked_sources, header_text, processed_sources, controller, screen);
+                                          return close_open_file_command(command_palette_controller, tracked_sources, header_text, processed_sources, controller, screen);
+                                      });
+
+    command_manager.register_command({"synchronise-sources",
+                                      "Align one source to another by selecting two lines",
+                                      "synchronise-sources",
+                                      {
+                                          "Enter sync mode and pick one source line, then one destination line.",
+                                          "The first selected line is shifted so its timestamp aligns to the second selected line.",
+                                          "Use Up/Down to move, Enter to select, and Esc to cancel.",
+                                      }},
+                                     [&](std::string_view arguments)
+                                     {
+                                         if (!trim_text(arguments).empty())
+                                         {
+                                             return CommandResult {false, "Usage: synchronise-sources"};
+                                         }
+
+                                         return synchronise_sources_command(tracked_sources, processed_sources, controller, header_text, screen);
                                      });
 
     command_manager.register_command({"go-to-line",

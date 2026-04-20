@@ -143,9 +143,46 @@ ftxui::Element build_find_status(const AllProcessedSources& processed_sources, c
     return ftxui::hbox(std::move(parts));
 }
 
-ftxui::Element build_key_hints()
+ftxui::Element build_sync_status(const AllProcessedSources& processed_sources, const LogController& controller)
+{
+    ftxui::Elements parts;
+    parts.push_back(theme::badge("SYNC", theme::label_sync_fg));
+
+    if (!controller.sync_selection_active())
+    {
+        parts.push_back(ftxui::text(" off") | ftxui::color(theme::muted));
+        return ftxui::hbox(std::move(parts));
+    }
+
+    parts.push_back(ftxui::text(" " + controller.sync_selection_status(processed_sources)));
+    return ftxui::hbox(std::move(parts));
+}
+
+ftxui::Element build_controller_status(const LogController& controller)
+{
+    if (controller.status_message().empty())
+    {
+        return ftxui::text("");
+    }
+
+    return ftxui::text(controller.status_message()) | ftxui::color(controller.status_is_error() ? theme::error_fg : theme::success_fg);
+}
+
+ftxui::Element build_key_hints(bool sync_selection_active)
 {
     auto sep = []() { return ftxui::text("  "); };
+
+    if (sync_selection_active)
+    {
+        return ftxui::hbox({
+            theme::key_hint("Up/Down", "move"),
+            sep(),
+            theme::key_hint("Enter", "select"),
+            sep(),
+            theme::key_hint("Esc", "cancel"),
+        });
+    }
+
     return ftxui::hbox({
         theme::key_hint("Ctrl+P", "commands"),
         sep(),
@@ -204,6 +241,8 @@ ftxui::Element LogView::render(const AllProcessedSources& processed_sources, Log
         std::vector<TextViewRangeDecoration> source_decorations;
         source_decorations.reserve(static_cast<std::size_t>(row_count));
         rendered_rows.reserve(static_cast<std::size_t>(row_count));
+        const auto sync_target_index = controller.sync_target_visible_index();
+        const auto sync_source_index = controller.sync_source_visible_index(processed_sources);
 
         for (int row = 0; row < row_count; ++row)
         {
@@ -212,9 +251,19 @@ ftxui::Element LogView::render(const AllProcessedSources& processed_sources, Log
             RenderedRow rendered_row;
             rendered_row.text = controller.line_at(line_index);
 
+            const bool is_sync_target = sync_target_index.has_value() && sync_target_index->value == line_index;
+            const bool is_sync_source = sync_source_index.has_value() && sync_source_index->value == line_index;
             const bool is_find_match  = controller.find_active() && controller.visible_line_matches_find(processed_sources, line_index);
             const bool is_active_find = active_find_index.has_value() && active_find_index->value == line_index;
-            if (is_find_match)
+            if (is_sync_target || is_sync_source)
+            {
+                TextViewStyle style;
+                style.background = is_sync_target ? theme::sync_target_bg : theme::sync_source_bg;
+                style.foreground = is_sync_target ? theme::sync_target_fg : theme::sync_source_fg;
+                style.bold       = true;
+                rendered_row.style = style;
+            }
+            else if (is_find_match)
             {
                 TextViewStyle style;
                 style.background   = is_active_find ? theme::find_active_bg : theme::find_match_bg;
@@ -306,10 +355,12 @@ ftxui::Element LogView::render(const AllProcessedSources& processed_sources, Log
                                                        ftxui::separator(),
                                                        log_view,
                                                        ftxui::separator(),
-                                                       build_filter_status(processed_sources),
-                                                       build_find_status(processed_sources, controller),
-                                                       build_key_hints(),
-                                                   }));
+                                                        build_filter_status(processed_sources),
+                                                        build_find_status(processed_sources, controller),
+                                                        build_sync_status(processed_sources, controller),
+                                                        build_controller_status(controller),
+                                                        build_key_hints(controller.sync_selection_active()),
+                                                    }));
 }
 
 std::optional<TextViewPosition> LogView::mouse_to_text_position(const LogController& controller, const ftxui::Mouse& mouse) const

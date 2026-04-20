@@ -230,4 +230,29 @@ TEST(MasterControllerTest, EscapeExitsWhenPaletteClosedAndFindInactive)
     EXPECT_TRUE(master_controller.exit_requested());
 }
 
+TEST(MasterControllerTest, EscapeCancelsSynchroniseModeBeforeExiting)
+{
+    LogModel model;
+    LogController controller;
+    model.append_lines({
+        LogEntry {"alpha.log", "2026-04-01T10:00:00 source"},
+    });
+    const_cast<LogEntry&>(model.entry_at(AllLineIndex {0})).metadata.timestamp = std::chrono::system_clock::time_point(std::chrono::seconds(10));
+    const_cast<LogEntry&>(model.entry_at(AllLineIndex {0})).metadata.source = reinterpret_cast<TrackedSourceBase*>(0x1);
+    controller.rebuild_view(model);
+    std::string message;
+    ASSERT_TRUE(controller.start_sync_selection(model, [](const LogEntry&, const LogEntry&) { return SyncApplyResult {true, "ok"}; }, message));
+
+    CommandPaletteModel command_palette_model;
+    CommandManager command_manager;
+    CommandPaletteController command_palette_controller(command_palette_model, command_manager);
+    LogView view;
+    auto screen = ftxui::ScreenInteractive::FixedSize(80, 24);
+    MasterController master_controller(model, controller, view, screen, command_palette_controller);
+
+    EXPECT_TRUE(master_controller.handle_event(ftxui::Event::Escape));
+    EXPECT_FALSE(controller.sync_selection_active());
+    EXPECT_FALSE(master_controller.exit_requested());
+}
+
 } // namespace slayerlog

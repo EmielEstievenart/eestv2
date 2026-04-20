@@ -22,9 +22,17 @@ struct LogEventResult
     bool request_exit = false;
 };
 
+struct SyncApplyResult
+{
+    bool success = false;
+    std::string message;
+};
+
 class LogController
 {
 public:
+    using SyncApplyHandler = std::function<SyncApplyResult(const LogEntry&, const LogEntry&)>;
+
     LogController();
 
     void reset();
@@ -42,6 +50,15 @@ public:
     // --- Domain-specific navigation ---
 
     bool go_to_line(const AllProcessedSources& processed_sources, int line_number);
+
+    bool start_sync_selection(const AllProcessedSources& processed_sources, SyncApplyHandler apply_handler, std::string& message);
+    bool sync_selection_active() const;
+    std::optional<VisibleLineIndex> sync_target_visible_index() const;
+    std::optional<VisibleLineIndex> sync_source_visible_index(const AllProcessedSources& processed_sources) const;
+    std::string sync_selection_status(const AllProcessedSources& processed_sources) const;
+    const std::string& status_message() const;
+    bool status_is_error() const;
+    void clear_status_message();
 
     // --- Find ---
 
@@ -73,6 +90,13 @@ private:
     void rebuild_find_matches(const AllProcessedSources& processed_sources);
     void expand_find_matches(const AllProcessedSources& processed_sources, AllLineIndex first_new_entry_index);
     bool entry_matches_find_query(const LogEntry& entry) const;
+    std::optional<VisibleLineIndex> first_sync_selectable_visible_index(const AllProcessedSources& processed_sources) const;
+    std::optional<VisibleLineIndex> next_sync_selectable_visible_index(const AllProcessedSources& processed_sources, int start_index, int step) const;
+    bool is_sync_selectable_visible_index(const AllProcessedSources& processed_sources, VisibleLineIndex visible_index) const;
+    const LogEntry* sync_entry_at_visible_index(const AllProcessedSources& processed_sources, VisibleLineIndex visible_index) const;
+    void ensure_sync_target_visible();
+    void stop_sync_selection();
+    void set_status_message(std::string message, bool is_error);
 
     TextViewController _text_view_controller;
 
@@ -86,6 +110,15 @@ private:
     std::optional<SearchPattern> _find_pattern;
     IndexedVector<AllLineIndex, FindResultIndex> _find_match_entry_indices;
     std::optional<AllLineIndex> _active_find_entry_index;
+
+    bool _sync_selection_active = false;
+    bool _sync_selecting_destination = false;
+    std::optional<VisibleLineIndex> _sync_target_visible_index;
+    std::optional<AllLineIndex> _sync_source_entry_index;
+    SyncApplyHandler _sync_apply_handler;
+
+    std::string _status_message;
+    bool _status_is_error = false;
 };
 
 } // namespace slayerlog
