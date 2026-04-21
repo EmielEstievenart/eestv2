@@ -107,6 +107,21 @@
             "internalConsoleOptions": "neverOpen"
         },
         {
+            "name": "Roster Slayer",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${command:cmake.buildDirectory}/bin/roster_slayer.exe",
+            "args": [
+                "--top",
+                "20",
+                "--max-expanded",
+                "500000"
+            ],
+            "cwd": "${command:cmake.buildDirectory}",
+            "externalConsole": true,
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
             "name": "Debug CMake Target",
             "type": "cppvsdbg",
             "request": "launch",

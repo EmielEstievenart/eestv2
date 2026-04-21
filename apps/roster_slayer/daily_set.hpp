@@ -1,0 +1,52 @@
+#pragma once
+
+#include "shift.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+namespace roster_slayer
+{
+class DailySet
+{
+public:
+    explicit DailySet(std::vector<Shift> desired_shifts);
+
+    void set(std::size_t index, const Shift& shift);
+
+    void clear(std::size_t index);
+
+    [[nodiscard]] bool is_set(std::size_t index) const;
+
+    [[nodiscard]] const Shift& get(std::size_t index) const;
+
+    [[nodiscard]] std::size_t size() const;
+
+    [[nodiscard]] std::size_t nr_of_assigned_entries() const;
+
+    [[nodiscard]] std::uint64_t get_nr_of_combinations() const;
+
+private:
+    using CountMap = std::unordered_map<std::string, std::size_t>;
+
+    static std::uint64_t factorial(std::size_t n);
+
+    static std::uint64_t multinomial_count(const std::vector<std::size_t>& counts);
+
+    static std::string shift_id(const Shift& shift);
+
+    void validate_index(std::size_t index) const;
+
+    void validate_current_state_against_desired() const;
+
+    [[nodiscard]] std::vector<std::size_t> get_remaining_shift_counts() const;
+
+    std::vector<Shift> _desired_shifts;
+    std::vector<std::optional<Shift>> _assigned_shifts;
+};
+} // namespace roster_slayer

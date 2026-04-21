@@ -28,12 +28,14 @@ add_executable(
   slayerlog/command_history_tests.cpp
   slayerlog/command_manager_tests.cpp
   slayerlog/log_batch_tests.cpp
-  slayerlog/log_timestamp_tests.cpp
-  slayerlog/log_model_tests.cpp
-  slayerlog/log_controller_tests.cpp
-  slayerlog/master_controller_tests.cpp
-  slayerlog/settings_ini_tests.cpp
-   ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_controller.cpp
+   slayerlog/log_timestamp_tests.cpp
+   slayerlog/log_model_tests.cpp
+   slayerlog/log_controller_tests.cpp
+   slayerlog/master_controller_tests.cpp
+   slayerlog/settings_ini_tests.cpp
+   roster_slayer/roster_tests.cpp
+   roster_slayer/shift_tests.cpp
+    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_controller.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_controller.hpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_model.hpp
     ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands/command_palette_view.cpp
@@ -68,7 +70,9 @@ add_executable(
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/ssh_tail_watcher.cpp
    ${CMAKE_SOURCE_DIR}/apps/slayerlog/watchers/stream_line_buffer.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/all_processed_sources.cpp
-  ${CMAKE_SOURCE_DIR}/apps/slayerlog/search_pattern.cpp)
+  ${CMAKE_SOURCE_DIR}/apps/slayerlog/search_pattern.cpp
+   ${CMAKE_SOURCE_DIR}/apps/roster_slayer/daily_set.cpp
+   )
 
 # Link libraries (assuming eestv_lib provides sources and Boost)
 target_link_libraries(
@@ -86,7 +90,7 @@ target_link_libraries(
           libzstd)
 
 target_compile_definitions(unit_tests PRIVATE BOOST_ALL_NO_LIB BOOST_USE_WINAPI_VERSION=0x0602)
-target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources ${CMAKE_SOURCE_DIR}/code)
+target_include_directories(unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/apps/slayerlog ${CMAKE_SOURCE_DIR}/apps/slayerlog/commands ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources ${CMAKE_SOURCE_DIR}/apps/roster_slayer ${CMAKE_SOURCE_DIR}/code)
 
 # Conditionally discover tests (disabled for TSAN where it doesn't work well)
 if(ENABLE_CTEST)

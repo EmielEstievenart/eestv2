@@ -1,1 +1,2 @@
 add_subdirectory(slayerlog)
+add_subdirectory(roster_slayer)
