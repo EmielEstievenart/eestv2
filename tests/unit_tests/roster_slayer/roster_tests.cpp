@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <vector>
 
+#include "day_pruning.hpp"
 #include "daily_set.hpp"
 #include "roster_validation.hpp"
 #include "shift.hpp"
@@ -16,6 +18,19 @@ namespace
 std::vector<Shift> make_desired_shifts(std::size_t count)
 {
     return std::vector<Shift>(count, Shift {"EA", StartTime {Hour {7}, Minute {0}}, StopTime {Hour {15}, Minute {15}}, 7.5});
+}
+
+std::vector<std::string> to_codes(const std::vector<Shift>& shifts)
+{
+    std::vector<std::string> codes;
+    codes.reserve(shifts.size());
+    for (const Shift& shift : shifts)
+    {
+        codes.push_back(shift.get_code());
+    }
+
+    std::sort(codes.begin(), codes.end());
+    return codes;
 }
 }
 
@@ -159,6 +174,43 @@ TEST(RosterValidationTest, RejectsLateShiftFollowedByEarlyShift)
     tuesday.set(0, weekday_shifts::get_early_shift_b());
 
     EXPECT_FALSE(verify_2_weekday_shifts_allowed_consecutively(monday, tuesday));
+}
+
+TEST(DayPruningTest, RestrictsNextWeekdayAfterLateShift)
+{
+    EXPECT_EQ(to_codes(day_pruning::get_allowed_next_weekday_shifts(weekday_shifts::get_late_shift_2())),
+              (std::vector<std::string> {"D", "L1", "L2", "OFF"}));
+}
+
+TEST(DayPruningTest, RestrictsNextWeekdayAfterEarlyShift)
+{
+    EXPECT_EQ(to_codes(day_pruning::get_allowed_next_weekday_shifts(weekday_shifts::get_early_shift_b())),
+              (std::vector<std::string> {"D", "EA", "EB", "OFF"}));
+}
+
+TEST(DayPruningTest, KeepsForcedAssignmentsThatMatchPreviousDayConstraint)
+{
+    DailySet previous_day {{weekday_shifts::get_late_shift_1()}};
+    previous_day.set(0, weekday_shifts::get_late_shift_1());
+
+    DailySet day_template {{weekday_shifts::get_day_shift()}};
+    day_template.set(0, weekday_shifts::get_day_shift());
+
+    const auto possible_sets = day_pruning::make_possible_weekday_templates(previous_day, day_template);
+
+    ASSERT_EQ(possible_sets.size(), 1u);
+    EXPECT_EQ(possible_sets.front().get(0).get_code(), "D");
+}
+
+TEST(DayPruningTest, DropsForcedAssignmentsThatConflictWithPreviousDayConstraint)
+{
+    DailySet previous_day {{weekday_shifts::get_late_shift_1()}};
+    previous_day.set(0, weekday_shifts::get_late_shift_1());
+
+    DailySet day_template {{weekday_shifts::get_early_shift_a()}};
+    day_template.set(0, weekday_shifts::get_early_shift_a());
+
+    EXPECT_TRUE(day_pruning::make_possible_weekday_templates(previous_day, day_template).empty());
 }
 
 TEST(RosterValidationTest, AcceptsShiftPairsWithAtLeastTwelveHoursRest)
