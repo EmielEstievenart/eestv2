@@ -31,8 +31,11 @@ public:
 
     [[nodiscard]] std::uint64_t get_nr_of_combinations() const;
 
+    [[nodiscard]] DailySet get_set(std::uint64_t combination_index) const;
+
 private:
     using CountMap = std::unordered_map<std::string, std::size_t>;
+    using ShiftMap = std::unordered_map<std::string, Shift>;
 
     static std::uint64_t factorial(std::size_t n);
 
@@ -44,7 +47,15 @@ private:
 
     void validate_current_state_against_desired() const;
 
+    [[nodiscard]] CountMap get_remaining_shift_count_map() const;
+
     [[nodiscard]] std::vector<std::size_t> get_remaining_shift_counts() const;
+
+    [[nodiscard]] std::vector<std::string> get_shift_ids_in_order() const;
+
+    [[nodiscard]] ShiftMap get_shift_lookup() const;
+
+    [[nodiscard]] std::vector<std::size_t> get_empty_positions() const;
 
     std::vector<Shift> _desired_shifts;
     std::vector<std::optional<Shift>> _assigned_shifts;

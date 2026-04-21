@@ -86,4 +86,69 @@ TEST(DailySetTest, ReturnsRemainingCombinationCountForPartiallyFilledWeekendSet)
     EXPECT_EQ(set.get_nr_of_combinations(), 1680u);
 }
 
+TEST(DailySetTest, ReturnsIndexedCombinationForPartiallyFilledSet)
+{
+    std::vector<Shift> desired_shifts{
+        weekend_shifts::get_off_shift(),
+        weekend_shifts::get_off_shift(),
+        weekend_shifts::get_weekend_early_shift_a()};
+
+    DailySet set{desired_shifts};
+    set.set(0, weekend_shifts::get_off_shift());
+
+    const auto first = set.get_set(0);
+    EXPECT_EQ(first.get(0).get_code(), "OFF");
+    EXPECT_EQ(first.get(1).get_code(), "OFF");
+    EXPECT_EQ(first.get(2).get_code(), "WE-EA");
+
+    const auto second = set.get_set(1);
+    EXPECT_EQ(second.get(0).get_code(), "OFF");
+    EXPECT_EQ(second.get(1).get_code(), "WE-EA");
+    EXPECT_EQ(second.get(2).get_code(), "OFF");
+
+    EXPECT_THROW((void)set.get_set(2), std::out_of_range);
+}
+
+TEST(DailySetTest, ReturnsIndexedCombinationForPartiallyFilledSetWithSixDifferentShifts)
+{
+    const Shift shift_a{"A", StartTime{Hour{6}, Minute{0}}, StopTime{Hour{14}, Minute{0}}, 8.0};
+    const Shift shift_b{"B", StartTime{Hour{7}, Minute{0}}, StopTime{Hour{15}, Minute{0}}, 8.0};
+    const Shift shift_c{"C", StartTime{Hour{8}, Minute{0}}, StopTime{Hour{16}, Minute{0}}, 8.0};
+    const Shift shift_d{"D", StartTime{Hour{9}, Minute{0}}, StopTime{Hour{17}, Minute{0}}, 8.0};
+    const Shift shift_e{"E", StartTime{Hour{10}, Minute{0}}, StopTime{Hour{18}, Minute{0}}, 8.0};
+    const Shift shift_f{"F", StartTime{Hour{11}, Minute{0}}, StopTime{Hour{19}, Minute{0}}, 8.0};
+
+    DailySet set{{shift_a, shift_b, shift_c, shift_d, shift_e, shift_f}};
+    set.set(1, shift_b);
+    set.set(4, shift_e);
+
+    EXPECT_EQ(set.get_nr_of_combinations(), 24u);
+
+    const auto first = set.get_set(0);
+    EXPECT_EQ(first.get(0).get_code(), "A");
+    EXPECT_EQ(first.get(1).get_code(), "B");
+    EXPECT_EQ(first.get(2).get_code(), "C");
+    EXPECT_EQ(first.get(3).get_code(), "D");
+    EXPECT_EQ(first.get(4).get_code(), "E");
+    EXPECT_EQ(first.get(5).get_code(), "F");
+
+    const auto middle = set.get_set(7);
+    EXPECT_EQ(middle.get(0).get_code(), "C");
+    EXPECT_EQ(middle.get(1).get_code(), "B");
+    EXPECT_EQ(middle.get(2).get_code(), "A");
+    EXPECT_EQ(middle.get(3).get_code(), "F");
+    EXPECT_EQ(middle.get(4).get_code(), "E");
+    EXPECT_EQ(middle.get(5).get_code(), "D");
+
+    const auto last = set.get_set(23);
+    EXPECT_EQ(last.get(0).get_code(), "F");
+    EXPECT_EQ(last.get(1).get_code(), "B");
+    EXPECT_EQ(last.get(2).get_code(), "D");
+    EXPECT_EQ(last.get(3).get_code(), "C");
+    EXPECT_EQ(last.get(4).get_code(), "E");
+    EXPECT_EQ(last.get(5).get_code(), "A");
+
+    EXPECT_THROW((void)set.get_set(24), std::out_of_range);
+}
+
 } // namespace roster_slayer
