@@ -91,11 +91,20 @@ class Shift
 public:
     Shift() = default;
 
-    Shift(std::string code, StartTime start_time, StopTime stop_time, double number_of_hours_worked)
+    Shift(std::string code,
+          StartTime start_time,
+          StopTime stop_time,
+          double number_of_hours_worked,
+          bool is_early = false,
+          bool is_day = false,
+          bool is_late = false)
         : _start_time{start_time}
         , _end_time{stop_time}
         , _code{std::move(code)}
         , _number_of_hours_worked{number_of_hours_worked}
+        , _is_early{is_early}
+        , _is_day{is_day}
+        , _is_late{is_late}
     {
         if (_number_of_hours_worked < 0.0)
         {
@@ -105,6 +114,17 @@ public:
         if (_number_of_hours_worked == 0.0 && _code != "OFF")
         {
             throw std::invalid_argument("Only OFF shifts can have zero worked hours");
+        }
+
+        const int shift_type_count = static_cast<int>(_is_early) + static_cast<int>(_is_day) + static_cast<int>(_is_late);
+        if (shift_type_count > 1)
+        {
+            throw std::invalid_argument("Shift can only be early, day, or late");
+        }
+
+        if (is_off() && shift_type_count != 0)
+        {
+            throw std::invalid_argument("OFF shift cannot be marked as early, day, or late");
         }
     }
 
@@ -133,6 +153,21 @@ public:
         return _code == "OFF";
     }
 
+    [[nodiscard]] bool is_early() const
+    {
+        return _is_early;
+    }
+
+    [[nodiscard]] bool is_day() const
+    {
+        return _is_day;
+    }
+
+    [[nodiscard]] bool is_late() const
+    {
+        return _is_late;
+    }
+
     [[nodiscard]] std::string start_time_to_string() const
     {
         return to_string(_start_time);
@@ -148,6 +183,9 @@ private:
     StopTime _end_time;
     std::string _code;
     double _number_of_hours_worked {0.0};
+    bool _is_early {false};
+    bool _is_day {false};
+    bool _is_late {false};
 };
 
 [[nodiscard]] inline std::string to_string(const HourMinuteTime& value)

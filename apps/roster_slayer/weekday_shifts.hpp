@@ -16,27 +16,27 @@ namespace weekday_shifts
 
 [[nodiscard]] inline Shift get_early_shift_a()
 {
-    return Shift("EA", StartTime {Hour {7}, Minute {0}}, StopTime {Hour {15}, Minute {15}}, 7.5);
+    return Shift("EA", StartTime {Hour {7}, Minute {0}}, StopTime {Hour {15}, Minute {15}}, 7.5, true, false, false);
 }
 
 [[nodiscard]] inline Shift get_early_shift_b()
 {
-    return Shift("EB", StartTime {Hour {6}, Minute {45}}, StopTime {Hour {15}, Minute {0}}, 7.5);
+    return Shift("EB", StartTime {Hour {6}, Minute {45}}, StopTime {Hour {15}, Minute {0}}, 7.5, true, false, false);
 }
 
 [[nodiscard]] inline Shift get_day_shift()
 {
-    return Shift("D", StartTime {Hour {10}, Minute {45}}, StopTime {Hour {19}, Minute {0}}, 7.5);
+    return Shift("D", StartTime {Hour {10}, Minute {45}}, StopTime {Hour {19}, Minute {0}}, 7.5, false, true, false);
 }
 
 [[nodiscard]] inline Shift get_late_shift_1()
 {
-    return Shift("L1", StartTime {Hour {13}, Minute {0}}, StopTime {Hour {21}, Minute {0}}, 7.5);
+    return Shift("L1", StartTime {Hour {13}, Minute {0}}, StopTime {Hour {21}, Minute {0}}, 7.5, false, false, true);
 }
 
 [[nodiscard]] inline Shift get_late_shift_2()
 {
-    return Shift("L2", StartTime {Hour {13}, Minute {30}}, StopTime {Hour {21}, Minute {30}}, 7.5);
+    return Shift("L2", StartTime {Hour {13}, Minute {30}}, StopTime {Hour {21}, Minute {30}}, 7.5, false, false, true);
 }
 
 [[nodiscard]] inline const std::vector<Shift>& get_weekly_required_shifts()

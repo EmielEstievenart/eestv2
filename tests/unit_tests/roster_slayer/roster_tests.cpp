@@ -227,4 +227,114 @@ TEST(RosterValidationTest, AcceptsTwoConsecutiveOffDaysAcrossGeneralTransition)
     EXPECT_TRUE(verify_2_shifts_allowed_consecutively(sunday, monday));
 }
 
+TEST(RosterValidationTest, RejectsThirdConsecutiveOffDay)
+{
+    DailySet saturday {{weekend_shifts::get_off_shift()}};
+    saturday.set(0, weekend_shifts::get_off_shift());
+
+    DailySet sunday {{weekend_shifts::get_off_shift()}};
+    sunday.set(0, weekend_shifts::get_off_shift());
+
+    DailySet monday {{weekday_shifts::get_off_shift()}};
+    monday.set(0, weekday_shifts::get_off_shift());
+
+    EXPECT_FALSE(verify_candidate_day_with_partial_week({saturday, sunday}, monday));
+}
+
+TEST(RosterValidationTest, RejectsSecondWeekdayOffDay)
+{
+    DailySet saturday {{weekend_shifts::get_weekend_late_shift()}};
+    saturday.set(0, weekend_shifts::get_weekend_late_shift());
+
+    DailySet sunday {{weekend_shifts::get_weekend_late_shift()}};
+    sunday.set(0, weekend_shifts::get_weekend_late_shift());
+
+    DailySet monday {{weekday_shifts::get_off_shift()}};
+    monday.set(0, weekday_shifts::get_off_shift());
+
+    DailySet tuesday {{weekday_shifts::get_day_shift()}};
+    tuesday.set(0, weekday_shifts::get_day_shift());
+
+    DailySet wednesday {{weekday_shifts::get_off_shift()}};
+    wednesday.set(0, weekday_shifts::get_off_shift());
+
+    EXPECT_FALSE(verify_candidate_day_with_partial_week({saturday, sunday, monday, tuesday}, wednesday));
+}
+
+TEST(RosterValidationTest, AcceptsSingleWeekdayOffDay)
+{
+    DailySet saturday {{weekend_shifts::get_weekend_late_shift()}};
+    saturday.set(0, weekend_shifts::get_weekend_late_shift());
+
+    DailySet sunday {{weekend_shifts::get_weekend_late_shift()}};
+    sunday.set(0, weekend_shifts::get_weekend_late_shift());
+
+    DailySet monday {{weekday_shifts::get_day_shift()}};
+    monday.set(0, weekday_shifts::get_day_shift());
+
+    DailySet tuesday {{weekday_shifts::get_off_shift()}};
+    tuesday.set(0, weekday_shifts::get_off_shift());
+
+    EXPECT_TRUE(verify_candidate_day_with_partial_week({saturday, sunday, monday}, tuesday));
+}
+
+TEST(RosterValidationTest, RejectsRolloverWithInvalidFridayToSaturdayRest)
+{
+    DailySet saturday {{weekend_shifts::get_weekend_early_shift_b(), weekend_shifts::get_weekend_late_shift()}};
+    saturday.set(0, weekend_shifts::get_weekend_early_shift_b());
+    saturday.set(1, weekend_shifts::get_weekend_late_shift());
+
+    DailySet sunday {{weekend_shifts::get_off_shift(), weekend_shifts::get_off_shift()}};
+    sunday.set(0, weekend_shifts::get_off_shift());
+    sunday.set(1, weekend_shifts::get_off_shift());
+
+    DailySet monday {{weekday_shifts::get_day_shift(), weekday_shifts::get_day_shift()}};
+    monday.set(0, weekday_shifts::get_day_shift());
+    monday.set(1, weekday_shifts::get_day_shift());
+
+    DailySet tuesday {{weekday_shifts::get_day_shift(), weekday_shifts::get_day_shift()}};
+    tuesday.set(0, weekday_shifts::get_day_shift());
+    tuesday.set(1, weekday_shifts::get_day_shift());
+
+    DailySet wednesday {{weekday_shifts::get_day_shift(), weekday_shifts::get_day_shift()}};
+    wednesday.set(0, weekday_shifts::get_day_shift());
+    wednesday.set(1, weekday_shifts::get_day_shift());
+
+    DailySet thursday {{weekday_shifts::get_day_shift(), weekday_shifts::get_day_shift()}};
+    thursday.set(0, weekday_shifts::get_day_shift());
+    thursday.set(1, weekday_shifts::get_day_shift());
+
+    DailySet friday {{weekday_shifts::get_late_shift_2(), weekday_shifts::get_day_shift()}};
+    friday.set(0, weekday_shifts::get_late_shift_2());
+    friday.set(1, weekday_shifts::get_day_shift());
+
+    EXPECT_FALSE(verify_week_rollover({saturday, sunday, monday, tuesday, wednesday, thursday, friday}));
+}
+
+TEST(RosterValidationTest, RejectsFiveConsecutiveWorkDaysAcrossWeekBoundary)
+{
+    DailySet saturday {{weekend_shifts::get_weekend_late_shift()}};
+    saturday.set(0, weekend_shifts::get_weekend_late_shift());
+
+    DailySet sunday {{weekend_shifts::get_off_shift()}};
+    sunday.set(0, weekend_shifts::get_off_shift());
+
+    DailySet monday {{weekday_shifts::get_day_shift()}};
+    monday.set(0, weekday_shifts::get_day_shift());
+
+    DailySet tuesday {{weekday_shifts::get_day_shift()}};
+    tuesday.set(0, weekday_shifts::get_day_shift());
+
+    DailySet wednesday {{weekday_shifts::get_day_shift()}};
+    wednesday.set(0, weekday_shifts::get_day_shift());
+
+    DailySet thursday {{weekday_shifts::get_day_shift()}};
+    thursday.set(0, weekday_shifts::get_day_shift());
+
+    DailySet friday {{weekday_shifts::get_day_shift()}};
+    friday.set(0, weekday_shifts::get_day_shift());
+
+    EXPECT_FALSE(verify_week_rollover({saturday, sunday, monday, tuesday, wednesday, thursday, friday}));
+}
+
 } // namespace roster_slayer
