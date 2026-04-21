@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iosfwd>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -32,6 +33,8 @@ public:
     [[nodiscard]] std::uint64_t get_nr_of_combinations() const;
 
     [[nodiscard]] DailySet get_set(std::uint64_t combination_index) const;
+
+    void print(std::ostream& out) const;
 
 private:
     using CountMap = std::unordered_map<std::string, std::size_t>;

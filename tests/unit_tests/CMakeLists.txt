@@ -72,7 +72,8 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/tracked_sources/all_processed_sources.cpp
   ${CMAKE_SOURCE_DIR}/apps/slayerlog/search_pattern.cpp
    ${CMAKE_SOURCE_DIR}/apps/roster_slayer/daily_set.cpp
-   )
+   ${CMAKE_SOURCE_DIR}/apps/roster_slayer/roster_validation.cpp
+    )
 
 # Link libraries (assuming eestv_lib provides sources and Boost)
 target_link_libraries(

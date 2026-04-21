@@ -13,7 +13,8 @@
       "cacheVariables": {
         "BOOST_ROOT": "$penv{BOOST_ROOT}",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "FTXUI_BUILD_EXAMPLES": "ON"
+        "FTXUI_BUILD_EXAMPLES": "ON",
+        "BUILD_ROSTER_SLAYER_APP": "ON"
       }
     },
     {

@@ -1,6 +1,7 @@
 #include "daily_set.hpp"
 
 #include <stdexcept>
+#include <ostream>
 #include <utility>
 
 namespace roster_slayer
@@ -51,6 +52,28 @@ const Shift& DailySet::get(std::size_t index) const
     }
 
     return *_assigned_shifts[index];
+}
+
+void DailySet::print(std::ostream& out) const
+{
+    out << '[';
+    for (std::size_t i = 0; i < _assigned_shifts.size(); ++i)
+    {
+        if (i > 0)
+        {
+            out << ' ';
+        }
+
+        if (_assigned_shifts[i])
+        {
+            out << _assigned_shifts[i]->get_code();
+        }
+        else
+        {
+            out << "UNSET";
+        }
+    }
+    out << ']';
 }
 
 std::size_t DailySet::size() const
