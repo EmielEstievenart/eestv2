@@ -1,6 +1,7 @@
 #include "can_bus_data_provider.hpp"
 #include "can_manager.hpp"
 #include "can_notify.hpp"
+#include "container.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -19,29 +20,6 @@ void handle_signal(int)
 {
     running = false;
 }
-
-class Container
-{
-public:
-    Container(CanManager& can_manager, int value) :
-        _can_manager(can_manager),
-        _value(value),
-        _notify(
-            {CanSignal::engine_running},
-            [this](CanSignal signal, int value)
-            {
-                _value += value;
-                std::cout << "Container " << _value << " received " << magic_enum::enum_name(signal) << " = " << value << '\n';
-            })
-    {
-        _can_manager.add_notify(_notify);
-    }
-
-private:
-    CanManager& _can_manager;
-    int _value;
-    CanNotify _notify;
-};
 }
 
 int main()
