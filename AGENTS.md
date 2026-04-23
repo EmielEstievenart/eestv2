@@ -8,6 +8,8 @@ Before any edits, confirm the working directory with pwd!
 ## Build, Test, and Development Commands
 Set `BOOST_ROOT` to a Boost source checkout before configuring; this project uses `add_subdirectory()` for Boost.
 
+Run CMake build commands for this repository outside the sandbox. Request escalation before configuring or building so the build can use the real toolchain and filesystem state.
+
 ```bash
 cmake --preset windows-clang-debug
 cmake --build --preset windows-clang-debug

@@ -74,6 +74,7 @@ set(FTXUI_BUILD_MODULES
 
 add_subdirectory(libs/ftxui)
 add_subdirectory(libs/ftxui_components)
+add_subdirectory(libs/magic_enum)
 set(gtest_force_shared_crt
     ON
     CACHE BOOL "Use the shared CRT for GoogleTest on MSVC" FORCE)

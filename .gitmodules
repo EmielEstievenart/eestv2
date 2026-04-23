@@ -14,3 +14,6 @@
 [submodule "libs/zstd"]
 	path = libs/zstd
 	url = https://github.com/facebook/zstd.git
+[submodule "libs/magic_enum"]
+	path = libs/magic_enum
+	url = https://github.com/Neargye/magic_enum.git
