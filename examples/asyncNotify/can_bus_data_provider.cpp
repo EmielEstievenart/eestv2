@@ -45,10 +45,13 @@ void CanBusDataProvider::run()
 
     while (_running)
     {
+        _can_manager.housekeeping();
+
         const auto signal = static_cast<CanSignal>(signal_distribution(generator));
         const auto value  = value_distribution(generator);
 
         _can_manager.update_signal_value(signal, value);
+        _can_manager.housekeeping();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

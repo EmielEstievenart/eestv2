@@ -17,6 +17,7 @@ public:
 
     void add_notify(CanNotify& notify);
     void remove_notify(CanNotify& notify);
+    void housekeeping();
     void update_signal_value(CanSignal signal, int value);
 
 private:
@@ -24,5 +25,6 @@ private:
 
     std::array<int, signal_count> _signal_values {};
     std::vector<std::vector<CanNotify*>> _notifies;
-    std::mutex _mutex;
+    std::vector<CanNotify*> _pending_initial_notifies;
+    std::recursive_mutex _mutex;
 };
