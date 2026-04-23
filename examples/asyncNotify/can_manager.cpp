@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <utility>
 
 CanManager::CanManager() : _notifies(signal_count)
 {
@@ -32,15 +33,25 @@ void CanManager::add_notify(CanNotify& notify)
         notify._manager->remove_notify(notify);
     }
 
-    std::lock_guard<std::mutex> lock(_mutex);
+    std::vector<std::pair<CanSignal, int>> current_values;
 
-    for (const auto signal : notify.signal_ids())
     {
-        const auto signal_index = static_cast<std::size_t>(signal);
-        _notifies[signal_index].push_back(&notify);
+        std::lock_guard<std::mutex> lock(_mutex);
+
+        for (const auto signal : notify.signal_ids())
+        {
+            const auto signal_index = static_cast<std::size_t>(signal);
+            _notifies[signal_index].push_back(&notify);
+            current_values.emplace_back(signal, _signal_values[signal_index]);
+        }
+
+        notify._manager = this;
     }
 
-    notify._manager = this;
+    for (const auto& [signal, value] : current_values)
+    {
+        notify.notify(signal, value);
+    }
 }
 
 void CanManager::remove_notify(CanNotify& notify)
