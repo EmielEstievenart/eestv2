@@ -34,3 +34,5 @@ add_executable(
 target_include_directories(
   roster_slayer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
                         ${CMAKE_SOURCE_DIR}/libs/magic_enum/include)
+
+target_link_libraries(roster_slayer PRIVATE component)
