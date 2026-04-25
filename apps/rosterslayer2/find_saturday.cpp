@@ -32,6 +32,13 @@ void find_possible_saturdays(WeekPlanning planning, DaysOfTheWeek search_until, 
                 is_valid = false;
                 break;
             }
+
+            const auto next_shift = planning.getNextWeekendShift(static_cast<int>(person), DaysOfTheWeek::saturday);
+            if (next_shift.has_value() && !validator.is_valid(saturday_candidate.get(person).get_code(), *next_shift))
+            {
+                is_valid = false;
+                break;
+            }
         }
 
         if (!is_valid)

@@ -10,7 +10,7 @@ int main(int argc, char* argv[])
 
     PlanningMaster planning_master;
     WeekPlanning planning;
-    planning_master.start_search(DaysOfTheWeek::monday, planning, DaysOfTheWeek::friday, [](WeekPlanning result) { result.print(std::cout); });
+    planning_master.start_search(DaysOfTheWeek::monday, planning, DaysOfTheWeek::sunday, [](WeekPlanning result) { result.print(std::cout); });
 
     return 0;
 }

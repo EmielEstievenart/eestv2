@@ -25,6 +25,13 @@ void find_possible_tuesdays(WeekPlanning planning, DaysOfTheWeek search_until, c
                 is_valid = false;
                 break;
             }
+
+            const auto next_shift = planning.getNextWeekdayShift(static_cast<int>(person), DaysOfTheWeek::tuesday);
+            if (next_shift.has_value() && !validator.is_valid(tuesday_candidate.get(person).get_code(), *next_shift))
+            {
+                is_valid = false;
+                break;
+            }
         }
 
         if (!is_valid)

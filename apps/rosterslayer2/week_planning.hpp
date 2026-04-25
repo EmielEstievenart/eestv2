@@ -311,6 +311,100 @@ struct WeekPlanning
         return std::nullopt;
     }
 
+    std::optional<WeekdayShiftCode> getNextWeekdayShift(int person, DaysOfTheWeek day) const
+    {
+        auto get_if_optional_set = [](const std::optional<OneDayPlanning<WeekdayShiftCode>>& optional_planning,
+                                      std::size_t person_index) -> std::optional<WeekdayShiftCode>
+        {
+            if (!optional_planning.has_value() || person_index >= optional_planning->size() || !optional_planning->is_set(person_index))
+            {
+                return std::nullopt;
+            }
+
+            return optional_planning->get(person_index).get_code();
+        };
+
+        if (person < 0)
+        {
+            return std::nullopt;
+        }
+
+        const auto person_index = static_cast<std::size_t>(person);
+
+        switch (day)
+        {
+        case DaysOfTheWeek::monday:
+            return get_if_optional_set(tuesday, person_index);
+
+        case DaysOfTheWeek::tuesday:
+            return get_if_optional_set(wednesday, person_index);
+
+        case DaysOfTheWeek::wednesday:
+            return get_if_optional_set(thursday, person_index);
+
+        case DaysOfTheWeek::thursday:
+            return get_if_optional_set(friday, person_index);
+
+        case DaysOfTheWeek::sunday:
+        {
+            // Sunday rolls forward to Monday of the next roster week.
+            // Because rows rotate, Sunday row 0 becomes Monday row 1, etc.
+            if (!monday.has_value() || person_index >= monday->size())
+            {
+                return std::nullopt;
+            }
+
+            const auto next_person = person_index + 1 == monday->size() ? 0 : person_index + 1;
+            return get_if_optional_set(monday, next_person);
+        }
+
+        case DaysOfTheWeek::friday:
+        case DaysOfTheWeek::saturday:
+            return std::nullopt;
+        }
+
+        return std::nullopt;
+    }
+
+    std::optional<WeekendShiftCode> getNextWeekendShift(int person, DaysOfTheWeek day) const
+    {
+        auto get_if_optional_set = [](const std::optional<OneDayPlanning<WeekendShiftCode>>& optional_planning,
+                                      std::size_t person_index) -> std::optional<WeekendShiftCode>
+        {
+            if (!optional_planning.has_value() || person_index >= optional_planning->size() || !optional_planning->is_set(person_index))
+            {
+                return std::nullopt;
+            }
+
+            return optional_planning->get(person_index).get_code();
+        };
+
+        if (person < 0)
+        {
+            return std::nullopt;
+        }
+
+        const auto person_index = static_cast<std::size_t>(person);
+
+        switch (day)
+        {
+        case DaysOfTheWeek::friday:
+            return get_if_optional_set(saturday, person_index);
+
+        case DaysOfTheWeek::saturday:
+            return get_if_optional_set(sunday, person_index);
+
+        case DaysOfTheWeek::monday:
+        case DaysOfTheWeek::tuesday:
+        case DaysOfTheWeek::wednesday:
+        case DaysOfTheWeek::thursday:
+        case DaysOfTheWeek::sunday:
+            return std::nullopt;
+        }
+
+        return std::nullopt;
+    }
+
     std::optional<OneDayPlanning<WeekendShiftCode>> saturday;
     std::optional<OneDayPlanning<WeekendShiftCode>> sunday;
     std::optional<OneDayPlanning<WeekdayShiftCode>> monday;
