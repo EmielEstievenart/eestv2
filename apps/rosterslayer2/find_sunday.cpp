@@ -9,13 +9,7 @@
 void find_possible_sundays(WeekPlanning planning, DaysOfTheWeek search_until, const SearchResultCallback& on_found)
 {
     DoubleDayPlanningValidator validator;
-    OneDayPlanning<WeekendShiftCode> sunday_planning(get_weekend_required_shifts());
-
-    sunday_planning.set(0, get_weekend_off_shift());
-    sunday_planning.set(2, get_weekend_off_shift());
-    sunday_planning.set(4, get_weekend_off_shift());
-    sunday_planning.set(6, get_weekend_off_shift());
-    sunday_planning.set(8, get_weekend_off_shift());
+    auto sunday_planning = planning.sunday.value_or(OneDayPlanning<WeekendShiftCode>(get_weekend_required_shifts()));
 
     auto nr_of_combinations = sunday_planning.get_nr_of_combinations();
     for (auto index = 0; index < nr_of_combinations; index++)

@@ -8,7 +8,7 @@
 
 void find_possible_mondays(WeekPlanning planning, DaysOfTheWeek search_until, const SearchResultCallback& on_found)
 {
-    OneDayPlanning<WeekdayShiftCode> monday_planning(get_weekday_required_shifts());
+    auto monday_planning = planning.monday.value_or(OneDayPlanning<WeekdayShiftCode>(get_weekday_required_shifts()));
     DoubleDayPlanningValidator validator;
 
     auto nr_of_combinations = monday_planning.get_nr_of_combinations();

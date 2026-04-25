@@ -9,7 +9,7 @@
 void find_possible_thursdays(WeekPlanning planning, DaysOfTheWeek search_until, const SearchResultCallback& on_found)
 {
     DoubleDayPlanningValidator validator;
-    OneDayPlanning<WeekdayShiftCode> thursday_planning(get_weekday_required_shifts());
+    auto thursday_planning = planning.thursday.value_or(OneDayPlanning<WeekdayShiftCode>(get_weekday_required_shifts()));
 
     auto nr_of_combinations = thursday_planning.get_nr_of_combinations();
     for (auto index = 0; index < nr_of_combinations; index++)
