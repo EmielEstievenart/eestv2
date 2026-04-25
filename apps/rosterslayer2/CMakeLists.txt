@@ -3,10 +3,20 @@ project(roster_slayer)
 add_executable(
   roster_slayer
   days_of_the_week.hpp
+  find_friday.cpp
+  find_friday.hpp
+  find_monday.cpp
+  find_monday.hpp
   find_saturday.cpp
   find_saturday.hpp
   find_sunday.cpp
   find_sunday.hpp
+  find_thursday.cpp
+  find_thursday.hpp
+  find_tuesday.cpp
+  find_tuesday.hpp
+  find_wednesday.cpp
+  find_wednesday.hpp
   main.cpp
   one_day_planning.cpp
   one_day_planning.hpp
@@ -17,4 +27,4 @@ add_executable(
   weekend_shifts.hpp
   double_day_planning_validator.cpp
   double_day_planning_validator.hpp)
-target_include_directories(roster_slayer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(roster_slayer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/libs/magic_enum/include)

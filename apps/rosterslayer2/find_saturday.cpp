@@ -5,7 +5,9 @@
 #include "one_day_planning.hpp"
 #include "weekend_shifts.hpp"
 
-void find_possible_saturdays()
+#include <iostream>
+
+void find_possible_saturdays(DaysOfTheWeek search_until)
 {
     WeekPlanning planning;
     OneDayPlanning<WeekendShiftCode> saturday_planning(get_weekend_required_shifts());
@@ -19,7 +21,15 @@ void find_possible_saturdays()
     auto nr_of_combinations = saturday_planning.get_nr_of_combinations();
     for (auto index = 0; index < nr_of_combinations; index++)
     {
-        planning.saturday.emplace(saturday_planning.get_set(index));
-        find_possible_sundays(planning);
+        auto candidate_planning = planning;
+        candidate_planning.saturday.emplace(saturday_planning.get_set(index));
+
+        if (search_until == DaysOfTheWeek::saturday)
+        {
+            candidate_planning.print(std::cout);
+            continue;
+        }
+
+        find_possible_sundays(candidate_planning, search_until);
     }
 }
