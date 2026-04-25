@@ -4,24 +4,18 @@
 #include "find_thursday.hpp"
 #include "weekday_shifts.hpp"
 
-#include <iostream>
-
-void find_possible_wednesdays(WeekPlanning planning, DaysOfTheWeek search_until)
+void find_possible_wednesdays(WeekPlanning planning, DaysOfTheWeek search_until, const SearchResultCallback& on_found)
 {
-    if (!planning.tuesday.has_value())
-    {
-        return;
-    }
-
     DoubleDayPlanningValidator validator;
     OneDayPlanning<WeekdayShiftCode> wednesday_planning(get_weekday_required_shifts());
+    const bool validate_against_tuesday = planning.tuesday.has_value();
 
     auto nr_of_combinations = wednesday_planning.get_nr_of_combinations();
     for (auto index = 0; index < nr_of_combinations; index++)
     {
         auto wednesday_candidate = wednesday_planning.get_set(index);
 
-        if (!validator.is_valid(*planning.tuesday, wednesday_candidate))
+        if (validate_against_tuesday && !validator.is_valid(*planning.tuesday, wednesday_candidate))
         {
             continue;
         }
@@ -29,12 +23,12 @@ void find_possible_wednesdays(WeekPlanning planning, DaysOfTheWeek search_until)
         auto candidate_planning = planning;
         candidate_planning.wednesday.emplace(wednesday_candidate);
 
-        if (search_until == DaysOfTheWeek::wednessday)
+        if (search_until == DaysOfTheWeek::wednesday)
         {
-            candidate_planning.print(std::cout);
+            on_found(candidate_planning);
             continue;
         }
 
-        find_possible_thursdays(candidate_planning, search_until);
+        find_possible_thursdays(candidate_planning, search_until, on_found);
     }
 }

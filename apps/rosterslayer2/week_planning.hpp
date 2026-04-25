@@ -1,6 +1,8 @@
 #pragma once
 
+#include "days_of_the_week.hpp"
 #include "one_day_planning.hpp"
+#include "shift.hpp"
 #include "weekday_shifts.hpp"
 #include "weekend_shifts.hpp"
 
@@ -17,7 +19,7 @@ struct WeekPlanning
 {
     void print(std::ostream& out) const
     {
-        constexpr std::array<std::string_view, 8> headers {"person", "saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday"};
+        constexpr std::array<std::string_view, 8> headers {"person", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"};
         constexpr std::array<std::size_t, 8> column_widths {6, 12, 12, 12, 12, 12, 12, 12};
 
         auto print_separator = [&out, &column_widths]()
@@ -90,63 +92,63 @@ struct WeekPlanning
             out << '|';
             print_cell(person_label, column_widths[0]);
 
-            if (saturday.has_value() && saturday->is_set(person))
+            if (monday.has_value() && monday->is_set(person))
             {
-                print_cell(magic_enum::enum_name(saturday->get(person).get_code()), column_widths[1]);
+                print_cell(magic_enum::enum_name(monday->get(person).get_code()), column_widths[1]);
             }
             else
             {
                 print_cell("UNSET", column_widths[1]);
             }
 
-            if (sunday.has_value() && sunday->is_set(person))
+            if (tuesday.has_value() && tuesday->is_set(person))
             {
-                print_cell(magic_enum::enum_name(sunday->get(person).get_code()), column_widths[2]);
+                print_cell(magic_enum::enum_name(tuesday->get(person).get_code()), column_widths[2]);
             }
             else
             {
                 print_cell("UNSET", column_widths[2]);
             }
 
-            if (monday.has_value() && monday->is_set(person))
+            if (wednesday.has_value() && wednesday->is_set(person))
             {
-                print_cell(magic_enum::enum_name(monday->get(person).get_code()), column_widths[3]);
+                print_cell(magic_enum::enum_name(wednesday->get(person).get_code()), column_widths[3]);
             }
             else
             {
                 print_cell("UNSET", column_widths[3]);
             }
 
-            if (tuesday.has_value() && tuesday->is_set(person))
+            if (thursday.has_value() && thursday->is_set(person))
             {
-                print_cell(magic_enum::enum_name(tuesday->get(person).get_code()), column_widths[4]);
+                print_cell(magic_enum::enum_name(thursday->get(person).get_code()), column_widths[4]);
             }
             else
             {
                 print_cell("UNSET", column_widths[4]);
             }
 
-            if (wednesday.has_value() && wednesday->is_set(person))
+            if (friday.has_value() && friday->is_set(person))
             {
-                print_cell(magic_enum::enum_name(wednesday->get(person).get_code()), column_widths[5]);
+                print_cell(magic_enum::enum_name(friday->get(person).get_code()), column_widths[5]);
             }
             else
             {
                 print_cell("UNSET", column_widths[5]);
             }
 
-            if (thursday.has_value() && thursday->is_set(person))
+            if (saturday.has_value() && saturday->is_set(person))
             {
-                print_cell(magic_enum::enum_name(thursday->get(person).get_code()), column_widths[6]);
+                print_cell(magic_enum::enum_name(saturday->get(person).get_code()), column_widths[6]);
             }
             else
             {
                 print_cell("UNSET", column_widths[6]);
             }
 
-            if (friday.has_value() && friday->is_set(person))
+            if (sunday.has_value() && sunday->is_set(person))
             {
-                print_cell(magic_enum::enum_name(friday->get(person).get_code()), column_widths[7]);
+                print_cell(magic_enum::enum_name(sunday->get(person).get_code()), column_widths[7]);
             }
             else
             {
@@ -157,6 +159,156 @@ struct WeekPlanning
         }
 
         print_separator();
+    }
+
+    std::optional<ShiftType> getPreviousShiftType(int person, DaysOfTheWeek day) const
+    {
+        auto get_if_optional_set = [](const auto& optional_planning, std::size_t person_index) -> std::optional<ShiftType>
+        {
+            if (!optional_planning.has_value() || person_index >= optional_planning->size() || !optional_planning->is_set(person_index))
+            {
+                return std::nullopt;
+            }
+
+            return optional_planning->get(person_index)._type;
+        };
+
+        if (person < 0)
+        {
+            return std::nullopt;
+        }
+
+        const auto person_index = static_cast<std::size_t>(person);
+
+        switch (day)
+        {
+        case DaysOfTheWeek::monday:
+        {
+            // Monday looks back to Sunday of the previous roster week.
+            // Because rows rotate, person 0 came from the final row, person 1 from row 0, etc.
+            if (!sunday.has_value() || person_index >= sunday->size())
+            {
+                return std::nullopt;
+            }
+
+            const auto previous_person = person_index == 0 ? sunday->size() - 1 : person_index - 1;
+            return get_if_optional_set(sunday, previous_person);
+        }
+
+        case DaysOfTheWeek::tuesday:
+            return get_if_optional_set(monday, person_index);
+
+        case DaysOfTheWeek::wednesday:
+            return get_if_optional_set(tuesday, person_index);
+
+        case DaysOfTheWeek::thursday:
+            return get_if_optional_set(wednesday, person_index);
+
+        case DaysOfTheWeek::friday:
+            return get_if_optional_set(thursday, person_index);
+
+        case DaysOfTheWeek::saturday:
+            return get_if_optional_set(friday, person_index);
+
+        case DaysOfTheWeek::sunday:
+            return get_if_optional_set(saturday, person_index);
+        }
+
+        return std::nullopt;
+    }
+
+    std::optional<WeekdayShiftCode> getPreviousWeekdayShift(int person, DaysOfTheWeek day) const
+    {
+        auto get_if_optional_set = [](const std::optional<OneDayPlanning<WeekdayShiftCode>>& optional_planning,
+                                      std::size_t person_index) -> std::optional<WeekdayShiftCode>
+        {
+            if (!optional_planning.has_value() || person_index >= optional_planning->size() || !optional_planning->is_set(person_index))
+            {
+                return std::nullopt;
+            }
+
+            return optional_planning->get(person_index).get_code();
+        };
+
+        if (person < 0)
+        {
+            return std::nullopt;
+        }
+
+        const auto person_index = static_cast<std::size_t>(person);
+
+        switch (day)
+        {
+        case DaysOfTheWeek::tuesday:
+            return get_if_optional_set(monday, person_index);
+
+        case DaysOfTheWeek::wednesday:
+            return get_if_optional_set(tuesday, person_index);
+
+        case DaysOfTheWeek::thursday:
+            return get_if_optional_set(wednesday, person_index);
+
+        case DaysOfTheWeek::friday:
+            return get_if_optional_set(thursday, person_index);
+
+        case DaysOfTheWeek::saturday:
+            return get_if_optional_set(friday, person_index);
+
+        case DaysOfTheWeek::monday:
+        case DaysOfTheWeek::sunday:
+            return std::nullopt;
+        }
+
+        return std::nullopt;
+    }
+
+    std::optional<WeekendShiftCode> getPreviousWeekendShift(int person, DaysOfTheWeek day) const
+    {
+        auto get_if_optional_set = [](const std::optional<OneDayPlanning<WeekendShiftCode>>& optional_planning,
+                                      std::size_t person_index) -> std::optional<WeekendShiftCode>
+        {
+            if (!optional_planning.has_value() || person_index >= optional_planning->size() || !optional_planning->is_set(person_index))
+            {
+                return std::nullopt;
+            }
+
+            return optional_planning->get(person_index).get_code();
+        };
+
+        if (person < 0)
+        {
+            return std::nullopt;
+        }
+
+        const auto person_index = static_cast<std::size_t>(person);
+
+        switch (day)
+        {
+        case DaysOfTheWeek::monday:
+        {
+            // Monday looks back to Sunday of the previous roster week.
+            // Because rows rotate, person 0 came from the final row, person 1 from row 0, etc.
+            if (!sunday.has_value() || person_index >= sunday->size())
+            {
+                return std::nullopt;
+            }
+
+            const auto previous_person = person_index == 0 ? sunday->size() - 1 : person_index - 1;
+            return get_if_optional_set(sunday, previous_person);
+        }
+
+        case DaysOfTheWeek::sunday:
+            return get_if_optional_set(saturday, person_index);
+
+        case DaysOfTheWeek::tuesday:
+        case DaysOfTheWeek::wednesday:
+        case DaysOfTheWeek::thursday:
+        case DaysOfTheWeek::friday:
+        case DaysOfTheWeek::saturday:
+            return std::nullopt;
+        }
+
+        return std::nullopt;
     }
 
     std::optional<OneDayPlanning<WeekendShiftCode>> saturday;

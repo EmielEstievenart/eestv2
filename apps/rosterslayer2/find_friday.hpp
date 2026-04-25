@@ -1,6 +1,6 @@
 #pragma once
 
 #include "days_of_the_week.hpp"
-#include "week_planning.hpp"
+#include "search_result_callback.hpp"
 
-void find_possible_fridays(WeekPlanning planning, DaysOfTheWeek search_until);
+void find_possible_fridays(WeekPlanning planning, DaysOfTheWeek search_until, const SearchResultCallback& on_found);

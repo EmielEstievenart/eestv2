@@ -1,13 +1,16 @@
 #include "days_of_the_week.hpp"
-#include "find_saturday.hpp"
+#include "planning_master.hpp"
+
+#include <iostream>
 
 int main(int argc, char* argv[])
 {
     (void)argc;
     (void)argv;
 
-    DaysOfTheWeek search_until = DaysOfTheWeek::friday;
-    find_possible_saturdays(search_until);
+    PlanningMaster planning_master;
+    WeekPlanning planning;
+    planning_master.start_search(DaysOfTheWeek::monday, planning, DaysOfTheWeek::friday, [](WeekPlanning result) { result.print(std::cout); });
 
     return 0;
 }

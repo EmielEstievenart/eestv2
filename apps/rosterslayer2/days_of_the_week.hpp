@@ -4,7 +4,7 @@ enum class DaysOfTheWeek
 {
     monday,
     tuesday,
-    wednessday,
+    wednesday,
     thursday,
     friday,
     saturday,

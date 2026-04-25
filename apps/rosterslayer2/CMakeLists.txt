@@ -22,9 +22,15 @@ add_executable(
   one_day_planning.hpp
   shift.hpp
   shifts_enums.hpp
+  search_result_callback.hpp
   time.hpp
   weekday_shifts.hpp
   weekend_shifts.hpp
   double_day_planning_validator.cpp
-  double_day_planning_validator.hpp)
-target_include_directories(roster_slayer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/libs/magic_enum/include)
+  double_day_planning_validator.hpp
+  planning_master.hpp
+  planning_master.cpp)
+
+target_include_directories(
+  roster_slayer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+                        ${CMAKE_SOURCE_DIR}/libs/magic_enum/include)
