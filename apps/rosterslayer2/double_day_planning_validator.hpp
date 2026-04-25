@@ -7,8 +7,8 @@
 class DoubleDayPlanningValidator
 {
 public:
-    bool is_valid(const OneDayPlanning<WeekendShiftCode>& first, const OneDayPlanning<WeekendShiftCode>& second);
-    bool is_valid(const OneDayPlanning<WeekendShiftCode>& first, const OneDayPlanning<WeekdayShiftCode>& second);
-    bool is_valid(const OneDayPlanning<WeekdayShiftCode>& first, const OneDayPlanning<WeekdayShiftCode>& second);
-    bool is_valid(const OneDayPlanning<WeekdayShiftCode>& first, const OneDayPlanning<WeekendShiftCode>& second);
+    bool is_valid(WeekendShiftCode first, WeekendShiftCode second);
+    bool is_valid(WeekendShiftCode first, WeekdayShiftCode second);
+    bool is_valid(WeekdayShiftCode first, WeekdayShiftCode second);
+    bool is_valid(WeekdayShiftCode first, WeekendShiftCode second);
 };

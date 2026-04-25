@@ -4,18 +4,30 @@
 #include "find_tuesday.hpp"
 #include "weekday_shifts.hpp"
 
+#include <cstddef>
+
 void find_possible_mondays(WeekPlanning planning, DaysOfTheWeek search_until, const SearchResultCallback& on_found)
 {
     OneDayPlanning<WeekdayShiftCode> monday_planning(get_weekday_required_shifts());
     DoubleDayPlanningValidator validator;
-    const bool validate_against_sunday = planning.sunday.has_value();
 
     auto nr_of_combinations = monday_planning.get_nr_of_combinations();
     for (auto index = 0; index < nr_of_combinations; index++)
     {
         auto monday_candidate = monday_planning.get_set(index);
+        bool is_valid         = true;
 
-        if (validate_against_sunday && !validator.is_valid(*planning.sunday, monday_candidate))
+        for (std::size_t person = 0; person < monday_candidate.size(); ++person)
+        {
+            const auto previous_shift = planning.getPreviousWeekendShift(static_cast<int>(person), DaysOfTheWeek::monday);
+            if (previous_shift.has_value() && !validator.is_valid(*previous_shift, monday_candidate.get(person).get_code()))
+            {
+                is_valid = false;
+                break;
+            }
+        }
+
+        if (!is_valid)
         {
             continue;
         }

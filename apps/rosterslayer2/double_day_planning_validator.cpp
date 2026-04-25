@@ -96,46 +96,24 @@ const std::vector<std::vector<bool>>& get_weekday_weekend_lookup_table()
     return table;
 }
 
-template <typename FirstPlanning, typename SecondPlanning>
-bool is_valid_using_lookup_table(const FirstPlanning& first, const SecondPlanning& second, const std::vector<std::vector<bool>>& table)
-{
-    if (first.size() != second.size())
-    {
-        return false;
-    }
-
-    for (std::size_t person = 0; person < first.size(); ++person)
-    {
-        const auto first_shift_index  = static_cast<std::size_t>(first.get(person)._code);
-        const auto second_shift_index = static_cast<std::size_t>(second.get(person)._code);
-
-        if (!table[first_shift_index][second_shift_index])
-        {
-            return false;
-        }
-    }
-
-    return true;
 }
 
+bool DoubleDayPlanningValidator::is_valid(WeekendShiftCode first, WeekendShiftCode second)
+{
+    return get_weekend_weekend_lookup_table()[static_cast<std::size_t>(first)][static_cast<std::size_t>(second)];
 }
 
-bool DoubleDayPlanningValidator::is_valid(const OneDayPlanning<WeekendShiftCode>& first, const OneDayPlanning<WeekendShiftCode>& second)
+bool DoubleDayPlanningValidator::is_valid(WeekendShiftCode first, WeekdayShiftCode second)
 {
-    return is_valid_using_lookup_table(first, second, get_weekend_weekend_lookup_table());
+    return get_weekend_weekday_lookup_table()[static_cast<std::size_t>(first)][static_cast<std::size_t>(second)];
 }
 
-bool DoubleDayPlanningValidator::is_valid(const OneDayPlanning<WeekendShiftCode>& first, const OneDayPlanning<WeekdayShiftCode>& second)
+bool DoubleDayPlanningValidator::is_valid(WeekdayShiftCode first, WeekdayShiftCode second)
 {
-    return is_valid_using_lookup_table(first, second, get_weekend_weekday_lookup_table());
+    return get_weekday_weekday_lookup_table()[static_cast<std::size_t>(first)][static_cast<std::size_t>(second)];
 }
 
-bool DoubleDayPlanningValidator::is_valid(const OneDayPlanning<WeekdayShiftCode>& first, const OneDayPlanning<WeekdayShiftCode>& second)
+bool DoubleDayPlanningValidator::is_valid(WeekdayShiftCode first, WeekendShiftCode second)
 {
-    return is_valid_using_lookup_table(first, second, get_weekday_weekday_lookup_table());
-}
-
-bool DoubleDayPlanningValidator::is_valid(const OneDayPlanning<WeekdayShiftCode>& first, const OneDayPlanning<WeekendShiftCode>& second)
-{
-    return is_valid_using_lookup_table(first, second, get_weekday_weekend_lookup_table());
+    return get_weekday_weekend_lookup_table()[static_cast<std::size_t>(first)][static_cast<std::size_t>(second)];
 }
