@@ -12,6 +12,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <fstream>
 #include <mutex>
@@ -29,6 +30,27 @@ constexpr int cell_width            = 14;
 const std::string output_file_path  = "roster_slayer_results.txt";
 
 using RosterGrid = std::array<std::array<int, nr_of_days>, nr_of_persons>;
+
+struct SearchDayUiState
+{
+    std::uint64_t current_combination {0};
+    std::uint64_t total_combinations {0};
+    bool has_progress {false};
+};
+
+struct SearchUiState
+{
+    DaysOfTheWeek start_day {DaysOfTheWeek::monday};
+    DaysOfTheWeek current_search_day {DaysOfTheWeek::monday};
+    DaysOfTheWeek stop_day {DaysOfTheWeek::monday};
+    std::uint64_t current_combination {0};
+    std::uint64_t total_combinations {0};
+    std::size_t depth_from_start {0};
+    DaysOfTheWeek deepest_valid_day {DaysOfTheWeek::monday};
+    bool has_progress {false};
+    bool search_was_cancelled {false};
+    std::array<SearchDayUiState, nr_of_days> day_progress;
+};
 
 template <typename Enum>
 std::vector<std::string> enum_labels()
@@ -353,6 +375,63 @@ ftxui::Element render_status(const std::string& status_message, bool status_is_e
     return ftxui::text("Found results: " + std::to_string(found_count));
 }
 
+ftxui::Element render_search_progress(const SearchUiState& progress, bool search_running, bool cancel_requested, std::size_t found_count)
+{
+    if (!search_running && !progress.search_was_cancelled && !progress.has_progress)
+    {
+        return ftxui::text("");
+    }
+
+    const auto current_combination = progress.total_combinations == 0 ? 0 : progress.current_combination + 1;
+    const auto day_label = search_running ? "Searching: " : "Last search day: ";
+    ftxui::Elements lines {
+        ftxui::text(day_label + std::string(magic_enum::enum_name(progress.current_search_day))),
+        ftxui::text("Combination: " + std::to_string(current_combination) + " / " + std::to_string(progress.total_combinations)),
+        ftxui::text("Depth from start: " + std::to_string(progress.depth_from_start)),
+        ftxui::text("Deepest valid day: " + std::string(magic_enum::enum_name(progress.deepest_valid_day))),
+        ftxui::text("Found results: " + std::to_string(found_count)),
+    };
+
+    lines.push_back(ftxui::separator());
+    lines.push_back(ftxui::text("Per-day combinations:") | ftxui::bold);
+
+    const auto start_day_index = static_cast<int>(progress.start_day);
+    const auto stop_day_index  = static_cast<int>(progress.stop_day);
+    for (std::size_t day = 0; day < nr_of_days; ++day)
+    {
+        if (!is_day_in_search_range(day, start_day_index, stop_day_index))
+        {
+            continue;
+        }
+
+        const auto& day_progress = progress.day_progress[day];
+        const auto day_name      = std::string(magic_enum::enum_name(days[day]));
+        const auto marker        = days[day] == progress.current_search_day && search_running ? "> " : "  ";
+
+        if (!day_progress.has_progress)
+        {
+            lines.push_back(ftxui::text(marker + day_name + ": not reached") | ftxui::color(ftxui::Color::GrayLight));
+            continue;
+        }
+
+        const auto day_current = day_progress.total_combinations == 0 ? 0 : day_progress.current_combination + 1;
+        const auto percentage = day_progress.total_combinations == 0 ? 0 : (day_current * 100) / day_progress.total_combinations;
+        lines.push_back(ftxui::text(marker + day_name + ": " + std::to_string(day_current) + " / " +
+                                    std::to_string(day_progress.total_combinations) + " (" + std::to_string(percentage) + "%)"));
+    }
+
+    if (search_running)
+    {
+        lines.push_back(ftxui::text(cancel_requested ? "Stopping search..." : "Space: stop search") | ftxui::color(ftxui::Color::Yellow));
+    }
+    else if (progress.search_was_cancelled)
+    {
+        lines.push_back(ftxui::text("Search cancelled. Edit the grid and press Search to run again.") | ftxui::color(ftxui::Color::Yellow));
+    }
+
+    return ftxui::vbox(std::move(lines));
+}
+
 }
 
 int main(int argc, char* argv[])
@@ -373,9 +452,11 @@ int main(int argc, char* argv[])
 
     std::mutex state_mutex;
     std::atomic<bool> search_running {false};
+    std::atomic<bool> search_cancel_requested {false};
     std::size_t found_count = 0;
     std::string status_message;
     bool status_is_error = false;
+    SearchUiState progress_state;
     std::thread search_thread;
 
     auto set_status = [&](std::string message, bool is_error)
@@ -407,8 +488,14 @@ int main(int argc, char* argv[])
             search_start_day  = start_day_index;
             search_stop_day   = stop_day_index;
             found_count       = 0;
+            progress_state    = SearchUiState {};
+            progress_state.start_day = days[static_cast<std::size_t>(search_start_day)];
+            progress_state.current_search_day = days[static_cast<std::size_t>(search_start_day)];
+            progress_state.stop_day           = days[static_cast<std::size_t>(search_stop_day)];
+            progress_state.deepest_valid_day  = days[static_cast<std::size_t>(search_start_day)];
             status_message    = "Searching...";
             status_is_error   = false;
+            search_cancel_requested = false;
             search_running    = true;
         }
 
@@ -429,6 +516,38 @@ int main(int argc, char* argv[])
 
                     PlanningMaster planning_master;
                     std::size_t local_found_count = 0;
+                    SearchContext search_context(days[static_cast<std::size_t>(search_start_day)]);
+                    search_context.should_cancel = [&]() { return search_cancel_requested.load(); };
+                    search_context.on_progress   = [&](const SearchProgress& progress)
+                    {
+                        {
+                            std::lock_guard<std::mutex> lock(state_mutex);
+                            if (progress.has_partial_planning)
+                            {
+                                grid = search_grid;
+                                apply_week_planning_to_grid(progress.partial_planning, grid);
+                                refresh_cell_labels(grid, cell_labels);
+                            }
+
+                            progress_state.current_search_day = progress.current_day;
+                            progress_state.stop_day           = progress.stop_day;
+                            progress_state.current_combination = progress.combination_index;
+                            progress_state.total_combinations  = progress.combination_count;
+                            progress_state.depth_from_start    = progress.depth_from_start;
+                            progress_state.deepest_valid_day   = progress.deepest_valid_day;
+                            progress_state.has_progress        = true;
+                            progress_state.search_was_cancelled = progress.cancelled || search_cancel_requested.load();
+                            progress_state.day_progress[static_cast<std::size_t>(progress.current_day)] = SearchDayUiState {
+                                progress.combination_index,
+                                progress.combination_count,
+                                true,
+                            };
+                            found_count                         = progress.found_count;
+                        }
+
+                        screen.PostEvent(ftxui::Event::Custom);
+                    };
+
                     planning_master.start_search(
                         days[static_cast<std::size_t>(search_start_day)], planning, days[static_cast<std::size_t>(search_stop_day)],
                         [&](WeekPlanning result)
@@ -437,12 +556,21 @@ int main(int argc, char* argv[])
                             result.print(output);
                             output << '\n';
                             ++local_found_count;
-                        });
+                        },
+                        &search_context);
 
                     {
                         std::lock_guard<std::mutex> lock(state_mutex);
                         found_count     = local_found_count;
-                        status_message  = "Found results: " + std::to_string(found_count) + ". Results written to " + output_file_path + ".";
+                        if (search_cancel_requested.load())
+                        {
+                            progress_state.search_was_cancelled = true;
+                            status_message = "Search cancelled. Found results: " + std::to_string(found_count) + ". Results written to " + output_file_path + ".";
+                        }
+                        else
+                        {
+                            status_message = "Found results: " + std::to_string(found_count) + ". Results written to " + output_file_path + ".";
+                        }
                         status_is_error = false;
                     }
                 }
@@ -478,9 +606,11 @@ int main(int argc, char* argv[])
                                   }
 
                                   const auto label_count = is_weekend(day) ? weekend_shift_labels.size() : weekday_shift_labels.size();
-                                  grid[person][day]      = (grid[person][day] + 1) % static_cast<int>(label_count);
+                                  std::lock_guard<std::mutex> lock(state_mutex);
+                                  grid[person][day]        = (grid[person][day] + 1) % static_cast<int>(label_count);
                                   cell_labels[person][day] = cell_label(grid, person, day);
-                                  set_status("", false);
+                                  status_message            = "";
+                                  status_is_error           = false;
                               },
                               ftxui::ButtonOption::Ascii())
                           | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, cell_width);
@@ -527,31 +657,34 @@ int main(int argc, char* argv[])
             std::string local_status;
             bool local_status_is_error = false;
             std::size_t local_found_count = 0;
+            SearchUiState local_progress_state;
             const bool local_search_running = search_running;
+            const bool local_cancel_requested = search_cancel_requested.load();
+            ftxui::Elements rendered_rows;
 
             {
                 std::lock_guard<std::mutex> lock(state_mutex);
                 local_status          = status_message;
                 local_status_is_error = status_is_error;
                 local_found_count     = found_count;
-            }
+                local_progress_state  = progress_state;
 
-            ftxui::Elements header_cells;
-            header_cells.push_back(ftxui::text("person") | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 8) | ftxui::bold);
-            for (const auto& label : day_labels)
-            {
-                header_cells.push_back(ftxui::text(label) | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, cell_width) | ftxui::bold);
-            }
+                ftxui::Elements header_cells;
+                header_cells.push_back(ftxui::text("person") | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 8) | ftxui::bold);
+                for (const auto& label : day_labels)
+                {
+                    header_cells.push_back(ftxui::text(label) | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, cell_width) | ftxui::bold);
+                }
 
-            ftxui::Elements rendered_rows;
-            rendered_rows.push_back(ftxui::hbox(std::move(header_cells)));
+                rendered_rows.push_back(ftxui::hbox(std::move(header_cells)));
 
-            for (std::size_t person = 0; person < nr_of_persons; ++person)
-            {
-                rendered_rows.push_back(ftxui::hbox({
-                    ftxui::text(std::to_string(person)) | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 8),
-                    grid_container->ChildAt(static_cast<int>(person))->Render(),
-                }));
+                for (std::size_t person = 0; person < nr_of_persons; ++person)
+                {
+                    rendered_rows.push_back(ftxui::hbox({
+                        ftxui::text(std::to_string(person)) | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 8),
+                        grid_container->ChildAt(static_cast<int>(person))->Render(),
+                    }));
+                }
             }
 
             return ftxui::window(
@@ -575,6 +708,8 @@ int main(int argc, char* argv[])
                     ftxui::vbox(std::move(rendered_rows)) | ftxui::xframe | ftxui::yframe,
                     ftxui::separator(),
                     render_status(local_status, local_status_is_error, local_search_running, local_found_count),
+                    render_search_progress(local_progress_state, local_search_running, local_cancel_requested, local_found_count),
+                    ftxui::text("Roster grid shows the latest valid partial result while searching.") | ftxui::color(ftxui::Color::GrayLight),
                     ftxui::text("X = optional/open. Other values are locked before search.") | ftxui::color(ftxui::Color::GrayLight),
                     ftxui::text("Only locked cells inside the selected start/stop range are used.") | ftxui::color(ftxui::Color::GrayLight),
                 }))
@@ -587,6 +722,13 @@ int main(int argc, char* argv[])
             if (event == ftxui::Event::Custom)
             {
                 return false;
+            }
+
+            if (search_running && event == ftxui::Event::Character(' '))
+            {
+                search_cancel_requested = true;
+                set_status("Stopping search...", false);
+                return true;
             }
 
             return search_running.load();

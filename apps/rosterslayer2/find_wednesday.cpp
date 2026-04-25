@@ -6,7 +6,7 @@
 
 #include <cstddef>
 
-void find_possible_wednesdays(WeekPlanning planning, DaysOfTheWeek search_until, const SearchResultCallback& on_found)
+void find_possible_wednesdays(WeekPlanning planning, DaysOfTheWeek search_until, const SearchResultCallback& on_found, SearchContext* context)
 {
     DoubleDayPlanningValidator validator;
     auto wednesday_planning = planning.wednesday.value_or(OneDayPlanning<WeekdayShiftCode>(get_weekday_required_shifts()));
@@ -14,6 +14,14 @@ void find_possible_wednesdays(WeekPlanning planning, DaysOfTheWeek search_until,
     auto nr_of_combinations = wednesday_planning.get_nr_of_combinations();
     for (auto index = 0; index < nr_of_combinations; index++)
     {
+        if (search_cancel_requested(context))
+        {
+            report_search_progress(context, DaysOfTheWeek::wednesday, search_until, index, nr_of_combinations, true);
+            return;
+        }
+
+        report_search_progress(context, DaysOfTheWeek::wednesday, search_until, index, nr_of_combinations);
+
         auto wednesday_candidate = wednesday_planning.get_set(index);
         bool is_valid            = true;
 
@@ -41,13 +49,26 @@ void find_possible_wednesdays(WeekPlanning planning, DaysOfTheWeek search_until,
 
         auto candidate_planning = planning;
         candidate_planning.wednesday.emplace(wednesday_candidate);
+        mark_search_day_valid(context, DaysOfTheWeek::wednesday);
+        report_search_progress(context, DaysOfTheWeek::wednesday, search_until, index, nr_of_combinations, false, &candidate_planning);
 
         if (search_until == DaysOfTheWeek::wednesday)
         {
+            if (context != nullptr)
+            {
+                ++context->found_count;
+                report_search_progress(context, DaysOfTheWeek::wednesday, search_until, index, nr_of_combinations, false, &candidate_planning);
+            }
             on_found(candidate_planning);
             continue;
         }
 
-        find_possible_thursdays(candidate_planning, search_until, on_found);
+        if (search_cancel_requested(context))
+        {
+            report_search_progress(context, DaysOfTheWeek::wednesday, search_until, index, nr_of_combinations, true);
+            return;
+        }
+
+        find_possible_thursdays(candidate_planning, search_until, on_found, context);
     }
 }

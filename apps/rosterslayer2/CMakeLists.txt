@@ -22,6 +22,7 @@ add_executable(
   one_day_planning.hpp
   shift.hpp
   shifts_enums.hpp
+  search_context.hpp
   search_result_callback.hpp
   time.hpp
   weekday_shifts.hpp
