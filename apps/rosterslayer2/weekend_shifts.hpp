@@ -8,7 +8,7 @@
 
 using WeekendShift = Shift<WeekendShiftCode>;
 
-inline WeekendShift get_off_shift()
+inline WeekendShift get_weekend_off_shift()
 {
     return WeekendShift(WeekendShiftCode::off, StartTime {Hour {0}, Minute {0}}, StopTime {Hour {0}, Minute {0}}, 0.0, ShiftType::is_off);
 }
@@ -41,14 +41,14 @@ inline WeekendShift get_weekend_late_shift()
 inline const std::vector<WeekendShift>& get_weekend_required_shifts()
 {
     static const std::vector<WeekendShift> shifts {
-        get_off_shift(), get_off_shift(), get_off_shift(), get_off_shift(), get_off_shift(), get_weekend_early_shift_a(), get_weekend_early_shift_b(), get_weekend_split_day_shift(), get_weekend_split_late_shift(), get_weekend_late_shift()};
+        get_weekend_off_shift(), get_weekend_off_shift(), get_weekend_off_shift(), get_weekend_off_shift(), get_weekend_off_shift(), get_weekend_early_shift_a(), get_weekend_early_shift_b(), get_weekend_split_day_shift(), get_weekend_split_late_shift(), get_weekend_late_shift()};
 
     return shifts;
 }
 
 inline const std::vector<WeekendShift>& get_weekend_unqiue_shifts()
 {
-    static const std::vector<WeekendShift> shifts {get_off_shift(), get_weekend_early_shift_a(), get_weekend_early_shift_b(), get_weekend_split_day_shift(), get_weekend_split_late_shift(), get_weekend_late_shift()};
+    static const std::vector<WeekendShift> shifts {get_weekend_off_shift(), get_weekend_early_shift_a(), get_weekend_early_shift_b(), get_weekend_split_day_shift(), get_weekend_split_late_shift(), get_weekend_late_shift()};
 
     return shifts;
 }

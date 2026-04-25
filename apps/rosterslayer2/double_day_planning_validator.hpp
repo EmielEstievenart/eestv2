@@ -6,8 +6,9 @@
 
 class DoubleDayPlanningValidator
 {
-    bool DoubleDayPlanningValidator::is_valid(OneDayPlanning<WeekendShift> weekend, OneDayPlanning<WeekendShift>);
-    bool DoubleDayPlanningValidator::is_valid(OneDayPlanning<WeekendShift> weekend, OneDayPlanning<WeekdayShift>);
-    bool DoubleDayPlanningValidator::is_valid(OneDayPlanning<WeekdayShift> weekend, OneDayPlanning<WeekdayShift>);
-    bool DoubleDayPlanningValidator::is_valid(OneDayPlanning<WeekdayShift> weekend, OneDayPlanning<WeekendShift>);
+public:
+    bool is_valid(const OneDayPlanning<WeekendShiftCode>& first, const OneDayPlanning<WeekendShiftCode>& second);
+    bool is_valid(const OneDayPlanning<WeekendShiftCode>& first, const OneDayPlanning<WeekdayShiftCode>& second);
+    bool is_valid(const OneDayPlanning<WeekdayShiftCode>& first, const OneDayPlanning<WeekdayShiftCode>& second);
+    bool is_valid(const OneDayPlanning<WeekdayShiftCode>& first, const OneDayPlanning<WeekendShiftCode>& second);
 };

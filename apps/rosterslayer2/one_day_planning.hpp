@@ -111,11 +111,11 @@ public:
         return multinomial_count(remaining_counts);
     }
 
-    Shift<shiftEnum> get_set(std::uint64_t combination_index) const
+    OneDayPlanning get_set(std::uint64_t combination_index) const
     {
         validate_current_state_against_desired();
 
-        WeekdayDailySet result = *this;
+        OneDayPlanning result = *this;
 
         CountMap remaining_counts     = get_remaining_shift_count_map();
         const auto shift_ids_in_order = get_shift_ids_in_order();
@@ -150,7 +150,7 @@ public:
                     counts.push_back(count);
                 }
 
-                const std::uint64_t block_size = daily_set_detail::multinomial_count(counts);
+                const std::uint64_t block_size = multinomial_count(counts);
 
                 if (combination_index < block_size)
                 {
