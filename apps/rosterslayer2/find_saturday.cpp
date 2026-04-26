@@ -1,5 +1,6 @@
 #include "find_saturday.hpp"
 
+#include "day_off_planning_validator.hpp"
 #include "double_day_planning_validator.hpp"
 #include "find_sunday.hpp"
 #include "one_day_planning.hpp"
@@ -11,6 +12,10 @@ void find_possible_saturdays(WeekPlanning planning, DaysOfTheWeek search_until, 
 {
     DoubleDayPlanningValidator validator;
     auto saturday_planning = planning.saturday.value_or(OneDayPlanning<WeekendShiftCode>(get_weekend_required_shifts()));
+    if (!DayOffPlanningValidator::apply_mandatory_days_off(planning, saturday_planning, DaysOfTheWeek::saturday, DayOffPlanningValidator::default_max_consecutive_days, get_weekend_off_shift))
+    {
+        return;
+    }
 
     auto nr_of_combinations = saturday_planning.get_nr_of_combinations();
     for (auto index = 0; index < nr_of_combinations; index++)

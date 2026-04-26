@@ -3,6 +3,8 @@ project(roster_slayer)
 add_executable(
   roster_slayer
   days_of_the_week.hpp
+  day_off_planning_validator.cpp
+  day_off_planning_validator.hpp
   find_friday.cpp
   find_friday.hpp
   find_monday.cpp
